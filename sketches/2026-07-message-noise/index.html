@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>message noise</title>
+  <style>
+    body { margin: 0; background: #0e0e11; color: #e8e6e0; font: 14px ui-monospace, monospace; display: grid; place-items: center; min-height: 100vh; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #8a877e; text-decoration: none; }
+    #ui { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.5rem; align-items: center; background: #17171cdd; padding: 0.6rem 0.8rem; border-radius: 8px; }
+    input { background: #0e0e11; color: #e8e6e0; border: 1px solid #333; border-radius: 4px; padding: 0.4rem 0.6rem; width: 16rem; font: inherit; }
+    button { background: #26262e; color: #e8e6e0; border: 1px solid #444; border-radius: 4px; padding: 0.4rem 0.7rem; font: inherit; cursor: pointer; }
+    button:hover { border-color: #7fb3a3; }
+    #hint { position: fixed; top: 1rem; right: 1rem; color: #8a877e; }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← sketchbook</a>
+  <div id="hint">space = freeze · message stays only in your head</div>
+  <div id="ui">
+    <input id="message" type="password" placeholder="hidden message…" autocomplete="off" />
+    <button id="reveal" title="show/hide message">👁</button>
+    <button id="apply">seed</button>
+    <button id="freeze">freeze</button>
+    <button id="mode">contour</button>
+    <button id="save">png ×3</button>
+  </div>
+  <script type="module" src="./sketch.js"></script>
+</body>
+</html>

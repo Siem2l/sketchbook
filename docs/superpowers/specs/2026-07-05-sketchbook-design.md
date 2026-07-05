@@ -55,6 +55,22 @@ sketchbook/
     `rsync --delete dist/ <homelab>:/var/lib/sketchbook/` using the
     existing SSH identity/host-alias routing in `~/.ssh/config`.
 
+## First sketch: message-noise (tattoo study)
+
+A top-down perlin noise map driven by a hidden message:
+
+- A text input (kept out of the URL and the rendered output) is hashed
+  (cyrb128) into seeds for `noiseSeed`/`randomSeed` — the same message
+  always reproduces the same visual world; the message itself is
+  unrecoverable from the output.
+- The field animates naturally (3D noise, time as the z-axis).
+- Spacebar/button freezes/resumes the animation; a frozen frame is
+  deterministic given (message, elapsed time shown on screen) so a
+  chosen frame can be found again.
+- Render modes: filled topographic color map and a black-and-white
+  contour/threshold mode suitable for tattoo linework.
+- High-resolution PNG export of the current frame.
+
 ## Nix side (apis-mellifera repo)
 
 One module `modules/services/web/sketchbook.nix`:
