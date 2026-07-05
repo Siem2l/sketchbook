@@ -23,9 +23,9 @@
 
 **Interfaces:** Produces `scripts/build-index.js` emitting `gallery-data.json` (array of `{slug,title,date,tags,description}` sorted date-desc); vite config exporting multi-page `build.rollupOptions.input` from sketch folders.
 
-- [ ] Scaffold files, `npm install`
-- [ ] Verify: `npm run build` succeeds; `dist/index.html` and `dist/sketches/_template` excluded, gallery lists no sketches yet (template skipped)
-- [ ] Commit
+- [x] Scaffold files, `npm install`
+- [x] Verify: `npm run build` succeeds; `dist/index.html` and `dist/sketches/_template` excluded, gallery lists no sketches yet (template skipped)
+- [x] Commit
 
 ### Task 2: message-noise sketch
 
@@ -33,9 +33,9 @@
 
 **Interfaces:** Consumes template layout. Behavior per spec: cyrb128 hash of message → `noiseSeed`+`randomSeed`; animated 3D noise top-down map; spacebar/button freeze with on-screen time `t`; modes: color topo / B&W contour; hi-res PNG export button (3x). Message input is a plain field, never persisted or put in URL.
 
-- [ ] Implement sketch
-- [ ] Verify: `npm run build` includes the page; `make dev` serves it (curl the page, check p5 bundle referenced)
-- [ ] Commit
+- [x] Implement sketch
+- [x] Verify: `npm run build` includes the page; `make dev` serves it (curl the page, check p5 bundle referenced)
+- [x] Commit
 
 ### Task 3: Nix module + host enablement
 
@@ -43,13 +43,13 @@
 
 **Interfaces:** `services.apis-mellifera.sketchbook.{enable,port(8088),dataDir(/var/lib/sketchbook),publishGroup(sketchbook),expose.*}`; nginx vhost `sketchbook-local` listening 127.0.0.1:8088 with `root = dataDir`, `try_files`; tmpfiles rule creating dataDir `0775 root <group>`; expose defaults subdomain `sketches`, auth `none`.
 
-- [ ] Write module + host enable (expose.enable = true, dashboard icon optional)
-- [ ] Verify: `nix flake check` (or targeted eval of nixosConfigurations.nixos) passes port/ingress validation
-- [ ] Commit (separate commit in apis-mellifera repo, on a branch — user reviews/deploys)
+- [x] Write module + host enable (expose.enable = true, dashboard icon optional)
+- [x] Verify: `nix flake check` (or targeted eval of nixosConfigurations.nixos) passes port/ingress validation
+- [x] Commit (separate commit in apis-mellifera repo, on a branch — user reviews/deploys)
 
 ### Task 4: Publish plumbing + docs
 
 **Files:** Modify `Makefile` (publish target: build + rsync to `/var/lib/sketchbook/` — local copy since we run on the homelab; fallback ssh host var), `README.md` (workflow: new/dev/publish, one-time deploy note).
 
-- [ ] Implement + verify `make publish DRY=1` (rsync --dry-run) output sane
-- [ ] Commit; final self-review vs spec
+- [x] Implement + verify `make publish DRY=1` (rsync --dry-run) output sane
+- [x] Commit; final self-review vs spec
