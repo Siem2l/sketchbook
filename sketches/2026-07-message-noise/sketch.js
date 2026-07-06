@@ -5,9 +5,79 @@
 import p5 from 'p5';
 
 const SIZE = 720;
-const CELL = 4;            // sampling resolution of the field
-const Z_SPEED = 0.0035;    // how fast the terrain breathes
-const LEVELS = 12;         // contour bands
+const CELL = 4;              // sampling resolution of the field (topo raster)
+const Z_SPEED = 0.0035;      // how fast the terrain breathes
+const LEVELS = 12;           // colour bands in topo mode
+const CONTOUR_LEVELS = 22;   // iso-lines in contour mode (~21 nested lines)
+const INDEX_EVERY = 4;       // every Nth line is a thick, labelled index contour
+
+// Marching-squares helpers — trace clean iso-lines like a real topo map
+// instead of the old per-pixel band trick. Each grid cell emits 0-2 line
+// segments depending on which of its 4 corners sit above the level.
+function inv(a, b, level) {
+  const d = b - a;
+  return d === 0 ? 0.5 : (level - a) / d;
+}
+function line2(g, a, b) {
+  g.line(a[0], a[1], b[0], b[1]);
+}
+function segFor(g, idx, T, R, B, L) {
+  switch (idx) {
+    case 1: line2(g, L, B); break;
+    case 2: line2(g, B, R); break;
+    case 3: line2(g, L, R); break;
+    case 4: line2(g, T, R); break;
+    case 5: line2(g, T, L); line2(g, B, R); break; // saddle
+    case 6: line2(g, T, B); break;
+    case 7: line2(g, T, L); break;
+    case 8: line2(g, T, L); break;
+    case 9: line2(g, T, B); break;
+    case 10: line2(g, T, R); line2(g, B, L); break; // saddle
+    case 11: line2(g, T, R); break;
+    case 12: line2(g, L, R); break;
+    case 13: line2(g, B, R); break;
+    case 14: line2(g, L, B); break;
+  }
+}
+// One representative segment per case, used to anchor + orient a label.
+function firstSeg(idx, T, R, B, L) {
+  switch (idx) {
+    case 1: case 14: return [L, B];
+    case 2: case 13: return [B, R];
+    case 3: case 12: return [L, R];
+    case 4: case 11: return [T, R];
+    case 6: case 9: return [T, B];
+    case 7: case 8: return [T, L];
+    case 10: return [T, R];
+    default: return [T, L]; // 5 and fallback
+  }
+}
+function farFrom(placed, x, y, d) {
+  for (const p of placed) {
+    if (Math.hypot(p[0] - x, p[1] - y) < d) return false;
+  }
+  return true;
+}
+function drawLabel(g, x, y, seg, txt, f) {
+  // Rotate to follow the contour, kept upright, with a white break in the
+  // line behind it — exactly how surveyed contours are annotated.
+  let ang = Math.atan2(seg[1][1] - seg[0][1], seg[1][0] - seg[0][0]);
+  if (ang > Math.PI / 2) ang -= Math.PI;
+  if (ang < -Math.PI / 2) ang += Math.PI;
+  g.push();
+  g.translate(x, y);
+  g.rotate(ang);
+  g.textFont('serif');
+  g.textSize(9 * f);
+  g.textAlign(g.CENTER, g.CENTER);
+  const wLbl = g.textWidth(txt);
+  g.noStroke();
+  g.fill(250);
+  g.rect(-wLbl / 2 - 2 * f, -6 * f, wLbl + 4 * f, 12 * f);
+  g.fill(24);
+  g.text(txt, 0, 0);
+  g.pop();
+}
 
 // cyrb128 — small, well-distributed 128-bit string hash. We only need
 // determinism, not cryptography: the message is never transmitted.
@@ -56,33 +126,100 @@ new p5((p) => {
   }
 
   function render(g, cell) {
-    const w = g.width, h = g.height;
-    const f = w / SIZE; // keep the world identical at export resolution
+    const f = g.width / SIZE; // keep the world identical at export resolution
+    if (contourMode) drawContours(g, f);
+    else drawTopo(g, cell, f);
+
+    // Time stamp: with the same message, this t reproduces this exact frame.
     g.noStroke();
+    g.fill(contourMode ? 24 : 245);
+    g.textFont('monospace');
+    g.textSize(11 * f);
+    g.textAlign(g.LEFT, g.BASELINE);
+    g.text(`t=${t.toFixed(3)}`, 10 * f, g.height - 10 * f);
+  }
+
+  // Filled colour relief — deep water → shore → highland.
+  function drawTopo(g, cell, f) {
+    const w = g.width, h = g.height;
+    g.noStroke();
+    const c1 = g.color(16, 28, 42);
+    const c2 = g.color(127, 179, 163);
+    const c3 = g.color(240, 234, 214);
     for (let y = 0; y < h; y += cell) {
       for (let x = 0; x < w; x += cell) {
-        const v = field(x / f, y / f, t);
-        if (contourMode) {
-          // Quantize into bands; paint thin dark lines at band edges.
-          const band = v * LEVELS;
-          const edge = Math.abs(band - Math.round(band)) < 0.07;
-          g.fill(edge ? 20 : 245);
-        } else {
-          const band = Math.floor(v * LEVELS) / LEVELS;
-          // Deep water → shore → highland palette.
-          const c1 = g.color(16, 28, 42);
-          const c2 = g.color(127, 179, 163);
-          const c3 = g.color(240, 234, 214);
-          g.fill(band < 0.5 ? g.lerpColor(c1, c2, band * 2) : g.lerpColor(c2, c3, (band - 0.5) * 2));
-        }
+        const band = Math.floor(field(x / f, y / f, t) * LEVELS) / LEVELS;
+        g.fill(band < 0.5 ? g.lerpColor(c1, c2, band * 2) : g.lerpColor(c2, c3, (band - 0.5) * 2));
         g.rect(x, y, cell, cell);
       }
     }
-    // Time stamp: with the same message, this t reproduces this exact frame.
-    g.fill(contourMode ? 20 : 245);
-    g.textFont('monospace');
-    g.textSize(11 * f);
-    g.text(`t=${t.toFixed(3)}`, 10 * f, h - 10 * f);
+  }
+
+  // Clean nested iso-lines on white via marching squares, with a handful of
+  // rotated elevation labels on the thicker index contours.
+  function drawContours(g, f) {
+    const w = g.width, h = g.height;
+    const step = Math.max(3, Math.round(5 * f));
+    const cols = Math.floor(w / step) + 2;
+    const rows = Math.floor(h / step) + 2;
+
+    // Sample the field once; every level reuses this grid.
+    const grid = new Float32Array(cols * rows);
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        grid[j * cols + i] = field((i * step) / f, (j * step) / f, t);
+      }
+    }
+
+    g.background(250);
+    g.noFill();
+    const placed = [];
+
+    for (let l = 1; l < CONTOUR_LEVELS; l++) {
+      const level = l / CONTOUR_LEVELS;
+      const isIndex = l % INDEX_EVERY === 0;
+      g.stroke(24);
+      g.strokeWeight((isIndex ? 1.6 : 0.85) * f);
+      let sinceLabel = 30;
+
+      for (let j = 0; j < rows - 1; j++) {
+        for (let i = 0; i < cols - 1; i++) {
+          const tl = grid[j * cols + i];
+          const tr = grid[j * cols + i + 1];
+          const br = grid[(j + 1) * cols + i + 1];
+          const bl = grid[(j + 1) * cols + i];
+          let idx = 0;
+          if (tl > level) idx |= 8;
+          if (tr > level) idx |= 4;
+          if (br > level) idx |= 2;
+          if (bl > level) idx |= 1;
+          if (idx === 0 || idx === 15) continue;
+
+          const x0 = i * step, y0 = j * step, x1 = x0 + step, y1 = y0 + step;
+          const T = [x0 + step * inv(tl, tr, level), y0];
+          const R = [x1, y0 + step * inv(tr, br, level)];
+          const B = [x0 + step * inv(bl, br, level), y1];
+          const L = [x0, y0 + step * inv(tl, bl, level)];
+          segFor(g, idx, T, R, B, L);
+
+          if (isIndex && placed.length < 14) {
+            sinceLabel++;
+            if (sinceLabel > 50) {
+              const seg = firstSeg(idx, T, R, B, L);
+              const mx = (seg[0][0] + seg[1][0]) / 2;
+              const my = (seg[0][1] + seg[1][1]) / 2;
+              if (mx > 34 * f && mx < w - 34 * f && my > 24 * f && my < h - 24 * f &&
+                  farFrom(placed, mx, my, 84 * f)) {
+                const meters = (l / INDEX_EVERY) * 50;
+                drawLabel(g, mx, my, seg, `${meters}m`, f);
+                placed.push([mx, my]);
+                sinceLabel = 0;
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   p.setup = () => {
