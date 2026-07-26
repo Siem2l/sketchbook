@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>a year in a body</title>
+  <style>
+    :root {
+      --paper: #faf8f2; --ink: #18181b; --ink2: #54524c; --ink3: #8a877e;
+      --hair: #d9d4c6; --accent: #b5451d;
+    }
+    * { margin: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      background: var(--paper); color: var(--ink);
+      font: 14px ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden;
+    }
+    canvas { position: fixed; inset: 0; z-index: 1; }
+    a.back { position: fixed; top: 14px; left: 16px; color: var(--ink3); text-decoration: none; z-index: 6; }
+    a.back:hover { color: var(--ink); }
+    header { position: fixed; top: 10px; left: 0; right: 0; text-align: center; z-index: 4; pointer-events: none; }
+    h1 { font: 600 15px/1 Georgia, "Times New Roman", serif; letter-spacing: .02em; }
+    #sub { color: var(--ink2); font-size: 11px; margin-top: 4px; min-height: 14px; padding: 0 12px; }
+    nav { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; z-index: 5; flex-wrap: wrap; justify-content: center; max-width: 96vw; }
+    nav button {
+      background: transparent; border: 1px solid var(--hair); color: var(--ink2);
+      border-radius: 20px; padding: 5px 13px; font: 11px ui-monospace, monospace; cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    nav button:hover { border-color: var(--ink3); color: var(--ink); }
+    nav button[aria-current="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+    #loading { position: fixed; inset: 0; display: grid; place-items: center; color: var(--ink3); z-index: 3; }
+    #err { position: fixed; inset: auto 12px 12px 12px; color: var(--accent); font-size: 12px; z-index: 7; }
+
+    #readout {
+      position: fixed; left: 16px; bottom: 16px; width: 236px; max-width: 46vw;
+      border: 1px solid var(--ink); background: rgba(250, 248, 242, .94);
+      padding: 13px 15px; z-index: 6;
+    }
+    #readout .rday { font: italic 600 17px/1.05 Georgia, "Times New Roman", serif; }
+    #readout .rsub { font: 9px ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin: 3px 0 12px; }
+    #readout .metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+    #readout .metric .k { font: 9px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); }
+    #readout .metric .v { font: 18px/1.1 ui-monospace, monospace; color: var(--ink); margin-top: 2px; }
+    #readout .metric .v small { font-size: 10px; color: var(--ink2); }
+    #readout .sleepbar { display: flex; height: 6px; margin-top: 12px; border: 1px solid var(--hair); }
+    #readout .sleepbar i { display: block; height: 100%; }
+    #readout .rnote { font: 9px/1.5 ui-monospace, monospace; letter-spacing: .06em; color: var(--ink3); margin-top: 9px; }
+    #hint { position: fixed; right: 16px; bottom: 18px; font: 10px ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); z-index: 6; pointer-events: none; }
+    @media (max-width: 560px) {
+      #readout { left: 10px; right: 10px; bottom: 10px; width: auto; max-width: none; }
+      #hint { display: none; }
+    }
+  </style>
+  <script type="module" src="./sketch.js"></script>
+</head>
+<body>
+  <a class="back" href="/">← sketchbook</a>
+  <header><h1>a year in a body</h1><div id="sub"></div></header>
+  <nav id="nav"></nav>
+  <div id="loading">reading your year…</div>
+  <aside id="readout" aria-live="polite"></aside>
+  <div id="hint">move across the chart to read a day</div>
+</body>
+</html>

@@ -23,13 +23,16 @@ for (const dir of readdirSync(sketchesDir, { withFileTypes: true })) {
   for (const field of ['title', 'date']) {
     if (!meta[field]) throw new Error(`sketches/${dir.name}/meta.json: "${field}" is required`);
   }
+  const conventionThumb = resolve(root, 'public', 'sketches', dir.name, 'thumb.png');
+  const thumbnail = existsSync(conventionThumb) ? 'thumb.png' : (meta.thumbnail ?? null);
+
   entries.push({
     slug: dir.name,
     title: meta.title,
     date: meta.date,
     tags: meta.tags ?? [],
     description: meta.description ?? '',
-    thumbnail: meta.thumbnail ?? null,
+    thumbnail,
   });
 }
 
