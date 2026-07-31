@@ -1,0 +1,7 @@
+{
+  "title": "inconstructions",
+  "date": "2026-07-31",
+  "tags": ["isometric", "vectorheart", "toy", "interactive"],
+  "description": "An ephemeral assembly sandbox in the Vectorheart idiom. Build interlocking axonometric structures from a closed kit of parts on a bounded lattice; occlusion is a sort rather than a depth buffer, and picking reads a pixel from an ID buffer. Nothing is saved — the page opens by building itself, and the only thing that leaves is a PNG.",
+  "thumbnail": "thumb.png"
+}
