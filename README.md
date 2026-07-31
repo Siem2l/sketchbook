@@ -12,6 +12,7 @@ make new NAME=my-idea       # copy the template to sketches/YYYY-MM-my-idea
 make dev                    # hot-reload dev server
 make publish                # vite build + rsync to /var/lib/sketchbook
 npm test                    # playwright behaviour tests (starts its own server)
+npm run thumbs              # regenerate public/sketches/*/thumb.png
 ```
 
 `make publish DRY=1` shows what would sync. From another machine, set
