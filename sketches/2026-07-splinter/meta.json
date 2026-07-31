@@ -1,0 +1,7 @@
+{
+  "title": "splinter",
+  "date": "2026-07-31",
+  "tags": ["vectorheart", "generative", "3d", "isometric", "y2k"],
+  "description": "A Vectorheart debris field in real 3D that you can walk around and draw into. Two references, one generator: Chapter Three's flat angular shards at one pole, MC-202's extruded hardware at the other, with a MIX control between them. Because the scene is genuinely dimensional, the isometric look of the posters is just the ORTHO camera parked at 45 degrees — and you can leave it. Component toggles, five views, five palettes, five motion modes, and a rigid-body explosion sim: fragments launch and tumble under drag tuned to settle them onto their designed positions, with optional gravity and rigid-body collision — capsules for rods, oriented boxes for everything else, solved with SAT over a spatial hash — so the debris collapses into a real heap. Every composition is a pure function of its printed seed.",
+  "thumbnail": "thumb.png"
+}
