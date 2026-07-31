@@ -1,6 +1,11 @@
 {
   "title": "message noise",
   "date": "2026-07-05",
-  "tags": ["perlin", "tattoo-study", "seeded"],
-  "description": "A hidden message seeds a living noise map. Freeze the moment you like; only you know the words underneath."
+  "tags": [
+    "perlin",
+    "tattoo-study",
+    "seeded"
+  ],
+  "description": "A hidden message seeds a living noise map. Freeze the moment you like; only you know the words underneath.",
+  "thumbnail": "thumb.png"
 }
