@@ -1,0 +1,31 @@
+# Orca project defaults for sketchbook.
+# Supported keys: scripts.{setup,archive}, issueCommand, defaultTabs,
+# environmentRecipes, worktree.sharedDirectories.
+#
+# The repo icon is not configured here — Orca auto-detects ./public/favicon.png.
+
+scripts:
+  setup: npm install
+
+# Tab colours are gruvbox, matching the apis-mellifera hive theme that paints
+# the rest of this setup (vars/theme.nix there). #fe8019 is the shared
+# "active pane" accent.
+defaultTabs:
+  - title: shell
+    color: "#fe8019"
+  # Safe to auto-run: Vite picks the next free port when 5173 is taken, so
+  # several worktrees can serve at once without clashing.
+  - title: dev
+    color: "#fabd2f"
+    command: npm run dev
+  - title: sketches
+    color: "#8ec07c"
+
+worktree:
+  # playwright (devDependency) makes node_modules large, and the dependency
+  # set barely changes between branches — so share one install across
+  # worktrees instead of paying for it per worktree. Trade-off: a worktree
+  # that changes package.json mutates the shared tree for all of them; run
+  # `npm install` again after switching back.
+  sharedDirectories:
+    - node_modules
