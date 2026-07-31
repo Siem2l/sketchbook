@@ -109,9 +109,14 @@ new p5((p) => {
     seed = cyrb128(message || '…');
     p.noiseSeed(seed[0]);
     p.randomSeed(seed[1]);
+    // Few octaves + gentle falloff = big, smooth rolling terrain (surveyed
+    // contour look) instead of high-frequency speckle.
+    p.noiseDetail(2, 0.5);
     // Let the message shape the terrain's character, not just its layout.
-    scale = 0.004 + (seed[2] % 1000) / 1000 * 0.008;
-    warp = 0.5 + (seed[3] % 1000) / 1000 * 2.0;
+    // Low frequency → a handful of large hill systems span the canvas; light
+    // warp keeps the lines flowing rather than jittery.
+    scale = 0.003 + (seed[2] % 1000) / 1000 * 0.003;
+    warp = 0.2 + (seed[3] % 1000) / 1000 * 0.5;
     t = 0;
     frozen = false;
     document.getElementById('freeze').textContent = 'freeze';
@@ -159,7 +164,7 @@ new p5((p) => {
   // rotated elevation labels on the thicker index contours.
   function drawContours(g, f) {
     const w = g.width, h = g.height;
-    const step = Math.max(3, Math.round(5 * f));
+    const step = Math.max(3, Math.round(4 * f)); // finer grid → smoother curves
     const cols = Math.floor(w / step) + 2;
     const rows = Math.floor(h / step) + 2;
 
