@@ -48,7 +48,9 @@ try {
   await waitForServer(BASE);
 
   // ------------------------------------------------------------------ helpers
-  const state = (p, fn) => p.evaluate(fn);
+  // The third argument is passed through to the page, so a test can name a
+  // control without interpolating it into the function source.
+  const state = (p, fn, arg) => p.evaluate(fn, arg);
   const parts = (p) => state(p, () => window.__inconstructions.parts());
 
   async function openSketch({ width = 1200, height = 900, touch = false } = {}) {
@@ -682,7 +684,7 @@ try {
       page.errors = errors;
       return page;
     }
-    const sp = (p, fn) => p.evaluate(fn);
+    const sp = (p, fn, arg) => p.evaluate(fn, arg);
     // Cycle a control until it reaches the named state — tests can pin down a
     // composition without any way to set one directly.
     async function cycle(p, key, read, want, max = 9) {
@@ -984,6 +986,15 @@ try {
     // The loose match above covers the unseeded path; this pins the exact name
     // a known seed produces, so moving the export into the library cannot
     // quietly change what a reproducible composition is called.
+    await test('every panel control the layout draws is clickable', async () => {
+      // One label from each group the layout helpers now build.
+      for (const label of ['LOOK', 'SHARD', 'VIEW', 'DETONATE', 'CLEAR']) {
+        const at = await sp(p, (l) => window.__splinter.buttonAt(l), label);
+        assert.ok(at, `no hit rect for ${label}`);
+        assert.ok(at.x > 0 && at.y > 0, `${label} is off-screen: ${JSON.stringify(at)}`);
+      }
+    });
+
     await test('a seeded splinter export is named for that seed exactly', async () => {
       const page = await openSplinter();
       await page.goto(`${SPLINTER}?seed=1234abcd`, { waitUntil: 'networkidle' });

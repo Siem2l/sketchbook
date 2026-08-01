@@ -19,7 +19,7 @@ import '../_lib/chrome.css';
 import p5 from 'p5';
 import { spaced, spacedWidth, titleBlock, readout, regMarks } from '../_lib/type.js';
 import { exportPng as exportPngTo } from '../_lib/export.js';
-import { buttonStyle, button, hitLayer } from '../_lib/panel.js';
+import { buttonStyle, button, hitLayer, strip, slider } from '../_lib/panel.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -1309,28 +1309,6 @@ function rect4(x, y, w, h) {
   return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 }
 
-// A slider row: label, track, value. The hit it registers carries a `drag`
-// handler — the first interaction in this sketch that is not a click.
-function slider(g, u, x, y, w, label, value, set, live) {
-  const bx = x + 62 * u, bw = w - 96 * u, bh = 6 * u;
-  g.noStroke();
-  g.textSize(7 * u);
-  g.textAlign(g.LEFT, g.BASELINE);
-  g.fill('#8a8a80');
-  spaced(g, label, x, y + 6 * u, 0.9 * u);
-  poly(g, rect4(bx, y, bw, bh), 'rgba(0,0,0,0)', INK, 1 * u);
-  if (value > 0) poly(g, rect4(bx + 1 * u, y + 1 * u, (bw - 2 * u) * value, bh - 2 * u), '#fabd2f', null, 0);
-  g.noStroke();
-  g.fill(INK);
-  g.textAlign(g.RIGHT, g.BASELINE);
-  g.text(String(Math.round(value * 100)).padStart(2, '0'), x + w, y + 6 * u);
-  g.textAlign(g.LEFT, g.BASELINE);
-  if (live) {
-    hud.add(bx - 8 * u, y - 6 * u, bw + 16 * u, bh + 12 * u,
-      { drag: (mx) => set(clamp01((mx - bx) / bw)), label });
-  }
-}
-
 // Height of the generator panel, so a narrow layout can bottom-anchor it. Kept
 // in step with the row increments in drawGenPanel by hand.
 const PANEL_H = (u) => (14 + 18 + 14 + SLIDERS.length * 16 + 18 + 18 + 18 + 12) * u;
@@ -1367,7 +1345,7 @@ function drawGenPanel(g, u, x, y, w) {
       gen[k] = v;
       dragMoved = true;
       retune();
-    }, true);
+    }, { style: BTN, layer: hud });
     y += 16 * u;
   }
 
@@ -1470,13 +1448,8 @@ function drawHud(g, u, w, h, live) {
   // one — the strip has to fit inside the frame at any width.
   const bh = 22 * u;
   const gap = 5 * u;
-  const row = (y, defs) => {
-    let x = M + 14 * u;
-    for (const d of defs) {
-      x = button(g, u, x, y, d[0] * u, bh, d[1],
-        { on: d[3], action: d[2], live, layer: hud, style: BTN }) + gap;
-    }
-  };
+  const row = (y, defs) => strip(g, u, M + 14 * u, y, bh, defs,
+    { gap: 5, layer: hud, style: BTN, live });
   const PLACE = [44, 'PLACE', () => { mode = 'place'; }, mode === 'place'];
   const DELETE = [52, 'DELETE', () => { mode = 'delete'; }, mode === 'delete'];
   const ROT = [40, `R${activeRot}`, () => { activeRot = (activeRot + 1) % 4; }, false];

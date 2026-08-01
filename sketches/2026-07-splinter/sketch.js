@@ -25,7 +25,7 @@ import p5 from 'p5';
 // Vite tree-shakes the build, so importing it now costs nothing.
 import { spaced, spacedWidth, titleBlock, footer } from '../_lib/type.js';
 import { exportPng as exportPngTo } from '../_lib/export.js';
-import { buttonStyle, button, hitLayer } from '../_lib/panel.js';
+import { buttonStyle, button, hitLayer, heading, stack } from '../_lib/panel.js';
 
 // --------------------------------------------------------------- palettes
 
@@ -947,36 +947,34 @@ function drawPanel(g, k, w, h, live) {
   g.fill(bgc);
   g.rect(M - 10 * k, top, panelW + 20 * k, 440 * k);
 
-  const heading = (t) => {
-    g.noStroke(); g.fill('#6d6d66'); g.textFont('monospace'); g.textSize(6.8 * k);
-    g.textAlign(g.LEFT, g.BASELINE); g.text(t, M, y - 6 * k); y += 2 * k;
-  };
+  // The shared heading draws only; the 2k spacer it used to fold in stays here,
+  // where the column's vertical rhythm lives.
+  const head = (t) => { heading(g, k, M, y - 6 * k, t, { theme: theme() }); y += 2 * k; };
 
-  heading('MODE');
+  head('MODE');
   chip(g, k, M, y, cw, bh, 'LOOK', mode === 'LOOK', () => { mode = 'LOOK'; }, live);
   chip(g, k, M + cw + gap, y, cw, bh, 'DRAW', mode === 'DRAW', () => { mode = 'DRAW'; }, live);
   y += bh + gap + 12 * k;
 
-  heading('COMPONENTS');
+  head('COMPONENTS');
   COMP_KEYS.forEach((key, i) => {
     chip(g, k, M + (i % 2) * (cw + gap), y + Math.floor(i / 2) * (bh + gap), cw, bh,
       key.toUpperCase(), COMP[key], () => { COMP[key] = !COMP[key]; regenerate(); }, live);
   });
   y += Math.ceil(COMP_KEYS.length / 2) * (bh + gap) + 12 * k;
 
-  heading('COMPOSITION');
-  const cyc = [
-    [`VIEW ${view().name}`, () => { viewIx = (viewIx + 1) % VIEWS.length; regenerate(); }],
-    [`MIX ${MIXES[mixIx].name}`, () => { mixIx = (mixIx + 1) % MIXES.length; regenerate(); }],
-    [`PAL ${pal().name}`, () => { paletteIx = (paletteIx + 1) % PALETTES.length; regenerate(); }],
-    [`CAM ${cam.ortho ? 'ORTHO' : 'PERSP'}`, () => { cam.ortho = !cam.ortho; P.loop(); }],
-    [`TIME ${MOTIONS[motionIx].name}`, () => { motionIx = (motionIx + 1) % MOTIONS.length; P.loop(); }],
-    [`RATE ${SPEEDS[speedIx].name}`, () => { speedIx = (speedIx + 1) % SPEEDS.length; }],
-  ];
-  for (const [label, action] of cyc) { chip(g, k, M, y, panelW, bh, label, false, action, live); y += bh + gap; }
+  head('COMPOSITION');
+  y = stack(g, k, M, y, panelW, bh, [
+    [`VIEW ${view().name}`, () => { viewIx = (viewIx + 1) % VIEWS.length; regenerate(); }, false],
+    [`MIX ${MIXES[mixIx].name}`, () => { mixIx = (mixIx + 1) % MIXES.length; regenerate(); }, false],
+    [`PAL ${pal().name}`, () => { paletteIx = (paletteIx + 1) % PALETTES.length; regenerate(); }, false],
+    [`CAM ${cam.ortho ? 'ORTHO' : 'PERSP'}`, () => { cam.ortho = !cam.ortho; P.loop(); }, false],
+    [`TIME ${MOTIONS[motionIx].name}`, () => { motionIx = (motionIx + 1) % MOTIONS.length; P.loop(); }, false],
+    [`RATE ${SPEEDS[speedIx].name}`, () => { speedIx = (speedIx + 1) % SPEEDS.length; }, false],
+  ], { gap: 4, layer: ui, style: chipStyle(), live });
 
   y += 10 * k;
-  heading('PHYSICS');
+  head('PHYSICS');
   chip(g, k, M, y, panelW, bh, sim.live ? 'RE-DETONATE' : 'DETONATE', sim.live, () => detonate(), live);
   y += bh + gap;
   chip(g, k, M, y, cw, bh, 'GRAVITY', sim.gravity,

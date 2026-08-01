@@ -82,3 +82,92 @@ export function hitLayer() {
     clear() { hits = []; regions = []; },
   };
 }
+
+// A section label above a run of controls.
+export function heading(g, k, x, y, text, { theme, size = 6.8 }) {
+  g.push();
+  g.noStroke();
+  g.fill(theme.muted);
+  g.textFont('monospace');
+  g.textAlign(g.LEFT, g.BASELINE);
+  g.textSize(size * k);
+  g.text(text, x, y);
+  g.pop();
+}
+
+// A run of controls left to right. `defs` are [width, label, action, on] with
+// width in unscaled units. Returns the x just past the last control.
+export function strip(g, k, x, y, h, defs, { gap = 5, layer, style, live = true }) {
+  let cx = x;
+  for (const [w, label, action, on] of defs) {
+    cx = button(g, k, cx, y, w * k, h, label, { on, action, live, layer, style }) + gap * k;
+  }
+  return cx;
+}
+
+// A column of full-width controls. `defs` are [label, action, on]. Returns the y
+// just past the last control.
+export function stack(g, k, x, y, w, h, defs, { gap = 4, layer, style, live = true }) {
+  let cy = y;
+  for (const [label, action, on] of defs) {
+    button(g, k, x, cy, w, h, label, { on, action, live, layer, style });
+    cy += h + gap * k;
+  }
+  return cy;
+}
+
+// Label, track, printed value. The hit it registers carries a `drag` handler
+// rather than an action, because a slider is worth nothing if it only responds
+// to the pixel you first pressed.
+//
+// What a drag *means* stays with the caller: inconstructions snapshots its world
+// on press and records one undo entry on release, so a drag from one end to the
+// other costs one undo rather than sixty. The library only reports positions.
+export function slider(g, k, x, y, w, label, value, set, {
+  style, layer, live = true, track = 62, tail = 34, barH = 6, size = 7,
+}) {
+  const { theme, shape } = style;
+  const bx = x + track * k;
+  const bw = w - (track + tail) * k;
+  const bh = barH * k;
+  // Same reason as the button: beginShape and rect() rasterize differently, so
+  // the track follows whichever the sketch already draws with.
+  const box = (bxx, byy, bww, bhh) => {
+    if (shape === 'poly') {
+      g.beginShape();
+      for (const [px, py] of [[bxx, byy], [bxx + bww, byy], [bxx + bww, byy + bhh], [bxx, byy + bhh]]) {
+        g.vertex(px, py);
+      }
+      g.endShape(g.CLOSE);
+    } else {
+      g.rect(bxx, byy, bww, bhh);
+    }
+  };
+  g.push();
+  g.noStroke();
+  g.textFont('monospace');
+  g.textSize(size * k);
+  g.textAlign(g.LEFT, g.BASELINE);
+  g.fill(theme.muted);
+  spaced(g, label, x, y + 6 * k, 0.9 * k);
+  g.fill('rgba(0,0,0,0)');
+  g.stroke(theme.ink);
+  g.strokeWeight(1 * k);
+  box(bx, y, bw, bh);
+  if (value > 0) {
+    g.noStroke();
+    g.fill(theme.accent);
+    box(bx + 1 * k, y + 1 * k, (bw - 2 * k) * value, bh - 2 * k);
+  }
+  g.noStroke();
+  g.fill(theme.ink);
+  g.textAlign(g.RIGHT, g.BASELINE);
+  g.text(String(Math.round(value * 100)).padStart(2, '0'), x + w, y + 6 * k);
+  g.pop();
+  if (live && layer) {
+    layer.add(bx - 8 * k, y - 6 * k, bw + 16 * k, bh + 12 * k, {
+      drag: (mx) => set(Math.max(0, Math.min(1, (mx - bx) / bw))),
+      label,
+    });
+  }
+}
