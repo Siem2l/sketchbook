@@ -22,6 +22,38 @@ Each sketch folder needs `index.html`, `sketch.js`, and `meta.json`
 (`title` and `date` required — the build fails otherwise). The gallery
 index is generated from these at build time.
 
+## Vectorheart house rules
+
+Sketches in the Vectorheart idiom (`splinter`, `inconstructions`) share
+`sketches/_lib/` — type, panel controls, keys, PNG export, the test probe and
+the page chrome. The template starts from it. A directory under `sketches/`
+whose name begins with `_` is not a sketch and needs no `meta.json`.
+
+- **`(g, k)` first.** Every drawing function takes the graphics target and the
+  scale factor. `k` is 1 on screen and 3 in a PNG export; that single convention
+  is what makes export a re-render rather than an upscale. Never read a
+  module-level scale inside a shared function.
+- **Colour is data.** The library defines none. Each sketch passes a
+  `{ ink, paper, accent, onAccent, muted }` theme in — a constant if its palette
+  is fixed, a function of the active palette if not.
+- **Reserved keys.** `s` PNG, `z` undo, `y` redo, `c` clear, space new, `?` help.
+  Everything else is yours. `keymap()` throws if you take one for something else.
+  It checks the canonical verb, not the printed one: inconstructions binds NEW to
+  space and prints it as ROLL.
+- **The library never owns the draw loop.** Sketches differ too much — one
+  redraws every frame off a dirty flag, another parks in `noLoop()`. Primitives
+  and plumbing are shared; control flow is not.
+- **The probe is read-only.** `probe(name, fields, layer)` exposes what the
+  interface already shows. Tests click and type like a person, and find controls
+  with `buttonAt(label)` rather than by hardcoding a pixel.
+- **Reproducibility is a feature.** If a composition has a seed, print it and
+  accept it back through `?seed=`.
+
+`npm run pixels` is the guard on all of it: it captures both sketches at a fixed
+viewport and settle point and byte-compares against a baseline in `.pixels/`
+(uncommitted — a baseline belongs to one Chromium build on one machine).
+`npm run pixels -- --update` takes a new one.
+
 ## Serving
 
 The site is served by the `sketchbook` module in apis-mellifera
