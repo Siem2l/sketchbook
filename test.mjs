@@ -339,6 +339,32 @@ try {
     await p.close();
   });
 
+  await test('the key registry refuses to redefine a reserved key', async () => {
+    const p = await openSketch();
+    await ready(p);
+    const message = await state(p, async () => {
+      const m = await import('/sketches/_lib/keys.js');
+      try {
+        m.keymap([{ key: 's', label: 'SAVE ALL', run: () => {} }]);
+        return null;
+      } catch (e) { return e.message; }
+    });
+    assert.match(message ?? '', /reserved/i);
+    await p.close();
+  });
+
+  await test('? opens the help overlay and escape closes it', async () => {
+    const p = await openSketch();
+    await ready(p);
+    await p.keyboard.press('?');
+    await settle(p);
+    assert.equal(await state(p, () => window.__inconstructions.helpOpen()), true);
+    await p.keyboard.press('Escape');
+    await settle(p);
+    assert.equal(await state(p, () => window.__inconstructions.helpOpen()), false);
+    await p.close();
+  });
+
   await test('the back link is present and points at the gallery', async () => {
     const p = await openSketch();
     const link = p.locator('a.back');

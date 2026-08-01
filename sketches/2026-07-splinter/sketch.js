@@ -26,6 +26,7 @@ import p5 from 'p5';
 import { spaced, spacedWidth, titleBlock, footer } from '../_lib/type.js';
 import { exportPng as exportPngTo } from '../_lib/export.js';
 import { buttonStyle, button, hitLayer, heading, stack } from '../_lib/panel.js';
+import { keymap } from '../_lib/keys.js';
 
 // --------------------------------------------------------------- palettes
 
@@ -1011,6 +1012,8 @@ function render(g, k, w, h, reveal, withPanel) {
   drawType(g, k, w, h);
   // The panel is a tool, not part of the poster — the export leaves it out.
   if (withPanel) { ui.clear(); drawPanel(g, k, w, h, true); }
+  // The overlay is a tool like the panel, so the export leaves it out too.
+  if (withPanel) KEYS.overlay(g, k, w, h, { theme: theme(), title: 'SPLINTER · KEYS' });
   footer(g, k, {
     x: 36 * k, y: h - 28 * k,
     text: `SKETCHBOOK · SIEM2L.NL · ${strokes.length} STROKE${strokes.length === 1 ? '' : 'S'}`,
@@ -1051,6 +1054,7 @@ if (typeof window !== 'undefined') {
     strokePieces: () => strokes.reduce((a, s) => a + s.length, 0),
     // Where a named button actually is, so tests never hardcode a pixel and
     // break the moment the panel gains a row.
+    helpOpen: () => KEYS.visible,
     buttonAt: (label) => {
       const b = ui.find(label);
       return b ? { x: Math.round(b.x + b.w / 2), y: Math.round(b.y + b.h / 2) } : null;
@@ -1085,6 +1089,28 @@ function seedFromUrl() {
   const n = Number.parseInt(q, 16);
   return Number.isFinite(n) && n > 0 ? n >>> 0 : null;
 }
+
+const KEYS = keymap([
+  { key: ' ', label: 'NEW', hint: 'NEW COMPOSITION', run: () => reseed() },
+  { key: 'v', label: 'VIEW', hint: 'VIEW', run: () => { viewIx = (viewIx + 1) % VIEWS.length; regenerate(); } },
+  { key: 'm', label: 'MIX', hint: 'MIX', run: () => { mixIx = (mixIx + 1) % MIXES.length; regenerate(); } },
+  { key: 'k', label: 'PALETTE', hint: 'PALETTE',
+    run: () => { paletteIx = (paletteIx + 1) % PALETTES.length; regenerate(); } },
+  { key: 't', label: 'TIME', hint: 'MOTION',
+    run: (p) => { motionIx = (motionIx + 1) % MOTIONS.length; p.loop(); } },
+  { key: 'r', label: 'RATE', hint: 'RATE',
+    run: (p) => { speedIx = (speedIx + 1) % SPEEDS.length; p.loop(); } },
+  { key: 'o', label: 'ORTHO', hint: 'ORTHO / PERSP', run: (p) => { cam.ortho = !cam.ortho; p.loop(); } },
+  { key: 'd', label: 'DRAW', hint: 'DRAW / LOOK',
+    run: (p) => { mode = mode === 'DRAW' ? 'LOOK' : 'DRAW'; p.loop(); } },
+  { key: 'z', label: 'UNDO', hint: 'UNDO STROKE', run: (p) => { strokes.pop(); p.loop(); } },
+  { key: 'c', label: 'CLEAR', hint: 'CLEAR STROKES', run: (p) => { strokes = []; p.loop(); } },
+  { key: 'x', label: 'DETONATE', hint: 'DETONATE', run: () => detonate() },
+  { key: 'g', label: 'GRAVITY', hint: 'GRAVITY',
+    run: (p) => { sim.gravity = !sim.gravity; if (!sim.live) detonate(); p.loop(); } },
+  { key: 'b', label: 'COLLIDE', hint: 'COLLIDE', run: (p) => { sim.collide = !sim.collide; p.loop(); } },
+  { key: 's', label: 'PNG', hint: 'PNG', run: () => exportPng() },
+]);
 
 new p5((p) => {
   P = p;
@@ -1167,22 +1193,5 @@ new p5((p) => {
     return false;
   };
 
-  p.keyPressed = () => {
-    const k = p.key.toLowerCase();
-    if (p.key === ' ') { reseed(); return false; }
-    if (k === 'v') { viewIx = (viewIx + 1) % VIEWS.length; regenerate(); return false; }
-    if (k === 'm') { mixIx = (mixIx + 1) % MIXES.length; regenerate(); return false; }
-    if (k === 'k') { paletteIx = (paletteIx + 1) % PALETTES.length; regenerate(); return false; }
-    if (k === 't') { motionIx = (motionIx + 1) % MOTIONS.length; p.loop(); return false; }
-    if (k === 'r') { speedIx = (speedIx + 1) % SPEEDS.length; p.loop(); return false; }
-    if (k === 'o') { cam.ortho = !cam.ortho; p.loop(); return false; }
-    if (k === 'd') { mode = mode === 'DRAW' ? 'LOOK' : 'DRAW'; p.loop(); return false; }
-    if (k === 'z') { strokes.pop(); p.loop(); return false; }
-    if (k === 'c') { strokes = []; p.loop(); return false; }
-    if (k === 'x') { detonate(); return false; }
-    if (k === 'g') { sim.gravity = !sim.gravity; if (!sim.live) detonate(); p.loop(); return false; }
-    if (k === 'b') { sim.collide = !sim.collide; p.loop(); return false; }
-    if (k === 's') { exportPng(); return false; }
-    return true;
-  };
+  p.keyPressed = () => (KEYS.handle(p) ? false : true);
 });

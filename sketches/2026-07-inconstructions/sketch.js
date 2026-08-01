@@ -20,6 +20,7 @@ import p5 from 'p5';
 import { spaced, spacedWidth, titleBlock, readout, regMarks } from '../_lib/type.js';
 import { exportPng as exportPngTo } from '../_lib/export.js';
 import { buttonStyle, button, hitLayer, strip, slider } from '../_lib/panel.js';
+import { keymap } from '../_lib/keys.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -1439,8 +1440,11 @@ function drawHud(g, u, w, h, live) {
     g.noStroke();
     g.fill('#8a8a80');
     g.textSize(7 * u);
-    spaced(g, '1-7 SELECT · R ROTATE · Q/E VIEW', lx, ly + 12 * u, 0.8 * u);
-    spaced(g, 'SPACE ROLL · T TEMPLATE · G GROW', lx, ly + 23 * u, 0.8 * u);
+    // Generated from the bindings rather than typed out, so the two cannot
+    // drift. The third line stays literal: WHEEL is not a key binding.
+    const hints = KEYS.hints().split(' · ');
+    spaced(g, hints.slice(0, 3).join(' · '), lx, ly + 12 * u, 0.8 * u);
+    spaced(g, hints.slice(3, 6).join(' · '), lx, ly + 23 * u, 0.8 * u);
     spaced(g, 'F FLUX · W TOWER · WHEEL SCRUB', lx, ly + 34 * u, 0.8 * u);
   }
 
@@ -1638,6 +1642,7 @@ if (typeof window !== 'undefined') {
     target: () => { const t = target(); return t ? [t.x, t.y, t.z] : null; },
     undoDepth: () => past.length,
     redoDepth: () => future.length,
+    helpOpen: () => KEYS.visible,
     // Where a named control actually is, so tests never hardcode a pixel and
     // break the moment the panel gains a row — which is exactly what happened
     // when the generator dashboard pushed everything down by ten.
@@ -1673,6 +1678,31 @@ if (typeof window !== 'undefined') {
     },
   };
 }
+
+// Bindings as data, so the hint line cannot drift from what the keys do. The
+// first six entries are ordered to reproduce the two drawn hint lines exactly.
+const KEYS = keymap([
+  { key: '1-7', hint: 'SELECT' },
+  { key: 'r', label: 'ROTATE', hint: 'ROTATE', run: () => { activeRot = (activeRot + 1) % 4; } },
+  { key: 'q/e', hint: 'VIEW' },
+  { key: ' ', label: 'NEW', hint: 'ROLL', run: () => roll() },
+  { key: 't', label: 'TEMPLATE', hint: 'TEMPLATE',
+    run: () => { gen.template = (gen.template + 1) % TEMPLATES.length; retune(); } },
+  { key: 'g', label: 'GROW', hint: 'GROW', run: () => grow(14) },
+  { key: 'f', label: 'FLUX', hint: 'FLUX', run: () => setFlux(!gen.flux) },
+  { key: 'w', label: 'TOWER', hint: 'TOWER', run: () => setTower(!gen.tower) },
+  { key: 'q', label: 'VIEW LEFT', run: () => turn(-1) },
+  { key: 'e', label: 'VIEW RIGHT', run: () => turn(1) },
+  { key: 'x', label: 'MODE', run: () => { mode = mode === 'place' ? 'delete' : 'place'; } },
+  { key: 'm', label: 'SYMMETRY', run: () => { gen.sym = (gen.sym + 1) % SYMS.length; retune(); } },
+  { key: 'n', label: 'STEP', run: () => grow(1) },
+  { key: 'p', label: 'PANEL', run: () => { gen.open = !gen.open; } },
+  { key: 'c', label: 'CLEAR', run: () => swapWorld([]) },
+  { key: 'z', label: 'UNDO',
+    run: (p) => ((p.keyIsDown(p.CONTROL) || p.keyIsDown(91)) && p.keyIsDown(p.SHIFT) ? redo() : undo()) },
+  { key: 'y', label: 'REDO', run: () => redo() },
+  { key: 's', label: 'PNG', run: () => exportPng() },
+]);
 
 new p5((p) => {
   P = p;
@@ -1743,6 +1773,7 @@ new p5((p) => {
     drawHoverMark(p);
     hud.clear();
     drawHud(p, 1, p.width, p.height, true);
+    KEYS.overlay(p, 1, p.width, p.height, { theme: THEME, title: 'INCONSTRUCTIONS · KEYS' });
   };
 
   p.mousePressed = () => {
@@ -1790,25 +1821,12 @@ new p5((p) => {
   p.keyPressed = () => {
     if (!demoDone) { finishDemo(); return false; }
     if (genPlay) { finishGen(); return false; }
+    // The number range is handled here rather than as bindings because it is a
+    // range; the registry documents it with the '1-7' entry that carries a hint
+    // and no run.
     const k = p.key.toLowerCase();
-    if (k === ' ') { roll(); return false; }
-    if (k >= '1' && k <= String(PARTS.length)) activePart = Number(k) - 1;
-    else if (k === 'r') activeRot = (activeRot + 1) % 4;
-    else if (k === 'q') turn(-1);
-    else if (k === 'e') turn(1);
-    else if (k === 'x') mode = mode === 'place' ? 'delete' : 'place';
-    else if (k === 'c') swapWorld([]);
-    else if (k === 't') { gen.template = (gen.template + 1) % TEMPLATES.length; retune(); }
-    else if (k === 'm') { gen.sym = (gen.sym + 1) % SYMS.length; retune(); }
-    else if (k === 'g') grow(14);
-    else if (k === 'n') grow(1);
-    else if (k === 'p') gen.open = !gen.open;
-    else if (k === 'f') setFlux(!gen.flux);
-    else if (k === 'w') setTower(!gen.tower);
-    else if (k === 'z' && (p.keyIsDown(p.CONTROL) || p.keyIsDown(91))) p.keyIsDown(p.SHIFT) ? redo() : undo();
-    else if (k === 'z') undo();
-    else if (k === 'y') redo();
-    else if (k === 's') exportPng();
+    if (k >= '1' && k <= String(PARTS.length)) { activePart = Number(k) - 1; return false; }
+    KEYS.handle(p);
     return false;
   };
 });
