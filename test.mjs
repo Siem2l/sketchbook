@@ -948,6 +948,21 @@ try {
       assert.match(file.suggestedFilename(), /^splinter-[0-9a-f]+\.png$/);
     });
 
+    // The loose match above covers the unseeded path; this pins the exact name
+    // a known seed produces, so moving the export into the library cannot
+    // quietly change what a reproducible composition is called.
+    await test('a seeded splinter export is named for that seed exactly', async () => {
+      const page = await openSplinter();
+      await page.goto(`${SPLINTER}?seed=1234abcd`, { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => window.__splinter && window.__splinter.settled(),
+        null, { timeout: 60000 });
+      const download = page.waitForEvent('download', { timeout: 30000 });
+      await page.keyboard.press('s');
+      const file = await download;
+      assert.equal(file.suggestedFilename(), 'splinter-1234abcd.png');
+      await page.close();
+    });
+
     await p.close();
 
     await test('splinter renders on a narrow screen', async () => {

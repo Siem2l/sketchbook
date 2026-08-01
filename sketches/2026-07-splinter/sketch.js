@@ -23,6 +23,7 @@ import p5 from 'p5';
 // spacedWidth is unused here until Task 6 needs it for centred button labels;
 // Vite tree-shakes the build, so importing it now costs nothing.
 import { spaced, spacedWidth, titleBlock, footer } from '../_lib/type.js';
+import { exportPng as exportPngTo } from '../_lib/export.js';
 
 // --------------------------------------------------------------- palettes
 
@@ -1034,14 +1035,13 @@ function reseed() {
 }
 
 function exportPng() {
-  const p = P, k = 3;
-  const g = p.createGraphics(p.width * k, p.height * k);
   const su = unit;
-  updateCamera(p.width, p.height);
-  render(g, k, p.width * k, p.height * k, 1.1, false);
+  updateCamera(P.width, P.height);
+  exportPngTo(P, {
+    name: `splinter-${seed.toString(16)}`,
+    render: (g, k) => render(g, k, P.width * k, P.height * k, 1.1, false),
+  });
   unit = su;
-  p.saveCanvas(g, `splinter-${seed.toString(16)}`, 'png');
-  setTimeout(() => g.remove(), 200);
 }
 
 // Read-only view of what the interface already shows, for the behaviour tests.

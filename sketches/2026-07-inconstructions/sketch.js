@@ -17,6 +17,7 @@
 // the same idiom as the thing it makes.
 import p5 from 'p5';
 import { spaced, spacedWidth, titleBlock, readout, regMarks } from '../_lib/type.js';
+import { exportPng as exportPngTo } from '../_lib/export.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -1565,17 +1566,19 @@ function turn(dir) {
 }
 
 function exportPng() {
-  const p = P;
-  const u = 3;
-  const g = p.createGraphics(p.width * u, p.height * u);
-  g.background(PAPER);
-  const ox = originX, oy = originY, sc = scale;
-  originX *= u; originY *= u; scale *= u;
-  rebuildAt(g, u);
-  originX = ox; originY = oy; scale = sc;
-  drawHud(g, u, p.width * u, p.height * u, false);
-  p.saveCanvas(g, gen.rolled ? `inconstructions-${gen.seed.toString(16)}` : 'inconstructions', 'png');
-  setTimeout(() => g.remove(), 100);
+  exportPngTo(P, {
+    // A rolled composition is reproducible from its seed, so the file carries
+    // it; the reference build has no seed to claim.
+    name: gen.rolled ? `inconstructions-${gen.seed.toString(16)}` : 'inconstructions',
+    render: (g, u) => {
+      g.background(PAPER);
+      const ox = originX, oy = originY, sc = scale;
+      originX *= u; originY *= u; scale *= u;
+      rebuildAt(g, u);
+      originX = ox; originY = oy; scale = sc;
+      drawHud(g, u, P.width * u, P.height * u, false);
+    },
+  });
   dirty = true;
 }
 
