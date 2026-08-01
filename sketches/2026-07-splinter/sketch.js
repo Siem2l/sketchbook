@@ -27,6 +27,7 @@ import { spaced, spacedWidth, titleBlock, footer } from '../_lib/type.js';
 import { exportPng as exportPngTo } from '../_lib/export.js';
 import { buttonStyle, button, hitLayer, heading, stack } from '../_lib/panel.js';
 import { keymap } from '../_lib/keys.js';
+import { probe } from '../_lib/probe.js';
 
 // --------------------------------------------------------------- palettes
 
@@ -1037,47 +1038,39 @@ function exportPng() {
 }
 
 // Read-only view of what the interface already shows, for the behaviour tests.
-if (typeof window !== 'undefined') {
-  window.__splinter = {
-    seed: () => seed,
-    palette: () => pal().name,
-    view: () => view().name,
-    mix: () => MIXES[mixIx].name,
-    motion: () => MOTIONS[motionIx].name,
-    speed: () => SPEEDS[speedIx].name,
-    mode: () => mode,
-    ortho: () => cam.ortho,
-    camera: () => ({ yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist }),
-    components: () => ({ ...COMP }),
-    pieces: () => scene.length,
-    strokes: () => strokes.length,
-    strokePieces: () => strokes.reduce((a, s) => a + s.length, 0),
-    // Where a named button actually is, so tests never hardcode a pixel and
-    // break the moment the panel gains a row.
-    helpOpen: () => KEYS.visible,
-    buttonAt: (label) => {
-      const b = ui.find(label);
-      return b ? { x: Math.round(b.x + b.w / 2), y: Math.round(b.y + b.h / 2) } : null;
-    },
-    physics: () => ({ live: sim.live, gravity: sim.gravity, floor: sim.floor,
-      collide: sim.collide, t: sim.t }),
-    collision: () => ({ bodies: bodies.length, contacts: contactCount,
-      worstDepth: +worstDepth.toFixed(4) }),
-    // Mean clearance above the floor *surface beneath each body*. Measuring
-    // against a flat datum would just report the bowl's curvature; this reports
-    // stacking, which is the thing collision is supposed to produce.
-    pileHeight: () => (bodies.length
-      ? bodies.reduce((a, b) => a + (b.at.y - floorAt(b.at.x, b.at.z)), 0) / bodies.length : 0),
-    // Mean distance from each fragment's designed position — 0 when settled.
-    spread: () => {
-      let n = 0, d = 0;
-      for (const it of scene) { if (!it.home) continue; n++; d += Math.hypot(it.at.x - it.home.x, it.at.y - it.home.y, it.at.z - it.home.z); }
-      return n ? d / n : 0;
-    },
-    lowest: () => scene.reduce((m, it) => Math.min(m, it.at ? it.at.y : m), Infinity),
-    settled: () => performance.now() - revealAt > 1500,
-  };
-}
+probe('splinter', {
+  seed: () => seed,
+  palette: () => pal().name,
+  view: () => view().name,
+  mix: () => MIXES[mixIx].name,
+  motion: () => MOTIONS[motionIx].name,
+  speed: () => SPEEDS[speedIx].name,
+  mode: () => mode,
+  ortho: () => cam.ortho,
+  camera: () => ({ yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist }),
+  components: () => ({ ...COMP }),
+  pieces: () => scene.length,
+  strokes: () => strokes.length,
+  strokePieces: () => strokes.reduce((a, s) => a + s.length, 0),
+  helpOpen: () => KEYS.visible,
+  physics: () => ({ live: sim.live, gravity: sim.gravity, floor: sim.floor,
+    collide: sim.collide, t: sim.t }),
+  collision: () => ({ bodies: bodies.length, contacts: contactCount,
+    worstDepth: +worstDepth.toFixed(4) }),
+  // Mean clearance above the floor *surface beneath each body*. Measuring
+  // against a flat datum would just report the bowl's curvature; this reports
+  // stacking, which is the thing collision is supposed to produce.
+  pileHeight: () => (bodies.length
+    ? bodies.reduce((a, b) => a + (b.at.y - floorAt(b.at.x, b.at.z)), 0) / bodies.length : 0),
+  // Mean distance from each fragment's designed position — 0 when settled.
+  spread: () => {
+    let n = 0, d = 0;
+    for (const it of scene) { if (!it.home) continue; n++; d += Math.hypot(it.at.x - it.home.x, it.at.y - it.home.y, it.at.z - it.home.z); }
+    return n ? d / n : 0;
+  },
+  lowest: () => scene.reduce((m, it) => Math.min(m, it.at ? it.at.y : m), Infinity),
+  settled: () => performance.now() - revealAt > 1500,
+}, ui);
 
 // The poster prints its seed because the seed is the composition. Accepting one
 // back through the URL is what makes that promise true — and it is what lets a

@@ -21,6 +21,7 @@ import { spaced, spacedWidth, titleBlock, readout, regMarks } from '../_lib/type
 import { exportPng as exportPngTo } from '../_lib/export.js';
 import { buttonStyle, button, hitLayer, strip, slider } from '../_lib/panel.js';
 import { keymap } from '../_lib/keys.js';
+import { probe } from '../_lib/probe.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -1628,56 +1629,47 @@ let probeG = null;
 // The HUD is drawn on the canvas, so a test can't read it as text. This is the
 // one external seam: a read-only view of exactly what the HUD already shows,
 // with no way to drive the sketch from outside.
-if (typeof window !== 'undefined') {
-  window.__inconstructions = {
-    parts: () => cells.size,
-    bearing: () => bearing(),
-    mode: () => mode,
-    activePart: () => PARTS[activePart].id,
-    rot: () => activeRot,
-    demoDone: () => demoDone,
-    cell: () => (hover ? [hover.x, hover.y, hover.ground ? 0 : hover.z] : null),
-    // The cell the ghost preview is currently occupying, or null when a click
-    // here would be refused. Exactly what the ghost already shows on screen.
-    target: () => { const t = target(); return t ? [t.x, t.y, t.z] : null; },
-    undoDepth: () => past.length,
-    redoDepth: () => future.length,
-    helpOpen: () => KEYS.visible,
-    // Where a named control actually is, so tests never hardcode a pixel and
-    // break the moment the panel gains a row — which is exactly what happened
-    // when the generator dashboard pushed everything down by ten.
-    buttonAt: (label) => {
-      const b = hud.find(label);
-      return b ? { x: Math.round(b.x + b.w / 2), y: Math.round(b.y + b.h / 2) } : null;
-    },
-    // A scratch buffer so a test can exercise the shared type module against
-    // the same p5 text metrics the sketch itself uses. Made once, not per call.
-    graphics: () => (probeG || (probeG = P.createGraphics(200, 60))),
-    // Generator state — the same values the panel and the printed parameter
-    // line already show, plus a fingerprint of the lattice so a test can tell
-    // "the same composition came back" without being able to set a seed.
-    seed: () => gen.seed,
-    template: () => template().id,
-    symmetry: () => SYMS[gen.sym],
-    params: () => ({ mix: gen.mix, density: gen.density, grain: gen.grain,
-      accent: gen.accent, trim: gen.trim, legs: gen.legs }),
-    panelOpen: () => gen.open,
-    generating: () => genPlay !== null,
-    signature: () => signature(),
-    grounded: () => connected(),
-    flux: () => gen.flux,
-    tower: () => gen.tower,
-    altitude: () => Math.round(viewZ),
-    modules: () => towerTop / MZ,
-    // Highest occupied level — how a test tells an unbounded tower from a
-    // composition that merely fills the sandbox.
-    top: () => {
-      let hi = -1;
-      for (const k of cells.keys()) hi = Math.max(hi, Number(k.split(',')[2]));
-      return hi;
-    },
-  };
-}
+probe('inconstructions', {
+  parts: () => cells.size,
+  bearing: () => bearing(),
+  mode: () => mode,
+  activePart: () => PARTS[activePart].id,
+  rot: () => activeRot,
+  demoDone: () => demoDone,
+  cell: () => (hover ? [hover.x, hover.y, hover.ground ? 0 : hover.z] : null),
+  // The cell the ghost preview is currently occupying, or null when a click
+  // here would be refused. Exactly what the ghost already shows on screen.
+  target: () => { const t = target(); return t ? [t.x, t.y, t.z] : null; },
+  undoDepth: () => past.length,
+  redoDepth: () => future.length,
+  helpOpen: () => KEYS.visible,
+  // A scratch buffer so a test can exercise the shared type module against
+  // the same p5 text metrics the sketch itself uses. Made once, not per call.
+  graphics: () => (probeG || (probeG = P.createGraphics(200, 60))),
+  // Generator state — the same values the panel and the printed parameter
+  // line already show, plus a fingerprint of the lattice so a test can tell
+  // "the same composition came back" without being able to set a seed.
+  seed: () => gen.seed,
+  template: () => template().id,
+  symmetry: () => SYMS[gen.sym],
+  params: () => ({ mix: gen.mix, density: gen.density, grain: gen.grain,
+    accent: gen.accent, trim: gen.trim, legs: gen.legs }),
+  panelOpen: () => gen.open,
+  generating: () => genPlay !== null,
+  signature: () => signature(),
+  grounded: () => connected(),
+  flux: () => gen.flux,
+  tower: () => gen.tower,
+  altitude: () => Math.round(viewZ),
+  modules: () => towerTop / MZ,
+  // Highest occupied level — how a test tells an unbounded tower from a
+  // composition that merely fills the sandbox.
+  top: () => {
+    let hi = -1;
+    for (const k of cells.keys()) hi = Math.max(hi, Number(k.split(',')[2]));
+    return hi;
+  },
+}, hud);
 
 // Bindings as data, so the hint line cannot drift from what the keys do. The
 // first six entries are ordered to reproduce the two drawn hint lines exactly.
