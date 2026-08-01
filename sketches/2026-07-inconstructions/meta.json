@@ -2,6 +2,6 @@
   "title": "inconstructions",
   "date": "2026-07-31",
   "tags": ["isometric", "vectorheart", "toy", "interactive"],
-  "description": "An ephemeral assembly sandbox in the Vectorheart idiom. Build interlocking axonometric structures from a closed kit of parts on a bounded lattice; occlusion is a sort rather than a depth buffer, and picking reads a pixel from an ID buffer. Nothing is saved — the page opens by building itself, and the only thing that leaves is a PNG.",
+  "description": "An ephemeral assembly sandbox in the Vectorheart idiom, with a generator behind it. Build interlocking axonometric structures from a closed kit of parts on a bounded lattice, or roll one: five passes — field, support, typing, ribbon, trim — where the massing crossfades an authored template with perlin noise, and MIX is that crossfade as a single slider. Two endless modes: FLUX keeps the bounded volume churning at constant mass, and TOWER removes the ceiling and climbs, generating modules ahead of the camera and pruning behind it. Nothing is saved; the exported PNG prints the seed that reproduces it.",
   "thumbnail": "thumb.png"
 }

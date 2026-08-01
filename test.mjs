@@ -67,6 +67,15 @@ try {
 
   const settle = (p) => p.waitForTimeout(250);
 
+  // Wait for the opening assembly to hand over control. The replay is driven by
+  // the draw loop, so on a loaded machine it can take far longer than the four
+  // seconds it nominally runs for — and a fixed delay that expires early sends
+  // the test's first keystroke into finishing the demo instead of doing what it
+  // was meant to do.
+  const ready = (p) => p.waitForFunction(
+    () => window.__inconstructions && window.__inconstructions.demoDone(),
+    null, { timeout: 60000 });
+
   // Points on the finished demo build, verified against the assembled geometry:
   // TOP is the upward face of the accent ribbon, whose neighbour above is free;
   // SOLID is an interior face whose neighbour is already occupied; GROUND is a
@@ -118,7 +127,7 @@ try {
   // -------------------------------------------------------------- building
   {
     const p = await openSketch();
-    await p.waitForTimeout(5000);
+    await ready(p);
 
     await test('clicking a face of the structure attaches a part to it', async () => {
       const before = await parts(p);
@@ -210,7 +219,7 @@ try {
   // ------------------------------------------------------------------ deleting
   await test('delete mode removes a part rather than adding one', async () => {
     const p = await openSketch();
-    await p.waitForTimeout(5000);
+    await ready(p);
     await p.keyboard.press('x');
     await settle(p);
     assert.equal(await state(p, () => window.__inconstructions.mode()), 'delete');
@@ -226,7 +235,7 @@ try {
   // ------------------------------------------------------------------- camera
   await test('the camera cycles four bearings and returns to where it started', async () => {
     const p = await openSketch();
-    await p.waitForTimeout(5000);
+    await ready(p);
     const seen = [await state(p, () => window.__inconstructions.bearing())];
     for (let i = 0; i < 4; i++) {
       await p.keyboard.press('e');
@@ -241,7 +250,7 @@ try {
   // ------------------------------------------------------------ clear + reset
   await test('clear empties the lattice and is itself undoable', async () => {
     const p = await openSketch();
-    await p.waitForTimeout(5000);
+    await ready(p);
     const before = await parts(p);
     await p.keyboard.press('c');
     await settle(p);
@@ -255,7 +264,7 @@ try {
   // -------------------------------------------------------------------- bounds
   await test('clicking outside the build volume places nothing', async () => {
     const p = await openSketch();
-    await p.waitForTimeout(5000);
+    await ready(p);
     const before = await parts(p);
     await p.mouse.click(60, 700);
     await settle(p);
@@ -266,7 +275,7 @@ try {
   // --------------------------------------------------------------------- touch
   await test('the interface stays within a narrow viewport', async () => {
     const p = await openSketch({ width: 390, height: 780, touch: true });
-    await p.waitForTimeout(5000);
+    await ready(p);
     assert.ok(await parts(p) > 20, 'the assembly did not run on a narrow screen');
     assert.deepEqual(p.errors, []);
     await p.close();
@@ -274,7 +283,7 @@ try {
 
   await test('a tap places a part on a touch device', async () => {
     const p = await openSketch({ width: 390, height: 780, touch: true });
-    await p.waitForTimeout(5000);
+    await ready(p);
     const before = await parts(p);
     await p.touchscreen.tap(195, 430);
     await settle(p);
@@ -285,11 +294,311 @@ try {
   // -------------------------------------------------------------------- export
   await test('PNG export produces a download', async () => {
     const p = await openSketch();
-    await p.waitForTimeout(5000);
+    await ready(p);
     const download = p.waitForEvent('download', { timeout: 15000 });
     await p.keyboard.press('s');
     const file = await download;
     assert.match(file.suggestedFilename(), /\.png$/);
+    await p.close();
+  });
+
+  // ----------------------------------------------------------------- generator
+  //
+  // The generator panel is drawn on the canvas, so these drive it the same way
+  // the sketch's own controls are driven elsewhere in this file: real clicks at
+  // coordinates mirrored from the layout. At 1200x900 the panel is a right-hand
+  // column sitting below the readout stack (margin, four rows, the printed
+  // parameter lines), and each slider's track starts 62px into it and runs
+  // 100px wide.
+  {
+    const PX = 1200 - 20 - 14 - 196, PY = 20 + 14 + 4 * 13 + 40;
+    const BX = PX + 62, BW = 100;
+    const ROW = { mix: 0, density: 1, grain: 2, accent: 3, trim: 4 };
+    const sliderAt = (k, f) => [BX + f * BW, PY + 14 + 18 + 14 + ROW[k] * 16 + 3];
+    // Inside the panel but on no control: the seed readout row.
+    const PANEL_GAP = [PX + 8, PY + 14 + 18 + 6];
+
+    const gen = (p, fn) => p.evaluate(fn);
+    const sig = (p) => gen(p, () => window.__inconstructions.signature());
+
+    async function setSlider(p, k, f) {
+      const [x, y] = sliderAt(k, f);
+      await p.mouse.click(x, y);
+      await settle(p);
+    }
+
+    const p = await openSketch();
+    await ready(p);
+
+    await test('rolling produces a structure that stands on the ground', async () => {
+      await p.keyboard.press(' ');
+      await p.waitForTimeout(1600);
+      assert.ok(await parts(p) > 40, 'the roll produced almost nothing');
+      assert.equal(await gen(p, () => window.__inconstructions.generating()), false);
+      assert.ok(await gen(p, () => window.__inconstructions.grounded()),
+        'some part of the composition was floating free of the ground');
+    });
+
+    await test('a second roll is a different composition', async () => {
+      const before = await sig(p);
+      const seed = await gen(p, () => window.__inconstructions.seed());
+      await p.keyboard.press(' ');
+      await p.waitForTimeout(1600);
+      assert.notEqual(await gen(p, () => window.__inconstructions.seed()), seed);
+      assert.notEqual(await sig(p), before);
+    });
+
+    await test('a whole generated composition costs one undo', async () => {
+      const before = await sig(p);
+      const depth = await gen(p, () => window.__inconstructions.undoDepth());
+      await p.keyboard.press(' ');
+      await p.waitForTimeout(1600);
+      assert.equal(await gen(p, () => window.__inconstructions.undoDepth()), depth + 1);
+      await p.keyboard.press('z');
+      await settle(p);
+      assert.equal(await sig(p), before, 'undo did not restore the previous composition');
+      await p.keyboard.press('y');
+      await settle(p);
+    });
+
+    await test('an interaction finishes a roll that is still assembling', async () => {
+      await p.keyboard.press(' ');
+      await p.waitForTimeout(120);
+      assert.equal(await gen(p, () => window.__inconstructions.generating()), true);
+      await p.keyboard.press('r');
+      await settle(p);
+      assert.equal(await gen(p, () => window.__inconstructions.generating()), false);
+    });
+
+    await test('raising density puts more parts into the same composition', async () => {
+      await setSlider(p, 'density', 0.25);
+      const sparse = await parts(p);
+      await setSlider(p, 'density', 0.9);
+      assert.ok(await parts(p) > sparse * 1.3,
+        `density did not bite: ${sparse} -> ${await parts(p)}`);
+    });
+
+    await test('a parameter round-trip restores the identical composition', async () => {
+      await setSlider(p, 'grain', 0.4);
+      const before = await sig(p);
+      await setSlider(p, 'grain', 0.9);
+      assert.notEqual(await sig(p), before, 'grain changed nothing');
+      await setSlider(p, 'grain', 0.4);
+      assert.equal(await sig(p), before, 'the same parameters gave a different composition');
+    });
+
+    await test('a whole slider drag costs one undo, not one per frame', async () => {
+      const depth = await gen(p, () => window.__inconstructions.undoDepth());
+      const [x, y] = sliderAt('mix', 0.2);
+      await p.mouse.move(x, y);
+      await p.mouse.down();
+      for (const f of [0.4, 0.6, 0.8]) await p.mouse.move(sliderAt('mix', f)[0], y);
+      await p.mouse.up();
+      await settle(p);
+      assert.equal(await gen(p, () => window.__inconstructions.undoDepth()), depth + 1);
+    });
+
+    await test('cycling the template changes both the readout and the structure', async () => {
+      const before = { t: await gen(p, () => window.__inconstructions.template()), s: await sig(p) };
+      await p.keyboard.press('t');
+      await settle(p);
+      assert.notEqual(await gen(p, () => window.__inconstructions.template()), before.t);
+      assert.notEqual(await sig(p), before.s);
+    });
+
+    await test('cycling symmetry returns to where it started after three presses', async () => {
+      const seen = [await gen(p, () => window.__inconstructions.symmetry())];
+      for (let i = 0; i < 3; i++) {
+        await p.keyboard.press('m');
+        await settle(p);
+        seen.push(await gen(p, () => window.__inconstructions.symmetry()));
+      }
+      assert.equal(new Set(seen).size, 3, `expected three modes, saw ${seen.join(',')}`);
+      assert.equal(seen[0], seen[3]);
+    });
+
+    await test('a click inside the panel but not on a control places nothing', async () => {
+      const before = await parts(p);
+      await p.mouse.click(PANEL_GAP[0], PANEL_GAP[1]);
+      await settle(p);
+      assert.equal(await parts(p), before, 'a click in the panel edited the lattice');
+    });
+
+    await test('growth extends the structure rather than replacing it', async () => {
+      const before = await parts(p);
+      await p.keyboard.press('g');
+      await settle(p);
+      const after = await parts(p);
+      assert.ok(after > before, `growth added nothing: ${before} -> ${after}`);
+      assert.ok(await gen(p, () => window.__inconstructions.grounded()),
+        'growth left a part floating');
+    });
+
+    await test('a single growth step adds exactly one part', async () => {
+      const before = await parts(p);
+      await p.keyboard.press('n');
+      await settle(p);
+      assert.equal(await parts(p), before + 1);
+    });
+
+    await test('growth is undoable in one press', async () => {
+      const before = await sig(p);
+      await p.keyboard.press('g');
+      await settle(p);
+      await p.keyboard.press('z');
+      await settle(p);
+      assert.equal(await sig(p), before);
+    });
+
+    await test('the panel can be hidden and shown', async () => {
+      assert.equal(await gen(p, () => window.__inconstructions.panelOpen()), true);
+      await p.keyboard.press('p');
+      await settle(p);
+      assert.equal(await gen(p, () => window.__inconstructions.panelOpen()), false);
+      await p.keyboard.press('p');
+      await settle(p);
+      assert.equal(await gen(p, () => window.__inconstructions.panelOpen()), true);
+    });
+
+    await p.close();
+  }
+
+  // ------------------------------------------------------------------ endless
+  //
+  // These wait on the sketch's own readiness rather than on a fixed delay: both
+  // modes are driven by the draw loop, so a loaded machine changes the timing
+  // but never the behaviour being asserted.
+  {
+    const gen = (p, fn) => p.evaluate(fn);
+    const ready = (p) => p.waitForFunction(
+      () => window.__inconstructions && window.__inconstructions.demoDone(), null, { timeout: 60000 });
+    const rolled = (p) => p.waitForFunction(
+      () => !window.__inconstructions.generating(), null, { timeout: 60000 });
+
+    const p = await openSketch();
+    await ready(p);
+    await p.keyboard.press(' ');
+    await rolled(p);
+
+    await test('flux keeps changing the structure on its own', async () => {
+      const before = await gen(p, () => window.__inconstructions.signature());
+      await p.keyboard.press('f');
+      assert.equal(await gen(p, () => window.__inconstructions.flux()), true);
+      await p.waitForTimeout(3000);
+      assert.notEqual(await gen(p, () => window.__inconstructions.signature()), before,
+        'nothing changed in three seconds of flux');
+    });
+
+    await test('flux holds its mass rather than filling the volume', async () => {
+      const a = await parts(p);
+      await p.waitForTimeout(4000);
+      const b = await parts(p);
+      assert.ok(Math.abs(b - a) < 60, `mass ran away: ${a} -> ${b}`);
+    });
+
+    await test('flux never leaves a part floating', async () => {
+      assert.ok(await gen(p, () => window.__inconstructions.grounded()));
+    });
+
+    await test('a whole flux session costs one undo', async () => {
+      const depth = await gen(p, () => window.__inconstructions.undoDepth());
+      await p.keyboard.press('f');
+      await settle(p);
+      assert.equal(await gen(p, () => window.__inconstructions.flux()), false);
+      assert.equal(await gen(p, () => window.__inconstructions.undoDepth()), depth + 1);
+    });
+
+    // The climb accumulates frame time rather than wall-clock time — a starved
+    // tab climbs slowly rather than skipping ahead — so these wait on the
+    // altitude itself instead of on a duration.
+    const climbTo = (p, alt) => p.waitForFunction(
+      (a) => window.__inconstructions.altitude() > a, alt, { timeout: 90000 });
+
+    await test('the tower climbs past the ceiling of the bounded volume', async () => {
+      await p.keyboard.press('w');
+      assert.equal(await gen(p, () => window.__inconstructions.tower()), true);
+      await climbTo(p, 3);
+      assert.ok(await gen(p, () => window.__inconstructions.top()) >= 16,
+        'nothing was built above the sandbox ceiling');
+      assert.ok(await gen(p, () => window.__inconstructions.modules()) >= 3);
+    });
+
+    await test('every module is joined to the one below it', async () => {
+      assert.ok(await gen(p, () => window.__inconstructions.grounded()),
+        'part of the tower is floating free of the rest');
+    });
+
+    await test('the tower prunes what it leaves behind', async () => {
+      // Sample twice past the entry transient — the live set fills to a steady
+      // state of a few modules and then has to stay there, however tall the
+      // tower gets. Comparing against entry would only measure that ramp.
+      await climbTo(p, (await gen(p, () => window.__inconstructions.altitude())) + 20);
+      const a = { m: await gen(p, () => window.__inconstructions.modules()), n: await parts(p) };
+      await climbTo(p, (await gen(p, () => window.__inconstructions.altitude())) + 20);
+      const b = { m: await gen(p, () => window.__inconstructions.modules()), n: await parts(p) };
+      assert.ok(b.m > a.m, `the tower stopped generating: ${a.m} -> ${b.m} modules`);
+      assert.ok(b.n < a.n * 1.3,
+        `the live set grows with the tower: ${a.n} -> ${b.n} over ${a.m} -> ${b.m} modules`);
+      assert.ok(await gen(p, () => window.__inconstructions.grounded()));
+    });
+
+    await test('the wheel scrubs the altitude and pauses the climb', async () => {
+      await p.mouse.move(600, 450);
+      const before = await gen(p, () => window.__inconstructions.altitude());
+      await p.mouse.wheel(0, 600);
+      await settle(p);
+      const after = await gen(p, () => window.__inconstructions.altitude());
+      assert.ok(after < before, `the wheel did not scrub down: ${before} -> ${after}`);
+      await p.waitForTimeout(700);
+      assert.ok(await gen(p, () => window.__inconstructions.altitude()) <= after + 1,
+        'the climb did not pause while scrubbing');
+    });
+
+    await test('one undo leaves the tower and restores what came before it', async () => {
+      const depth = await gen(p, () => window.__inconstructions.undoDepth());
+      await p.keyboard.press('w');
+      await settle(p);
+      assert.equal(await gen(p, () => window.__inconstructions.tower()), false);
+      assert.equal(await gen(p, () => window.__inconstructions.undoDepth()), depth + 1);
+      await p.keyboard.press('z');
+      await settle(p);
+      assert.ok(await gen(p, () => window.__inconstructions.top()) < 16,
+        'undo left the tower behind');
+    });
+
+    await test('the two endless modes are mutually exclusive', async () => {
+      await p.keyboard.press('f');
+      await settle(p);
+      await p.keyboard.press('w');
+      await settle(p);
+      assert.equal(await gen(p, () => window.__inconstructions.flux()), false);
+      assert.equal(await gen(p, () => window.__inconstructions.tower()), true);
+      await p.keyboard.press('w');
+      await settle(p);
+      assert.deepEqual(p.errors, []);
+    });
+
+    await p.close();
+  }
+
+  await test('the generator panel is usable on a narrow screen', async () => {
+    const p = await openSketch({ width: 390, height: 780, touch: true });
+    await ready(p);
+    // The panel sits above the parts strip; the bottom row of controls ends
+    // with GEN, which toggles it.
+    await p.touchscreen.tap(195, 741);
+    await settle(p);
+    assert.equal(await p.evaluate(() => window.__inconstructions.panelOpen()), false);
+    await p.touchscreen.tap(195, 741);
+    await settle(p);
+    assert.equal(await p.evaluate(() => window.__inconstructions.panelOpen()), true);
+    // A tap on the panel's own background must not fall through to the lattice
+    // underneath it. The seed readout row carries no control.
+    const before = await parts(p);
+    await p.touchscreen.tap(60, 780 - 132 - 192 + 14 + 18 + 7);
+    await settle(p);
+    assert.equal(await parts(p), before, 'a tap on the panel edited the lattice');
+    assert.deepEqual(p.errors, []);
     await p.close();
   });
 

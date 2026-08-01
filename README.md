@@ -50,11 +50,24 @@ for the `sketchbook` group.
   Every composition is a pure function of its printed seed.
 
 - **inconstructions** (`2026-07-inconstructions`) — an ephemeral Vectorheart
-  assembly sandbox. Interlocking axonometric parts snap to a bounded lattice,
-  which makes occlusion a depth sort rather than a z-buffer; picking reads a
-  pixel from an offscreen ID buffer. Colour belongs to the part type, so there
-  is no colour picker. The page opens by building itself, nothing is saved, and
-  the only thing that leaves is a 3x PNG.
+  assembly sandbox with a generator bolted to it. Interlocking axonometric parts
+  snap to a bounded lattice, which makes occlusion a depth sort rather than a
+  z-buffer; picking reads a pixel from an offscreen ID buffer. Colour belongs to
+  the part type, so there is no colour picker. SPACE rolls a composition: five
+  passes over the lattice — field, support, typing, ribbon, trim — where the
+  massing pass crossfades an authored template field with domain-warped perlin.
+  MIX is that crossfade as one slider, so the same control runs from "the
+  template exactly" to "noise decided everything". The GENERATOR panel holds the
+  template, seed, MIX/DENSITY/GRAIN/ACCENT/TRIM, symmetry and legs; dragging a
+  slider regenerates live from the same seed, and the whole drag is one undo.
+  `g` grows the structure you already have under the same rules, `t`/`m` cycle
+  template and symmetry, `p` hides the panel. Two endless modes: `f` FLUX keeps
+  the bounded volume alive, growing and eroding at roughly constant mass, and
+  `w` TOWER removes the ceiling — modules of eight levels generate ahead of a
+  camera that rises at a crawl, each picking its own template, pruned behind so
+  the live set stays the size the sandbox's is. The wheel scrubs the altitude
+  and pauses the climb. Nothing is saved; the 3x PNG export prints the seed and
+  parameters that reproduce it.
 
 - **message noise** (`2026-07-message-noise`) — a hidden message is
   hashed (cyrb128) into noise/random seeds and terrain parameters; the
