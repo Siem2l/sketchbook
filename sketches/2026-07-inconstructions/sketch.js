@@ -15,6 +15,7 @@
 //
 // The interface is not decoration around the tool; it *is* the tool, drawn in
 // the same idiom as the thing it makes.
+import '../_lib/chrome.css';
 import p5 from 'p5';
 import { spaced, spacedWidth, titleBlock, readout, regMarks } from '../_lib/type.js';
 import { exportPng as exportPngTo } from '../_lib/export.js';

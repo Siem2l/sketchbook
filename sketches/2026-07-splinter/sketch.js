@@ -19,6 +19,7 @@
 //
 // A composition is a pure function of its seed. Seed, view, mix, palette and
 // motion are all printed on the page, so any image can be found again.
+import '../_lib/chrome.css';
 import p5 from 'p5';
 // spacedWidth is unused here until Task 6 needs it for centred button labels;
 // Vite tree-shakes the build, so importing it now costs nothing.

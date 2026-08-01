@@ -313,6 +313,15 @@ try {
     await p.close();
   });
 
+  await test('the back link is present and points at the gallery', async () => {
+    const p = await openSketch();
+    const link = p.locator('a.back');
+    assert.equal(await link.getAttribute('href'), '/');
+    // Positioned chrome, not inline text — proves the shared stylesheet loaded.
+    assert.equal(await link.evaluate((el) => getComputedStyle(el).position), 'fixed');
+    await p.close();
+  });
+
   await test('a tap places a part on a touch device', async () => {
     const p = await openSketch({ width: 390, height: 780, touch: true });
     await ready(p);
