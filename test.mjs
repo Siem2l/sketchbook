@@ -281,6 +281,22 @@ try {
     await p.close();
   });
 
+  await test('the shared type module measures what it draws', async () => {
+    const p = await openSketch();
+    await ready(p);
+    const [drawn, measured] = await state(p, async () => {
+      const m = await import('/sketches/_lib/type.js');
+      const g = window.__inconstructions.graphics();
+      g.textFont('monospace');
+      g.textSize(12);
+      return [m.spaced(g, 'ABCDE', 0, 20, 2), m.spacedWidth(g, 'ABCDE', 2)];
+    });
+    // spaced() advances past the final glyph; spacedWidth() stops at its edge.
+    assert.ok(Math.abs(drawn - measured - 2) < 0.001,
+      `spaced ${drawn} vs spacedWidth ${measured}`);
+    await p.close();
+  });
+
   await test('a tap places a part on a touch device', async () => {
     const p = await openSketch({ width: 390, height: 780, touch: true });
     await ready(p);

@@ -16,6 +16,7 @@
 // The interface is not decoration around the tool; it *is* the tool, drawn in
 // the same idiom as the thing it makes.
 import p5 from 'p5';
+import { spaced, spacedWidth } from '../_lib/type.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -1296,21 +1297,6 @@ function target() {
 
 // ---------------------------------------------------------------------- HUD
 
-function spaced(g, str, x, y, tracking) {
-  let cx = x;
-  for (const ch of str) {
-    g.text(ch, cx, y);
-    cx += g.textWidth(ch) + tracking;
-  }
-  return cx - x;
-}
-
-function spacedWidth(g, str, tracking) {
-  let w = 0;
-  for (const ch of str) w += g.textWidth(ch) + tracking;
-  return w - tracking;
-}
-
 function rect4(x, y, w, h) {
   return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 }
@@ -1677,6 +1663,8 @@ function act(mx, my) {
   if (t) place(t.x, t.y, t.z, activePart, activeRot);
 }
 
+let probeG = null;
+
 // The HUD is drawn on the canvas, so a test can't read it as text. This is the
 // one external seam: a read-only view of exactly what the HUD already shows,
 // with no way to drive the sketch from outside.
@@ -1694,6 +1682,9 @@ if (typeof window !== 'undefined') {
     target: () => { const t = target(); return t ? [t.x, t.y, t.z] : null; },
     undoDepth: () => past.length,
     redoDepth: () => future.length,
+    // A scratch buffer so a test can exercise the shared type module against
+    // the same p5 text metrics the sketch itself uses. Made once, not per call.
+    graphics: () => (probeG || (probeG = P.createGraphics(200, 60))),
     // Generator state — the same values the panel and the printed parameter
     // line already show, plus a fingerprint of the lattice so a test can tell
     // "the same composition came back" without being able to set a seed.

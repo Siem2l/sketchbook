@@ -20,6 +20,9 @@
 // A composition is a pure function of its seed. Seed, view, mix, palette and
 // motion are all printed on the page, so any image can be found again.
 import p5 from 'p5';
+// spacedWidth is unused here until Task 6 needs it for centred button labels;
+// Vite tree-shakes the build, so importing it now costs nothing.
+import { spaced, spacedWidth } from '../_lib/type.js';
 
 // --------------------------------------------------------------- palettes
 
@@ -845,11 +848,6 @@ function drawScene(g, k, w, h, reveal) {
 
 // -------------------------------------------------------------------- type
 
-function spaced(g, str, x, y, tracking) {
-  let cx = x;
-  for (const ch of str) { g.text(ch, cx, y); cx += g.textWidth(ch) + tracking; }
-  return cx - x;
-}
 
 const ROWS = [
   ['WALK AROUND IT', 'DRAG TO ORBIT · WHEEL TO DOLLY'],
