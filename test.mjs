@@ -313,6 +313,30 @@ try {
     await p.close();
   });
 
+  // Driving controls by label rather than by pixel. Three tests broke earlier in
+  // this repo's history when the panel moved ten pixels; this is the fix.
+  await test('inconstructions controls can be found by label, not by pixel', async () => {
+    const p = await openSketch();
+    await ready(p);
+    const at = await state(p, () => window.__inconstructions.buttonAt('DELETE'));
+    assert.ok(at && at.x > 0 && at.y > 0, `no DELETE button: ${JSON.stringify(at)}`);
+    await p.mouse.click(at.x, at.y);
+    await settle(p);
+    assert.equal(await state(p, () => window.__inconstructions.mode()), 'delete');
+    await p.close();
+  });
+
+  await test('a click on a control does not also place a part', async () => {
+    const p = await openSketch();
+    await ready(p);
+    const before = await parts(p);
+    const at = await state(p, () => window.__inconstructions.buttonAt('R0'));
+    await p.mouse.click(at.x, at.y);
+    await settle(p);
+    assert.equal(await parts(p), before);
+    await p.close();
+  });
+
   await test('the back link is present and points at the gallery', async () => {
     const p = await openSketch();
     const link = p.locator('a.back');

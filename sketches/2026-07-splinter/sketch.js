@@ -25,6 +25,7 @@ import p5 from 'p5';
 // Vite tree-shakes the build, so importing it now costs nothing.
 import { spaced, spacedWidth, titleBlock, footer } from '../_lib/type.js';
 import { exportPng as exportPngTo } from '../_lib/export.js';
+import { buttonStyle, button, hitLayer } from '../_lib/panel.js';
 
 // --------------------------------------------------------------- palettes
 
@@ -921,23 +922,15 @@ function drawType(g, k, w, h) {
 
 // ------------------------------------------------------------------- panel
 
-let uiHits = [];
-let uiBounds = { x: 0, y: 0, w: 0, h: 0 };
+const ui = hitLayer();
 
+// Rebuilt per call rather than frozen once: the palette is a control here, so
+// the theme the buttons draw with changes under them.
+const chipStyle = () => buttonStyle({ theme: theme(), size: 7.2, dy: 0.5, align: 'center', shape: 'rect' });
+
+// The wrapper stays so the thirty-odd call sites in drawPanel do not change.
 function chip(g, k, x, y, w, h, label, on, action, live) {
-  const p = pal();
-  g.fill(on ? p.accent : 'rgba(0,0,0,0)');
-  g.stroke(p.ink);
-  g.strokeWeight(1 * k);
-  g.rect(x, y, w, h);
-  g.noStroke();
-  g.fill(on ? '#ffffff' : p.ink);
-  g.textFont('monospace');
-  g.textSize(7.2 * k);
-  g.textAlign(g.CENTER, g.CENTER);
-  g.text(label, x + w / 2, y + h / 2 + 0.5 * k);
-  g.textAlign(g.LEFT, g.BASELINE);
-  if (live) uiHits.push({ x, y, w, h, action, label });
+  button(g, k, x, y, w, h, label, { on, action, live, layer: ui, style: chipStyle() });
 }
 
 function drawPanel(g, k, w, h, live) {
@@ -1005,12 +998,9 @@ function drawPanel(g, k, w, h, live) {
   chip(g, k, M + cw + gap, y, cw, bh, 'CLEAR', false, () => { strokes = []; P.loop(); }, live);
   y += bh + gap;
 
-  uiBounds = { x: M - 10 * k, y: top, w: panelW + 20 * k, h: y - top + 6 * k };
+  ui.region(M - 10 * k, top, panelW + 20 * k, y - top + 6 * k);
   g.pop();
 }
-
-const insidePanel = (x, y) => x >= uiBounds.x && x <= uiBounds.x + uiBounds.w
-  && y >= uiBounds.y && y <= uiBounds.y + uiBounds.h;
 
 // ------------------------------------------------------------------ sketch
 
@@ -1022,7 +1012,7 @@ function render(g, k, w, h, reveal, withPanel) {
   drawScene(g, k, w, h, reveal);
   drawType(g, k, w, h);
   // The panel is a tool, not part of the poster — the export leaves it out.
-  if (withPanel) { uiHits = []; drawPanel(g, k, w, h, true); }
+  if (withPanel) { ui.clear(); drawPanel(g, k, w, h, true); }
   footer(g, k, {
     x: 36 * k, y: h - 28 * k,
     text: `SKETCHBOOK · SIEM2L.NL · ${strokes.length} STROKE${strokes.length === 1 ? '' : 'S'}`,
@@ -1064,7 +1054,7 @@ if (typeof window !== 'undefined') {
     // Where a named button actually is, so tests never hardcode a pixel and
     // break the moment the panel gains a row.
     buttonAt: (label) => {
-      const b = uiHits.find((h) => h.label === label || h.label.startsWith(label));
+      const b = ui.find(label);
       return b ? { x: Math.round(b.x + b.w / 2), y: Math.round(b.y + b.h / 2) } : null;
     },
     physics: () => ({ live: sim.live, gravity: sim.gravity, floor: sim.floor,
@@ -1128,11 +1118,8 @@ new p5((p) => {
 
   const beginDrag = () => {
     // The panel swallows the gesture — you cannot orbit or draw through a button.
-    for (const hit of uiHits) {
-      if (p.mouseX >= hit.x && p.mouseX <= hit.x + hit.w
-        && p.mouseY >= hit.y && p.mouseY <= hit.y + hit.h) { hit.action(); p.loop(); return; }
-    }
-    if (insidePanel(p.mouseX, p.mouseY)) { p.loop(); return; }
+    if (ui.hit(p.mouseX, p.mouseY)) { p.loop(); return; }
+    if (ui.swallows(p.mouseX, p.mouseY)) { p.loop(); return; }
     lastPt = { x: p.mouseX, y: p.mouseY };
     if (mode === 'DRAW' && !p.keyIsDown(p.SHIFT)) {
       dragging = { kind: 'draw', stroke: [] };

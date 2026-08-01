@@ -19,6 +19,7 @@ import '../_lib/chrome.css';
 import p5 from 'p5';
 import { spaced, spacedWidth, titleBlock, readout, regMarks } from '../_lib/type.js';
 import { exportPng as exportPngTo } from '../_lib/export.js';
+import { buttonStyle, button, hitLayer } from '../_lib/panel.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -37,6 +38,7 @@ const INK = '#16160f';
 // The library takes colour as data so it can stay colour-blind. This sketch's
 // palette is fixed; splinter's changes with its active palette.
 const THEME = { ink: INK, paper: PAPER, accent: '#fabd2f', onAccent: INK, muted: '#8a8a80' };
+const BTN = buttonStyle({ theme: THEME, size: 9, tracking: 1.1, dy: 3.2, align: 'baseline', shape: 'poly' });
 
 const TONE = {
   grey:   ['#c2c2ba', '#98988f', '#6b6b64'],
@@ -1075,7 +1077,7 @@ let hover = null;                  // { x, y, z, nx, ny, nz, ground }
 let dirty = true;                  // scene or camera changed; rebuild faces
 let faces = [];
 let idBuf = null, idList = [], idStale = true, idsAt = 0;
-let hudHits = [];
+const hud = hitLayer();
 let scale = 30, originX = 0, originY = 0;
 let touchUsed = false;
 
@@ -1307,18 +1309,6 @@ function rect4(x, y, w, h) {
   return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 }
 
-function button(g, u, x, y, w, h, label, action, on, live) {
-  poly(g, [[x, y], [x + w, y], [x + w, y + h], [x, y + h]],
-    on ? '#fabd2f' : 'rgba(0,0,0,0)', INK, 1 * u);
-  g.noStroke();
-  g.fill(INK);
-  g.textSize(9 * u);
-  const tw = spacedWidth(g, label, 1.1 * u);
-  spaced(g, label, x + (w - tw) / 2, y + h / 2 + 3.2 * u, 1.1 * u);
-  if (live) hudHits.push({ x, y, w, h, action });
-  return x + w;
-}
-
 // A slider row: label, track, value. The hit it registers carries a `drag`
 // handler — the first interaction in this sketch that is not a click.
 function slider(g, u, x, y, w, label, value, set, live) {
@@ -1336,8 +1326,8 @@ function slider(g, u, x, y, w, label, value, set, live) {
   g.text(String(Math.round(value * 100)).padStart(2, '0'), x + w, y + 6 * u);
   g.textAlign(g.LEFT, g.BASELINE);
   if (live) {
-    hudHits.push({ x: bx - 8 * u, y: y - 6 * u, w: bw + 16 * u, h: bh + 12 * u,
-      action: () => {}, drag: (mx) => set(clamp01((mx - bx) / bw)) });
+    hud.add(bx - 8 * u, y - 6 * u, bw + 16 * u, bh + 12 * u,
+      { drag: (mx) => set(clamp01((mx - bx) / bw)), label });
   }
 }
 
@@ -1355,10 +1345,10 @@ function drawGenPanel(g, u, x, y, w) {
   spaced(g, 'GENERATOR', x, y + 6 * u, 1.4 * u);
   y += 14 * u;
 
-  button(g, u, x, y, w, bh, template().id, () => {
+  button(g, u, x, y, w, bh, template().id, { style: BTN, layer: hud, label: 'TEMPLATE', action: () => {
     gen.template = (gen.template + 1) % TEMPLATES.length;
     retune();
-  }, false, true);
+  } });
   y += 18 * u;
 
   g.noStroke();
@@ -1382,25 +1372,25 @@ function drawGenPanel(g, u, x, y, w) {
   }
 
   const half = (w - gap) / 2;
-  button(g, u, x, y, half, bh, SYMS[gen.sym], () => {
+  button(g, u, x, y, half, bh, SYMS[gen.sym], { style: BTN, layer: hud, label: 'SYM', action: () => {
     gen.sym = (gen.sym + 1) % SYMS.length;
     retune();
-  }, false, true);
-  button(g, u, x + half + gap, y, half, bh, 'LEGS', () => {
+  } });
+  button(g, u, x + half + gap, y, half, bh, 'LEGS', { style: BTN, layer: hud, on: gen.legs, action: () => {
     gen.legs = !gen.legs;
     retune();
-  }, gen.legs, true);
+  } });
   y += 18 * u;
 
   const third = (w - 2 * gap) / 3;
-  button(g, u, x, y, third, bh, 'ROLL', roll, false, true);
-  button(g, u, x + third + gap, y, third, bh, 'GROW', () => grow(14), false, true);
-  button(g, u, x + 2 * (third + gap), y, third, bh, 'STEP', () => grow(1), false, true);
+  button(g, u, x, y, third, bh, 'ROLL', { style: BTN, layer: hud, action: roll });
+  button(g, u, x + third + gap, y, third, bh, 'GROW', { style: BTN, layer: hud, action: () => grow(14) });
+  button(g, u, x + 2 * (third + gap), y, third, bh, 'STEP', { style: BTN, layer: hud, action: () => grow(1) });
   y += 18 * u;
 
   // The two endless modes.
-  button(g, u, x, y, half, bh, 'FLUX', () => setFlux(!gen.flux), gen.flux, true);
-  button(g, u, x + half + gap, y, half, bh, 'TOWER', () => setTower(!gen.tower), gen.tower, true);
+  button(g, u, x, y, half, bh, 'FLUX', { style: BTN, layer: hud, on: gen.flux, action: () => setFlux(!gen.flux) });
+  button(g, u, x + half + gap, y, half, bh, 'TOWER', { style: BTN, layer: hud, on: gen.tower, action: () => setTower(!gen.tower) });
 }
 
 function drawHud(g, u, w, h, live) {
@@ -1446,7 +1436,7 @@ function drawHud(g, u, w, h, live) {
       const sw = 30 * u;
       poly(g, [[x, ly], [x + sw, ly], [x + sw, ly + 20 * u], [x, ly + 20 * u]],
         TONE[part.tone][1], i === activePart ? '#fabd2f' : INK, i === activePart ? 2.4 * u : 1 * u);
-      if (live) hudHits.push({ x, y: ly, w: sw, h: 20 * u, action: () => { activePart = i; } });
+      if (live) hud.add(x, ly, sw, 20 * u, { action: () => { activePart = i; }, label: part.id });
       x += sw + 5 * u;
     });
   } else {
@@ -1465,7 +1455,7 @@ function drawHud(g, u, w, h, live) {
       g.textAlign(g.RIGHT, g.BASELINE);
       g.text(part.code, lx + 150 * u, ly + 11 * u);
       g.textAlign(g.LEFT, g.BASELINE);
-      if (live) hudHits.push({ x: lx - 6 * u, y: ly - 2 * u, w: 156 * u, h: rowH, action: () => { activePart = i; } });
+      if (live) hud.add(lx - 6 * u, ly - 2 * u, 156 * u, rowH, { action: () => { activePart = i; }, label: part.id });
       ly += rowH;
     });
     g.noStroke();
@@ -1482,7 +1472,10 @@ function drawHud(g, u, w, h, live) {
   const gap = 5 * u;
   const row = (y, defs) => {
     let x = M + 14 * u;
-    for (const d of defs) x = button(g, u, x, y, d[0] * u, bh, d[1], d[2], d[3], live) + gap;
+    for (const d of defs) {
+      x = button(g, u, x, y, d[0] * u, bh, d[1],
+        { on: d[3], action: d[2], live, layer: hud, style: BTN }) + gap;
+    }
   };
   const PLACE = [44, 'PLACE', () => { mode = 'place'; }, mode === 'place'];
   const DELETE = [52, 'DELETE', () => { mode = 'delete'; }, mode === 'delete'];
@@ -1531,8 +1524,7 @@ function drawHud(g, u, w, h, live) {
     drawGenPanel(g, u, px, py, pw);
     // Declared last so the panel's own controls win the pixel: everything else
     // inside the frame is swallowed, and a stray click cannot edit the lattice.
-    hudHits.push({ x: px - 10 * u, y: py - 10 * u, w: pw + 20 * u, h: PANEL_H(u),
-      action: () => {} });
+    hud.region(px - 10 * u, py - 10 * u, pw + 20 * u, PANEL_H(u));
   }
   g.pop();
 }
@@ -1609,22 +1601,23 @@ function rebuildAt(g, u) {
 let dragHit = null;
 
 function hudClick(mx, my) {
-  for (const hit of hudHits) {
-    if (mx >= hit.x && mx <= hit.x + hit.w && my >= hit.y && my <= hit.y + hit.h) {
-      if (hit.drag) {
-        // A drag is one undo entry, so the world is snapshotted before the
-        // first value change rather than on every frame of the drag.
-        dragHit = hit;
-        dragSnapshot = [...cells];
-        dragMoved = false;
-        hit.drag(mx, my);
-      } else {
-        hit.action();
-      }
-      return true;
+  const hit = hud.press(mx, my);
+  if (hit) {
+    if (hit.drag) {
+      // A drag is one undo entry, so the world is snapshotted before the first
+      // value change rather than on every frame of the drag.
+      dragHit = hit;
+      dragSnapshot = [...cells];
+      dragMoved = false;
+      hit.drag(mx, my);
+    } else if (hit.action) {
+      hit.action();
     }
+    return true;
   }
-  return false;
+  // The panel's own background: swallow the click rather than editing the
+  // lattice behind it.
+  return hud.swallows(mx, my);
 }
 
 function dragTo(mx, my) {
@@ -1672,6 +1665,13 @@ if (typeof window !== 'undefined') {
     target: () => { const t = target(); return t ? [t.x, t.y, t.z] : null; },
     undoDepth: () => past.length,
     redoDepth: () => future.length,
+    // Where a named control actually is, so tests never hardcode a pixel and
+    // break the moment the panel gains a row — which is exactly what happened
+    // when the generator dashboard pushed everything down by ten.
+    buttonAt: (label) => {
+      const b = hud.find(label);
+      return b ? { x: Math.round(b.x + b.w / 2), y: Math.round(b.y + b.h / 2) } : null;
+    },
     // A scratch buffer so a test can exercise the shared type module against
     // the same p5 text metrics the sketch itself uses. Made once, not per call.
     graphics: () => (probeG || (probeG = P.createGraphics(200, 60))),
@@ -1768,7 +1768,7 @@ new p5((p) => {
     drawScene(p);
     drawGhost(p);
     drawHoverMark(p);
-    hudHits = [];
+    hud.clear();
     drawHud(p, 1, p.width, p.height, true);
   };
 
