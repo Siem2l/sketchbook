@@ -22,7 +22,7 @@
 import p5 from 'p5';
 // spacedWidth is unused here until Task 6 needs it for centred button labels;
 // Vite tree-shakes the build, so importing it now costs nothing.
-import { spaced, spacedWidth } from '../_lib/type.js';
+import { spaced, spacedWidth, titleBlock, footer } from '../_lib/type.js';
 
 // --------------------------------------------------------------- palettes
 
@@ -855,6 +855,12 @@ const ROWS = [
   ['DETONATE IT', 'X TO EXPLODE · G GRAVITY · S PNG'],
 ];
 
+// Rebuilt each frame because the palette is a control, not a constant.
+const theme = () => {
+  const p = pal();
+  return { ink: p.ink, paper: p.bg, accent: p.accent, onAccent: '#ffffff', muted: '#6d6d66' };
+};
+
 function drawType(g, k, w, h) {
   const p = pal();
   const narrow = w < 760 * k;
@@ -870,21 +876,22 @@ function drawType(g, k, w, h) {
   g.rect(bx - 18 * k, by - 44 * k, bw + 36 * k, 192 * k);
 
   g.textAlign(g.LEFT, g.BASELINE);
-  g.textFont(DISPLAY);
+  // Two calls, not one: the title is bold and the subtitle is not, and a single
+  // titleBlock inside a BOLD wrapper would set both.
   g.textStyle(g.BOLD);
-  g.fill(p.ink);
-  g.textSize(23 * k);
-  spaced(g, '»SPLINTER', bx, by - 16 * k, 1.4 * k);
+  titleBlock(g, k, {
+    x: bx, y: by - 16 * k,
+    title: '»SPLINTER', titleSize: 23, titleTracking: 1.4, titleFont: DISPLAY,
+    sub: null, rule: 0, theme: theme(),
+  });
   g.textStyle(g.NORMAL);
-  g.textFont('monospace');
-  g.textSize(7.2 * k);
-  g.fill('#6d6d66');
-  spaced(g, `${view().name} · ${MIXES[mixIx].name} · ${p.name} · ${cam.ortho ? 'ORTHO' : 'PERSP'} · ${seed.toString(16).toUpperCase().padStart(8, '0')}`,
-    bx, by - 4 * k, 0.9 * k);
-
-  g.stroke('#bdbdb6');
-  g.strokeWeight(1 * k);
-  g.line(bx, by + 4 * k, bx + bw, by + 4 * k);
+  titleBlock(g, k, {
+    x: bx, y: by - 16 * k, title: '',
+    sub: `${view().name} · ${MIXES[mixIx].name} · ${p.name} · ${cam.ortho ? 'ORTHO' : 'PERSP'} · ${seed.toString(16).toUpperCase().padStart(8, '0')}`,
+    subSize: 7.2, subTracking: 0.9, subDy: 12,
+    rule: bw / k, ruleColor: '#bdbdb6', ruleDy: 20,
+    theme: theme(),
+  });
   g.noStroke();
 
   ROWS.forEach(([title, sub], i) => {
@@ -1014,15 +1021,11 @@ function render(g, k, w, h, reveal, withPanel) {
   drawType(g, k, w, h);
   // The panel is a tool, not part of the poster — the export leaves it out.
   if (withPanel) { uiHits = []; drawPanel(g, k, w, h, true); }
-  g.push();
-  g.noStroke();
-  g.fill('#6d6d66');
-  g.textFont('monospace');
-  g.textSize(7 * k);
-  g.textAlign(g.LEFT, g.BASELINE);
-  spaced(g, `SKETCHBOOK · SIEM2L.NL · ${strokes.length} STROKE${strokes.length === 1 ? '' : 'S'}`,
-    36 * k, h - 28 * k, 1.2 * k);
-  g.pop();
+  footer(g, k, {
+    x: 36 * k, y: h - 28 * k,
+    text: `SKETCHBOOK · SIEM2L.NL · ${strokes.length} STROKE${strokes.length === 1 ? '' : 'S'}`,
+    theme: theme(),
+  });
 }
 
 function reseed() {

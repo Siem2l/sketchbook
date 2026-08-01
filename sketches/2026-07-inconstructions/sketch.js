@@ -16,7 +16,7 @@
 // The interface is not decoration around the tool; it *is* the tool, drawn in
 // the same idiom as the thing it makes.
 import p5 from 'p5';
-import { spaced, spacedWidth } from '../_lib/type.js';
+import { spaced, spacedWidth, titleBlock, readout, regMarks } from '../_lib/type.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -31,6 +31,10 @@ const MONO = 'monospace';
 // Each part colour carries its own three face tones: top, right, left.
 const PAPER = '#eceae1';
 const INK = '#16160f';
+
+// The library takes colour as data so it can stay colour-blind. This sketch's
+// palette is fixed; splinter's changes with its active palette.
+const THEME = { ink: INK, paper: PAPER, accent: '#fabd2f', onAccent: INK, muted: '#8a8a80' };
 
 const TONE = {
   grey:   ['#c2c2ba', '#98988f', '#6b6b64'],
@@ -1404,25 +1408,17 @@ function drawHud(g, u, w, h, live) {
   g.textFont(MONO);
   g.textAlign(g.LEFT, g.BASELINE);
 
-  // corner registration marks
-  g.stroke(INK);
-  g.strokeWeight(1 * u);
-  const r = 9 * u;
-  for (const [cx, cy, sx, sy] of [[M, M, 1, 1], [w - M, M, -1, 1], [M, h - M, 1, -1], [w - M, h - M, -1, -1]]) {
-    g.line(cx, cy, cx + sx * r, cy);
-    g.line(cx, cy, cx, cy + sy * r);
-  }
+  regMarks(g, u, w, h, { theme: THEME, margin: 20 });
 
-  // title block
-  g.noStroke();
-  g.fill(INK);
-  g.textSize(narrow ? 15 * u : 20 * u);
-  spaced(g, 'INCONSTRUCTIONS', M + 14 * u, M + 20 * u, 2.4 * u);
-  g.textSize(8 * u);
-  spaced(g, 'DELTA INC · MC-202 / Λ3', M + 14 * u, M + 34 * u, 1.6 * u);
-  g.stroke(INK);
-  g.strokeWeight(1 * u);
-  g.line(M + 14 * u, M + 40 * u, M + (narrow ? 190 : 260) * u, M + 40 * u);
+  // The rule ran from M + 14u to M + (narrow ? 190 : 260)u, so its width is the
+  // difference: 176 narrow, 246 wide.
+  titleBlock(g, u, {
+    x: M + 14 * u, y: M + 20 * u,
+    title: 'INCONSTRUCTIONS', titleSize: narrow ? 15 : 20, titleTracking: 2.4,
+    sub: 'DELTA INC · MC-202 / Λ3', subColor: INK, subDy: 14,
+    rule: narrow ? 176 : 246, ruleDy: 20,
+    theme: THEME,
+  });
 
   // readouts, top right
   const cell = hover ? (hover.ground ? [hover.x, hover.y, 0] : [hover.x, hover.y, hover.z]) : null;
@@ -1437,17 +1433,7 @@ function drawHud(g, u, w, h, live) {
     rows.push(['ALT', String(Math.round(viewZ)).padStart(4, '0')]);
     rows.push(['MODULE', String(towerTop / MZ).padStart(3, '0')]);
   }
-  g.noStroke();
-  g.textAlign(g.RIGHT, g.BASELINE);
-  g.textSize(8 * u);
-  rows.forEach((row, i) => {
-    const y = M + 14 * u + i * 13 * u;
-    g.fill('#8a8a80');
-    g.text(row[0], w - M - 66 * u, y);
-    g.fill(INK);
-    g.text(row[1], w - M - 14 * u, y);
-  });
-  g.textAlign(g.LEFT, g.BASELINE);
+  readout(g, u, { x: w - M - 14 * u, y: M + 14 * u, rows, gap: 52, rowH: 13, size: 8, theme: THEME });
 
   // parts legend
   const lx = M + 14 * u;

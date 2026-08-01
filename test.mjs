@@ -297,6 +297,22 @@ try {
     await p.close();
   });
 
+  await test('the shared title block reports the width it ruled', async () => {
+    const p = await openSketch();
+    await ready(p);
+    const w = await state(p, async () => {
+      const m = await import('/sketches/_lib/type.js');
+      const g = window.__inconstructions.graphics();
+      g.textFont('monospace');
+      return m.titleBlock(g, 1, {
+        x: 10, y: 20, title: 'TEST', sub: 'SUB', rule: 120,
+        theme: { ink: '#000', paper: '#fff', accent: '#f00', onAccent: '#fff', muted: '#888' },
+      });
+    });
+    assert.equal(w, 120);
+    await p.close();
+  });
+
   await test('a tap places a part on a touch device', async () => {
     const p = await openSketch({ width: 390, height: 780, touch: true });
     await ready(p);
