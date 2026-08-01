@@ -1085,13 +1085,24 @@ if (typeof window !== 'undefined') {
   };
 }
 
+// The poster prints its seed because the seed is the composition. Accepting one
+// back through the URL is what makes that promise true — and it is what lets a
+// screenshot harness capture the same image twice.
+function seedFromUrl() {
+  if (typeof location === 'undefined') return null;
+  const q = new URLSearchParams(location.search).get('seed');
+  if (!q) return null;
+  const n = Number.parseInt(q, 16);
+  return Number.isFinite(n) && n > 0 ? n >>> 0 : null;
+}
+
 new p5((p) => {
   P = p;
 
   p.setup = () => {
     p.createCanvas(p.windowWidth, p.windowHeight);
     updateCamera(p.width, p.height);
-    generate(Math.floor(p.random(1, 4294967295)) >>> 0, {});
+    generate(seedFromUrl() ?? (Math.floor(p.random(1, 4294967295)) >>> 0), {});
   };
 
   p.windowResized = () => {

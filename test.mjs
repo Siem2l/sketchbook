@@ -537,8 +537,12 @@ try {
       await climbTo(p, (await gen(p, () => window.__inconstructions.altitude())) + 20);
       const b = { m: await gen(p, () => window.__inconstructions.modules()), n: await parts(p) };
       assert.ok(b.m > a.m, `the tower stopped generating: ${a.m} -> ${b.m} modules`);
-      assert.ok(b.n < a.n * 1.3,
-        `the live set grows with the tower: ${a.n} -> ${b.n} over ${a.m} -> ${b.m} modules`);
+      // Pruning keeps about six modules live — three below, the current one and
+      // two generated ahead. A hard ceiling states that invariant without
+      // depending on when the two samples happened to land.
+      for (const s of [a, b]) {
+        assert.ok(s.n < 1500, `the live set grows with the tower: ${s.n} at ${s.m} modules`);
+      }
       assert.ok(await gen(p, () => window.__inconstructions.grounded()));
     });
 
@@ -636,6 +640,28 @@ try {
     await test('a composition has pieces in the intended range', async () => {
       const n = await sp(p, () => window.__splinter.pieces());
       assert.ok(n > 300 && n < 1800, `piece count out of range: ${n}`);
+    });
+
+    // The poster prints its seed because the seed is the composition. Taking
+    // one back through the URL is what makes that promise true, and it is what
+    // lets a screenshot harness capture the same image twice.
+    await test('a seed in the URL reproduces an exact composition', async () => {
+      const page = await openSplinter();
+      await page.goto(`${SPLINTER}?seed=1234abcd`, { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => window.__splinter && window.__splinter.settled(),
+        null, { timeout: 60000 });
+      assert.equal(await sp(page, () => window.__splinter.seed()), 0x1234abcd);
+      await page.close();
+    });
+
+    await test('a nonsense seed falls back to a random one rather than breaking', async () => {
+      const page = await openSplinter();
+      await page.goto(`${SPLINTER}?seed=nonsense`, { waitUntil: 'networkidle' });
+      await page.waitForFunction(() => window.__splinter && window.__splinter.settled(),
+        null, { timeout: 60000 });
+      assert.ok(await sp(page, () => window.__splinter.seed()) > 0);
+      assert.deepEqual(page.errors, []);
+      await page.close();
     });
 
     await test('space reseeds into a different composition', async () => {
