@@ -1,663 +1,678 @@
 {
- "_note": "Event spine for the festival-season sketch. Sourced from Google Calendar and Gmail, NOT from body data — the sensors only ever caught a subset. Body metrics are joined on at build time by scripts/build-events.py. Hand-maintained: re-derive by sweeping Calendar (paginate, it caps at 250/page) and confirming names against Gmail ticket/locker/crew/travel mail.",
- "_types": "festival | crew | club | concert | trip",
- "_confidence": "confirmed = named by a calendar entry or a personal mail (ticket, locker, roster). tentative = the calendar itself hedges, or the name is inferred.",
- "_coverage": "Calendar swept 2022-11-25 → 2025-12-28. Calendar use before 2023-05 is sparse (83 entries total), so the 2022-12 → 2023-05 window is thin by nature, not by omission.",
- "events": [
-  {
-   "d": "2023-01-28",
-   "nd": 1,
-   "n": "Sneeuwbal Festival 2023",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Sneeuwbal Festival 2023 (Regular)\", Park Transwijk, Utrecht."
-  },
-  {
-   "d": "2023-02-10",
-   "nd": 1,
-   "n": "Blackout",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar: \"Blackout\"."
-  },
-  {
-   "d": "2023-05-20",
-   "nd": 1,
-   "n": "Soenda 2023",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Soenda\", 20–21 May."
-  },
-  {
-   "d": "2023-06-02",
-   "nd": 1,
-   "n": "BASIS · Cynthia Spiering all night long",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: BASIS, Oudegracht aan de werf 97, Utrecht."
-  },
-  {
-   "d": "2023-06-14",
-   "nd": 1,
-   "n": "Wake Up Club",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar: \"Wake up club\", 06:00 start."
-  },
-  {
-   "d": "2023-06-24",
-   "nd": 1,
-   "n": "The Weeknd",
-   "t": "concert",
-   "c": "confirmed",
-   "ev": "Calendar: \"The Weeknd\"."
-  },
-  {
-   "d": "2023-07-21",
-   "nd": 3,
-   "n": "Liquicity Festival 2023",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar pinned to Liquicity Festival Geestmerambacht, Oudkarspel; TicketSwap \"Weekend Ticket: Festival & Campsite\" bought from Loes; the festival's own wind-update mails on 22 and 23 Jul."
-  },
-  {
-   "d": "2023-07-29",
-   "nd": 1,
-   "n": "Orbit Festival 2023",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Orbitfestival\"; Elevation Events post-event survey 31 Jul."
-  },
-  {
-   "d": "2023-08-18",
-   "nd": 3,
-   "n": "Lowlands 2023",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Lowlands\" 17–21 Aug + \"Lowlands 2023 | Parkeerticket\" at Evenemententerrein Walibi. A visitor year — the crew work starts in 2024."
-  },
-  {
-   "d": "2023-09-01",
-   "nd": 1,
-   "n": "Blackout",
-   "t": "club",
-   "c": "tentative",
-   "ev": "Calendar: \"Blackout?\" — the question mark is theirs."
-  },
-  {
-   "d": "2023-09-02",
-   "nd": 1,
-   "n": "Rotterdam Rave",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"RotterdamRave\"; Rotterdam Rave Festival mail 27 Jul."
-  },
-  {
-   "d": "2023-09-09",
-   "nd": 1,
-   "n": "Smeerboel",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Smeerboel\"."
-  },
-  {
-   "d": "2023-09-14",
-   "nd": 1,
-   "n": "Fred again..",
-   "t": "concert",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: Ziggo Dome, Amsterdam."
-  },
-  {
-   "d": "2023-09-15",
-   "nd": 1,
-   "n": "Into The Woods",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"INTO THE WOODS\"."
-  },
-  {
-   "d": "2023-11-15",
-   "nd": 1,
-   "n": "Wake Up Club · Magic Morning",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: Ping Pong Club, Utrecht."
-  },
-  {
-   "d": "2023-11-17",
-   "nd": 2,
-   "n": "Soenda Indoor 2023",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Soenda Indoor Werkspoorkathedraal 2023 | FRIDAY (night)\", Werkspoorkathedraal, Utrecht. The walking lands on the 18th — it was a night that crossed midnight."
-  },
-  {
-   "d": "2023-12-28",
-   "nd": 1,
-   "n": "Blasha & Allatt · Steffi · Virginia @ De School",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: De School, Dr. Jan van Breemenstraat 1, Amsterdam."
-  },
-  {
-   "d": "2023-12-29",
-   "nd": 1,
-   "n": "Liquicity Winterfestival 2023",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Liquicity\"; Paylogic order 114055407 confirmed 28 Jul 2023."
-  },
-  {
-   "d": "2024-01-27",
-   "nd": 1,
-   "n": "Sneeuwbal",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Sneeuwbal\"."
-  },
-  {
-   "d": "2024-02-10",
-   "nd": 1,
-   "n": "Rotterdam Rave",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Rotterdam rave\"."
-  },
-  {
-   "d": "2024-02-17",
-   "nd": 8,
-   "n": "Wintersport",
-   "t": "trip",
-   "c": "confirmed",
-   "ev": "Calendar: \"Wintersport\" 17–25 Feb."
-  },
-  {
-   "d": "2024-03-06",
-   "nd": 1,
-   "n": "Wake Up Club",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar: \"Wake up club\", 06:00 start."
-  },
-  {
-   "d": "2024-04-13",
-   "nd": 1,
-   "n": "The History of Drum & Bass w/ Live Orchestra",
-   "t": "concert",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: Melkweg, Amsterdam."
-  },
-  {
-   "d": "2024-05-19",
-   "nd": 1,
-   "n": "En Vrienden festival",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"En vrienden festival\" (opening the day before)."
-  },
-  {
-   "d": "2024-05-25",
-   "nd": 1,
-   "n": "Soenda 2024",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"SOENDA\"."
-  },
-  {
-   "d": "2024-06-01",
-   "nd": 1,
-   "n": "Parade Pride",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Parade pride\", 13:00."
-  },
-  {
-   "d": "2024-06-07",
-   "nd": 1,
-   "n": "BASIS · Cynthia Spiering",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar: \"Basis Cynthia spiering\", 21:00 Friday."
-  },
-  {
-   "d": "2024-06-08",
-   "nd": 3,
-   "n": "Brussels",
-   "t": "trip",
-   "c": "confirmed",
-   "ev": "Calendar: \"Brussel\" + \"Stay at ibis Brussels Centre Gare Midi\" 8–10 Jun."
-  },
-  {
-   "d": "2024-06-23",
-   "nd": 1,
-   "n": "Pinkpop",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Pinkpop\"."
-  },
-  {
-   "d": "2024-06-29",
-   "nd": 1,
-   "n": "TWC huisfestival",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar: \"TWC huisfestival\"."
-  },
-  {
-   "d": "2024-07-09",
-   "nd": 8,
-   "n": "EXIT Festival · Novi Sad",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Exit\" 9–16 Jul; \"Stay at Prague Old Town Hostel\" 9–11 Jul as the way out; settled afterwards in \"Verrekening EXIT festival holiday lijst\" — Jack and Julian owed €322,37."
-  },
-  {
-   "d": "2024-07-19",
-   "nd": 3,
-   "n": "Liquicity Festival 2024",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"liquicity\" 19–22 Jul; two Paylogic orders (129322797, 129736985); pick-up mail for the Liquicity necklace, flag and camping chair."
-  },
-  {
-   "d": "2024-07-27",
-   "nd": 1,
-   "n": "BASIS Outdoor 2024",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Locker number 28575 and pincode mailed the morning of the 27th; \"Last Info for BASIS Outdoor\" the day before."
-  },
-  {
-   "d": "2024-08-08",
-   "nd": 11,
-   "n": "Lowlands 2024",
-   "t": "crew",
-   "c": "confirmed",
-   "ev": "Enschedeploeg bouw-breek roster (8–18 Aug, six \"Lowlands werken\" days) plus a LL24 festivalticket for the 16th. Pulled out of the 19th break shift by mail — \"persoonlijke redenen\"."
-  },
-  {
-   "d": "2024-09-06",
-   "nd": 1,
-   "n": "Blackout Utrecht · Spor, Mandidextrous, Black Sun Empire",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: TivoliVredenburg, Utrecht."
-  },
-  {
-   "d": "2024-09-07",
-   "nd": 1,
-   "n": "Rotterdam Rave",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Rotterdam rave\"."
-  },
-  {
-   "d": "2024-09-21",
-   "nd": 1,
-   "n": "Liquicity family day",
-   "t": "festival",
-   "c": "tentative",
-   "ev": "Calendar: \"Liquicity family day?\" — the question mark is theirs."
-  },
-  {
-   "d": "2024-11-23",
-   "nd": 1,
-   "n": "Intercell pres. Bad Boombox All Night Long",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: Warehouse Elementenstraat 25, Amsterdam."
-  },
-  {
-   "d": "2024-12-20",
-   "nd": 1,
-   "n": "ZeeZout × WAS.",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: WAS., Tractieweg 41, Utrecht."
-  },
-  {
-   "d": "2024-12-31",
-   "nd": 1,
-   "n": "BASIS NYE · Boris Bounce / Cynthia Spiering / ROD",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: BASIS, Oudegracht aan de Werf 97, Utrecht."
-  },
-  {
-   "d": "2025-01-15",
-   "nd": 1,
-   "n": "Caravan Palace",
-   "t": "concert",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: TivoliVredenburg, Utrecht."
-  },
-  {
-   "d": "2025-01-29",
-   "nd": 1,
-   "n": "Wake Up Club #11",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: Ping Pong Club, Concordiastraat 80, Utrecht."
-  },
-  {
-   "d": "2025-04-26",
-   "nd": 1,
-   "n": "Koningsdag @ PHL 17",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar: \"Koningsdag @ PHL 17\" 26–27 Apr."
-  },
-  {
-   "d": "2025-04-29",
-   "nd": 1,
-   "n": "Dotan",
-   "t": "concert",
-   "c": "confirmed",
-   "ev": "Calendar w/ venue: TivoliVredenburg, Utrecht."
-  },
-  {
-   "d": "2025-05-31",
-   "nd": 1,
-   "n": "Soenda Festival 2025",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Locker (entree B) + Weeztix tickets + post-event survey.",
-   "note": "Where your season always starts."
-  },
-  {
-   "d": "2025-06-15",
-   "nd": 1,
-   "n": "Intercell · Funk Tribu",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Your correction — Intercell Outdoor (Funk Tribu all-day), not Op de Ring.",
-   "note": "You backed your own memory over the ticket. Good call."
-  },
-  {
-   "d": "2025-06-21",
-   "nd": 1,
-   "n": "Festival Op de Ring",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Festival Op de Ring!\". Distinct from Intercell on 15 Jun — the earlier sketch dismissed this name while correcting that entry, but it is its own event a week later."
-  },
-  {
-   "d": "2025-07-11",
-   "nd": 4,
-   "n": "Wildeburg 2025",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "TicketSwap \"10–13 jul\", camping weekend Fri–Mon.",
-   "note": "Four days in a field, and 134 km without leaving it."
-  },
-  {
-   "d": "2025-07-26",
-   "nd": 1,
-   "n": "Liquicity Festival 2025",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Your correction.",
-   "note": "Three hours of sleep. Worth it."
-  },
-  {
-   "d": "2025-08-02",
-   "nd": 1,
-   "n": "Basis Outdoor 2025",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "EventSafe locker for \"Basis Outdoor 2025\".",
-   "note": "A locker, a Saturday, gone."
-  },
-  {
-   "d": "2025-08-14",
-   "nd": 5,
-   "n": "Lowlands 2025",
-   "t": "crew",
-   "c": "confirmed",
-   "ev": "On the \"Enschede Ploeg\" LL25 build/break crew.",
-   "note": "You sold your ticket and built the place instead — 145 km inside the fence."
-  },
-  {
-   "d": "2025-08-29",
-   "nd": 3,
-   "n": "Onder de Radar Festival 2025",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Personalized ODR ticket (Vliegbasis, 29–31 Aug).",
-   "note": "60,655 steps on the Saturday. Your legs kept the receipt."
-  },
-  {
-   "d": "2025-09-06",
-   "nd": 1,
-   "n": "Blackout (drum & bass)",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Your correction — Blackout DnB.",
-   "note": "Bass you could stand inside."
-  },
-  {
-   "d": "2025-09-13",
-   "nd": 1,
-   "n": "Lofi ‘Patio’",
-   "t": "club",
-   "c": "tentative",
-   "ev": "Lofi Amsterdam \"Patio — this Saturday 14:00–05:00\". Name unconfirmed.",
-   "note": "Two in the afternoon to five in the morning. (Still not sure of the name.)"
-  },
-  {
-   "d": "2025-09-20",
-   "nd": 3,
-   "n": "Portugal · Lisbon & Sintra",
-   "t": "trip",
-   "c": "confirmed",
-   "ev": "Ryanair \"19 sep\"; the floors give it away. Not a festival.",
-   "note": "Not a rave. Sintra just climbs like one — 172 floors."
-  },
-  {
-   "d": "2025-10-16",
-   "nd": 2,
-   "n": "Berlin · clubbing + Dark Matter",
-   "t": "trip",
-   "c": "confirmed",
-   "ev": "Berlin clubbing (16th) + Dark Matter exhibition (17th).",
-   "note": "A city, a show, a late one."
-  },
-  {
-   "d": "2025-10-18",
-   "nd": 1,
-   "n": "ADE 2025",
-   "t": "crew",
-   "c": "confirmed",
-   "ev": "\"Crew Briefing | Elementenstraat 25 | ADE 2025\".",
-   "note": "Worked it, then slept eleven hours. Earned."
-  },
-  {
-   "d": "2025-10-25",
-   "nd": 1,
-   "n": "Intercell · VTSS (Unity)",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Calendar: \"Intercell VTSS unity\"."
-  },
-  {
-   "d": "2025-11-08",
-   "nd": 1,
-   "n": "WAS Utrecht",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Your correction — WAS (Utrecht).",
-   "note": "Home at dawn on two hours of sleep."
-  },
-  {
-   "d": "2025-11-15",
-   "nd": 1,
-   "n": "Unreal × FYM Warehouse",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Your confirmation — Unreal Warehouse rave.",
-   "note": "Warehouse. Elementenstraat. You went."
-  },
-  {
-   "d": "2025-11-20",
-   "nd": 1,
-   "n": "Sef",
-   "t": "concert",
-   "c": "confirmed",
-   "ev": "Calendar: \"Sef Paradiso\" / \"SEF paradiso\"."
-  },
-  {
-   "d": "2025-11-22",
-   "nd": 1,
-   "n": "Soenda Indoor 2025",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Calendar: \"Soenda indoor\"."
-  },
-  {
-   "d": "2025-11-27",
-   "nd": 4,
-   "n": "Berlin · clubbing trip",
-   "t": "trip",
-   "c": "confirmed",
-   "ev": "RA.co \"Hoe__mies × Call of Dirty, OXI Berlin\".",
-   "note": "OXI, 23:00 to 08:00. One hour of sleep across four days."
-  },
-  {
-   "d": "2026-02-07",
-   "nd": 1,
-   "n": "Soenda Indoor",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Your correction — Soenda Indoor.",
-   "note": "The winter version. Same church."
-  },
-  {
-   "d": "2026-03-28",
-   "nd": 1,
-   "n": "High Tea Festival",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Your correction.",
-   "note": "HRV bottomed at 25. You felt that one for days."
-  },
-  {
-   "d": "2026-04-11",
-   "nd": 1,
-   "n": "Liquicity Spring",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Your correction. elockers reservation.",
-   "note": "Two and a half hours down, all of it in."
-  },
-  {
-   "d": "2026-04-18",
-   "nd": 1,
-   "n": "Mika Heggemann @ BASIS",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Your correction — Mika Heggemann at club BASIS.",
-   "note": "Then eight hours of sleep. Rare, and holy."
-  },
-  {
-   "d": "2026-04-27",
-   "nd": 1,
-   "n": "Koningsnacht + Koningsdag",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "EKKO’s Koningsnacht (26th) + King’s Day (27th).",
-   "note": "Orange, +10 bpm. The city owes you nothing."
-  },
-  {
-   "d": "2026-05-02",
-   "nd": 1,
-   "n": "Club night",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Your call — clubbing. Name unknown.",
-   "note": "A Saturday you didn’t name. The watch remembers anyway."
-  },
-  {
-   "d": "2026-05-09",
-   "nd": 1,
-   "n": "Wake Up Club × Ping Pong",
-   "t": "club",
-   "c": "confirmed",
-   "ev": "Weeztix \"Wake Up Club Utrecht x Ping Pong\".",
-   "note": "HRV to 24. Wake up, indeed."
-  },
-  {
-   "d": "2026-05-30",
-   "nd": 1,
-   "n": "Soenda Festival 2026",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Locker + Weeztix tickets.",
-   "note": "Season opener, year two. 1.6 hours of sleep."
-  },
-  {
-   "d": "2026-06-06",
-   "nd": 1,
-   "n": "Pride Utrecht",
-   "t": "festival",
-   "c": "tentative",
-   "ev": "TivoliVredenburg flagged Pride Utrecht Sat 6 Jun. Best guess.",
-   "note": "Your quietest big day. (Guessing this one.)"
-  },
-  {
-   "d": "2026-06-12",
-   "nd": 3,
-   "n": "Best Kept Secret 2026",
-   "t": "crew",
-   "c": "confirmed",
-   "ev": "Volunteer, Collective Care / Safer-Clubbing team.",
-   "note": "You went to look after everyone else — 64,748 steps doing it."
-  },
-  {
-   "d": "2026-06-20",
-   "nd": 3,
-   "n": "Barcelona",
-   "t": "trip",
-   "c": "confirmed",
-   "ev": "AMS–BCN flight + Sagrada Família & Park Güell.",
-   "note": "Gaudí, not a DJ. The floor count gave it away."
-  },
-  {
-   "d": "2026-06-26",
-   "nd": 3,
-   "n": "Sicily · Palermo",
-   "t": "trip",
-   "c": "confirmed",
-   "ev": "Boarding passes PMO→ZRH→AMS 28 Jun.",
-   "note": "The heat, not the bass. Your HRV has never been lower — 21."
-  },
-  {
-   "d": "2026-07-04",
-   "nd": 1,
-   "n": "Berlin · clubbing",
-   "t": "trip",
-   "c": "confirmed",
-   "ev": "Your correction — Berlin clubbing again.",
-   "note": "01:42 Uber home. Berlin again."
-  },
-  {
-   "d": "2026-07-10",
-   "nd": 3,
-   "n": "Wildeburg 2026",
-   "t": "festival",
-   "c": "confirmed",
-   "ev": "Paylogic \"Wildeburg 2026\".",
-   "note": "66,097 steps. The biggest day your watch has ever seen."
-  }
- ],
- "unnamed_spikes": [
-  {
-   "d": "2023-08-05",
-   "note": "13.4 km Saturday, sessions 12:01→00:11. No calendar entry, no ticket mail found."
-  },
-  {
-   "d": "2023-10-14",
-   "note": "10.4 km Saturday, sessions to 23:19. Calendar says only \"Langs eemnes\"."
-  }
- ]
+  "_note": "Event spine for the festival-season sketch. Sourced from Google Calendar and Gmail, NOT from body data — the sensors only ever caught a subset. Body metrics are joined on at build time by scripts/build-events.py. Hand-maintained: re-derive by sweeping Calendar (paginate, it caps at 250/page) and confirming names against Gmail ticket/locker/crew/travel mail.",
+  "_types": "festival | crew | club | concert | trip",
+  "_confidence": "confirmed = named by a calendar entry or a personal mail (ticket, locker, roster). tentative = the calendar itself hedges, or the name is inferred.",
+  "_coverage": "Calendar swept 2022-11-25 → 2025-12-28. Calendar use before 2023-05 is sparse (83 entries total), so the 2022-12 → 2023-05 window is thin by nature, not by omission.",
+  "events": [
+    {
+      "d": "2023-01-28",
+      "nd": 1,
+      "n": "Sneeuwbal Festival 2023",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Sneeuwbal Festival 2023 (Regular)\", Park Transwijk, Utrecht."
+    },
+    {
+      "d": "2023-02-10",
+      "nd": 1,
+      "n": "Blackout",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar: \"Blackout\"."
+    },
+    {
+      "d": "2023-05-20",
+      "nd": 1,
+      "n": "Soenda 2023",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Soenda\", 20–21 May."
+    },
+    {
+      "d": "2023-06-02",
+      "nd": 1,
+      "n": "BASIS · Cynthia Spiering all night long",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: BASIS, Oudegracht aan de werf 97, Utrecht."
+    },
+    {
+      "d": "2023-06-14",
+      "nd": 1,
+      "n": "Wake Up Club",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar: \"Wake up club\", 06:00 start."
+    },
+    {
+      "d": "2023-06-24",
+      "nd": 1,
+      "n": "The Weeknd",
+      "t": "concert",
+      "c": "confirmed",
+      "ev": "Calendar: \"The Weeknd\"."
+    },
+    {
+      "d": "2023-07-21",
+      "nd": 3,
+      "n": "Liquicity Festival 2023",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar pinned to Liquicity Festival Geestmerambacht, Oudkarspel; TicketSwap \"Weekend Ticket: Festival & Campsite\" bought from Loes; the festival's own wind-update mails on 22 and 23 Jul."
+    },
+    {
+      "d": "2023-07-29",
+      "nd": 1,
+      "n": "Orbit Festival 2023",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Orbitfestival\"; Elevation Events post-event survey 31 Jul."
+    },
+    {
+      "d": "2023-08-18",
+      "nd": 3,
+      "n": "Lowlands 2023",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Lowlands\" 17–21 Aug + \"Lowlands 2023 | Parkeerticket\" at Evenemententerrein Walibi. A visitor year — the crew work starts in 2024."
+    },
+    {
+      "d": "2023-09-01",
+      "nd": 1,
+      "n": "Blackout",
+      "t": "club",
+      "c": "tentative",
+      "ev": "Calendar: \"Blackout?\" — the question mark is theirs."
+    },
+    {
+      "d": "2023-09-02",
+      "nd": 1,
+      "n": "Rotterdam Rave",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"RotterdamRave\"; Rotterdam Rave Festival mail 27 Jul."
+    },
+    {
+      "d": "2023-09-09",
+      "nd": 1,
+      "n": "Smeerboel",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Smeerboel\"."
+    },
+    {
+      "d": "2023-09-14",
+      "nd": 1,
+      "n": "Fred again..",
+      "t": "concert",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: Ziggo Dome, Amsterdam."
+    },
+    {
+      "d": "2023-09-15",
+      "nd": 1,
+      "n": "Into The Woods",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"INTO THE WOODS\"."
+    },
+    {
+      "d": "2023-11-15",
+      "nd": 1,
+      "n": "Wake Up Club · Magic Morning",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: Ping Pong Club, Utrecht."
+    },
+    {
+      "d": "2023-11-17",
+      "nd": 2,
+      "n": "Soenda Indoor 2023",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Soenda Indoor Werkspoorkathedraal 2023 | FRIDAY (night)\", Werkspoorkathedraal, Utrecht. The walking lands on the 18th — it was a night that crossed midnight."
+    },
+    {
+      "d": "2023-12-28",
+      "nd": 1,
+      "n": "Blasha & Allatt · Steffi · Virginia @ De School",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: De School, Dr. Jan van Breemenstraat 1, Amsterdam."
+    },
+    {
+      "d": "2023-12-29",
+      "nd": 1,
+      "n": "Liquicity Winterfestival 2023",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Liquicity\"; Paylogic order 114055407 confirmed 28 Jul 2023."
+    },
+    {
+      "d": "2024-01-27",
+      "nd": 1,
+      "n": "Sneeuwbal",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Sneeuwbal\"."
+    },
+    {
+      "d": "2024-02-10",
+      "nd": 1,
+      "n": "Rotterdam Rave",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Rotterdam rave\"."
+    },
+    {
+      "d": "2024-02-17",
+      "nd": 8,
+      "n": "Wintersport",
+      "t": "trip",
+      "c": "confirmed",
+      "ev": "Calendar: \"Wintersport\" 17–25 Feb."
+    },
+    {
+      "d": "2024-03-06",
+      "nd": 1,
+      "n": "Wake Up Club",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar: \"Wake up club\", 06:00 start."
+    },
+    {
+      "d": "2024-04-13",
+      "nd": 1,
+      "n": "The History of Drum & Bass w/ Live Orchestra",
+      "t": "concert",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: Melkweg, Amsterdam."
+    },
+    {
+      "d": "2024-05-19",
+      "nd": 1,
+      "n": "En Vrienden festival",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"En vrienden festival\" (opening the day before)."
+    },
+    {
+      "d": "2024-05-25",
+      "nd": 1,
+      "n": "Soenda 2024",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"SOENDA\"."
+    },
+    {
+      "d": "2024-06-01",
+      "nd": 1,
+      "n": "Parade Pride",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Parade pride\", 13:00."
+    },
+    {
+      "d": "2024-06-07",
+      "nd": 1,
+      "n": "BASIS · Cynthia Spiering",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar: \"Basis Cynthia spiering\", 21:00 Friday."
+    },
+    {
+      "d": "2024-06-08",
+      "nd": 3,
+      "n": "Brussels",
+      "t": "trip",
+      "c": "confirmed",
+      "ev": "Calendar: \"Brussel\" + \"Stay at ibis Brussels Centre Gare Midi\" 8–10 Jun."
+    },
+    {
+      "d": "2024-06-23",
+      "nd": 1,
+      "n": "Pinkpop",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Pinkpop\"."
+    },
+    {
+      "d": "2024-06-29",
+      "nd": 1,
+      "n": "TWC huisfestival",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar: \"TWC huisfestival\"."
+    },
+    {
+      "d": "2024-07-09",
+      "nd": 8,
+      "n": "EXIT Festival · Novi Sad",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Exit\" 9–16 Jul; \"Stay at Prague Old Town Hostel\" 9–11 Jul as the way out; settled afterwards in \"Verrekening EXIT festival holiday lijst\" — Jack and Julian owed €322,37."
+    },
+    {
+      "d": "2024-07-19",
+      "nd": 3,
+      "n": "Liquicity Festival 2024",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"liquicity\" 19–22 Jul; two Paylogic orders (129322797, 129736985); pick-up mail for the Liquicity necklace, flag and camping chair."
+    },
+    {
+      "d": "2024-07-27",
+      "nd": 1,
+      "n": "BASIS Outdoor 2024",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Locker number 28575 and pincode mailed the morning of the 27th; \"Last Info for BASIS Outdoor\" the day before."
+    },
+    {
+      "d": "2024-08-08",
+      "nd": 11,
+      "n": "Lowlands 2024",
+      "t": "crew",
+      "c": "confirmed",
+      "ev": "Enschedeploeg bouw-breek roster (8–18 Aug, six \"Lowlands werken\" days) plus a LL24 festivalticket for the 16th. Pulled out of the 19th break shift by mail — \"persoonlijke redenen\"."
+    },
+    {
+      "d": "2024-09-06",
+      "nd": 1,
+      "n": "Blackout Utrecht · Spor, Mandidextrous, Black Sun Empire",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: TivoliVredenburg, Utrecht."
+    },
+    {
+      "d": "2024-09-07",
+      "nd": 1,
+      "n": "Rotterdam Rave",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Rotterdam rave\"."
+    },
+    {
+      "d": "2024-09-21",
+      "nd": 1,
+      "n": "Liquicity family day",
+      "t": "festival",
+      "c": "tentative",
+      "ev": "Calendar: \"Liquicity family day?\" — the question mark is theirs."
+    },
+    {
+      "d": "2024-11-23",
+      "nd": 1,
+      "n": "Intercell pres. Bad Boombox All Night Long",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: Warehouse Elementenstraat 25, Amsterdam."
+    },
+    {
+      "d": "2024-12-20",
+      "nd": 1,
+      "n": "ZeeZout × WAS.",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: WAS., Tractieweg 41, Utrecht."
+    },
+    {
+      "d": "2024-12-31",
+      "nd": 1,
+      "n": "BASIS NYE · Boris Bounce / Cynthia Spiering / ROD",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: BASIS, Oudegracht aan de Werf 97, Utrecht."
+    },
+    {
+      "d": "2025-01-15",
+      "nd": 1,
+      "n": "Caravan Palace",
+      "t": "concert",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: TivoliVredenburg, Utrecht."
+    },
+    {
+      "d": "2025-01-29",
+      "nd": 1,
+      "n": "Wake Up Club #11",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: Ping Pong Club, Concordiastraat 80, Utrecht."
+    },
+    {
+      "d": "2025-04-26",
+      "nd": 1,
+      "n": "Koningsdag @ PHL 17",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar: \"Koningsdag @ PHL 17\" 26–27 Apr."
+    },
+    {
+      "d": "2025-04-29",
+      "nd": 1,
+      "n": "Dotan",
+      "t": "concert",
+      "c": "confirmed",
+      "ev": "Calendar w/ venue: TivoliVredenburg, Utrecht."
+    },
+    {
+      "d": "2025-05-31",
+      "nd": 1,
+      "n": "Soenda Festival 2025",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Locker (entree B) + Weeztix tickets + post-event survey.",
+      "note": "Where your season always starts."
+    },
+    {
+      "d": "2025-06-15",
+      "nd": 1,
+      "n": "Intercell · Funk Tribu",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Your correction — Intercell Outdoor (Funk Tribu all-day), not Op de Ring.",
+      "note": "You backed your own memory over the ticket. Good call."
+    },
+    {
+      "d": "2025-06-21",
+      "nd": 1,
+      "n": "Festival Op de Ring",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Festival Op de Ring!\". Distinct from Intercell on 15 Jun — the earlier sketch dismissed this name while correcting that entry, but it is its own event a week later."
+    },
+    {
+      "d": "2025-07-11",
+      "nd": 4,
+      "n": "Wildeburg 2025",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "TicketSwap \"10–13 jul\", camping weekend Fri–Mon.",
+      "note": "Four days in a field, and 134 km without leaving it."
+    },
+    {
+      "d": "2025-07-26",
+      "nd": 1,
+      "n": "Liquicity Festival 2025",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Your correction.",
+      "note": "Three hours of sleep. Worth it."
+    },
+    {
+      "d": "2025-08-02",
+      "nd": 1,
+      "n": "Basis Outdoor 2025",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "EventSafe locker for \"Basis Outdoor 2025\".",
+      "note": "A locker, a Saturday, gone."
+    },
+    {
+      "d": "2025-08-14",
+      "nd": 5,
+      "n": "Lowlands 2025",
+      "t": "crew",
+      "c": "confirmed",
+      "ev": "On the \"Enschede Ploeg\" LL25 build/break crew.",
+      "note": "You sold your ticket and built the place instead — 145 km inside the fence."
+    },
+    {
+      "d": "2025-08-29",
+      "nd": 3,
+      "n": "Onder de Radar Festival 2025",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Personalized ODR ticket (Vliegbasis, 29–31 Aug).",
+      "note": "60,655 steps on the Saturday. Your legs kept the receipt."
+    },
+    {
+      "d": "2025-09-06",
+      "nd": 1,
+      "n": "Blackout (drum & bass)",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Your correction — Blackout DnB.",
+      "note": "Bass you could stand inside."
+    },
+    {
+      "d": "2025-09-13",
+      "nd": 1,
+      "n": "Lofi ‘Patio’",
+      "t": "club",
+      "c": "tentative",
+      "ev": "Lofi Amsterdam \"Patio — this Saturday 14:00–05:00\". Name unconfirmed.",
+      "note": "Two in the afternoon to five in the morning. (Still not sure of the name.)"
+    },
+    {
+      "d": "2025-09-20",
+      "nd": 3,
+      "n": "Portugal · Lisbon & Sintra",
+      "t": "trip",
+      "c": "confirmed",
+      "ev": "Ryanair \"19 sep\"; the floors give it away. Not a festival.",
+      "note": "Not a rave. Sintra just climbs like one — 172 floors."
+    },
+    {
+      "d": "2025-10-16",
+      "nd": 2,
+      "n": "Berlin · clubbing + Dark Matter",
+      "t": "trip",
+      "c": "confirmed",
+      "ev": "Berlin clubbing (16th) + Dark Matter exhibition (17th).",
+      "note": "A city, a show, a late one."
+    },
+    {
+      "d": "2025-10-18",
+      "nd": 1,
+      "n": "ADE 2025",
+      "t": "crew",
+      "c": "confirmed",
+      "ev": "\"Crew Briefing | Elementenstraat 25 | ADE 2025\".",
+      "note": "Worked it, then slept eleven hours. Earned."
+    },
+    {
+      "d": "2025-10-25",
+      "nd": 1,
+      "n": "Intercell · VTSS (Unity)",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Calendar: \"Intercell VTSS unity\"."
+    },
+    {
+      "d": "2025-11-08",
+      "nd": 1,
+      "n": "WAS Utrecht",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Your correction — WAS (Utrecht).",
+      "note": "Home at dawn on two hours of sleep."
+    },
+    {
+      "d": "2025-11-15",
+      "nd": 1,
+      "n": "Unreal × FYM Warehouse",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Your confirmation — Unreal Warehouse rave.",
+      "note": "Warehouse. Elementenstraat. You went."
+    },
+    {
+      "d": "2025-11-20",
+      "nd": 1,
+      "n": "Sef",
+      "t": "concert",
+      "c": "confirmed",
+      "ev": "Calendar: \"Sef Paradiso\" / \"SEF paradiso\"."
+    },
+    {
+      "d": "2025-11-22",
+      "nd": 1,
+      "n": "Soenda Indoor 2025",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Calendar: \"Soenda indoor\"."
+    },
+    {
+      "d": "2025-11-27",
+      "nd": 4,
+      "n": "Berlin · clubbing trip",
+      "t": "trip",
+      "c": "confirmed",
+      "ev": "RA.co \"Hoe__mies × Call of Dirty, OXI Berlin\".",
+      "note": "OXI, 23:00 to 08:00. One hour of sleep across four days."
+    },
+    {
+      "d": "2026-02-07",
+      "nd": 1,
+      "n": "Soenda Indoor",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Your correction — Soenda Indoor.",
+      "note": "The winter version. Same church."
+    },
+    {
+      "d": "2026-03-28",
+      "nd": 1,
+      "n": "High Tea Festival",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Your correction.",
+      "note": "HRV bottomed at 25. You felt that one for days."
+    },
+    {
+      "d": "2026-04-11",
+      "nd": 1,
+      "n": "Liquicity Spring",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Your correction. elockers reservation.",
+      "note": "Two and a half hours down, all of it in."
+    },
+    {
+      "d": "2026-04-18",
+      "nd": 1,
+      "n": "Mika Heggemann @ BASIS",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Your correction — Mika Heggemann at club BASIS.",
+      "note": "Then eight hours of sleep. Rare, and holy."
+    },
+    {
+      "d": "2026-04-27",
+      "nd": 1,
+      "n": "Koningsnacht + Koningsdag",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "EKKO’s Koningsnacht (26th) + King’s Day (27th).",
+      "note": "Orange, +10 bpm. The city owes you nothing."
+    },
+    {
+      "d": "2026-05-02",
+      "nd": 1,
+      "n": "Houseweekend · clubbing",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Your call — a house weekend, out clubbing."
+    },
+    {
+      "d": "2026-05-09",
+      "nd": 1,
+      "n": "Wake Up Club × Ping Pong",
+      "t": "club",
+      "c": "confirmed",
+      "ev": "Weeztix \"Wake Up Club Utrecht x Ping Pong\".",
+      "note": "HRV to 24. Wake up, indeed."
+    },
+    {
+      "d": "2026-05-30",
+      "nd": 1,
+      "n": "Soenda Festival 2026",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Locker + Weeztix tickets.",
+      "note": "Season opener, year two. 1.6 hours of sleep."
+    },
+    {
+      "d": "2026-06-06",
+      "nd": 1,
+      "n": "Pride Utrecht",
+      "t": "festival",
+      "c": "tentative",
+      "ev": "TivoliVredenburg flagged Pride Utrecht Sat 6 Jun. Best guess.",
+      "note": "Your quietest big day. (Guessing this one.)"
+    },
+    {
+      "d": "2026-06-12",
+      "nd": 3,
+      "n": "Best Kept Secret 2026",
+      "t": "crew",
+      "c": "confirmed",
+      "ev": "Volunteer, Collective Care / Safer-Clubbing team.",
+      "note": "You went to look after everyone else — 64,748 steps doing it."
+    },
+    {
+      "d": "2026-06-20",
+      "nd": 3,
+      "n": "Barcelona",
+      "t": "trip",
+      "c": "confirmed",
+      "ev": "AMS–BCN flight + Sagrada Família & Park Güell.",
+      "note": "Gaudí, not a DJ. The floor count gave it away."
+    },
+    {
+      "d": "2026-06-26",
+      "nd": 3,
+      "n": "Sicily · Palermo",
+      "t": "trip",
+      "c": "confirmed",
+      "ev": "Boarding passes PMO→ZRH→AMS 28 Jun.",
+      "note": "The heat, not the bass. Your HRV has never been lower — 21."
+    },
+    {
+      "d": "2026-07-04",
+      "nd": 1,
+      "n": "Berlin · clubbing",
+      "t": "trip",
+      "c": "confirmed",
+      "ev": "Your correction — Berlin clubbing again.",
+      "note": "01:42 Uber home. Berlin again."
+    },
+    {
+      "d": "2026-07-10",
+      "nd": 3,
+      "n": "Wildeburg 2026",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Paylogic \"Wildeburg 2026\".",
+      "note": "66,097 steps. The biggest day your watch has ever seen."
+    },
+    {
+      "d": "2026-07-25",
+      "nd": 2,
+      "n": "Liquicity Festival 2026",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Your correction — Liquicity Festival 2026, 25–26 Jul."
+    },
+    {
+      "d": "2026-08-01",
+      "nd": 1,
+      "n": "Basis Outdoor 2026",
+      "t": "festival",
+      "c": "confirmed",
+      "ev": "Your correction — Basis Outdoor 2026."
+    }
+  ],
+  "unnamed_spikes": [
+    {
+      "d": "2023-08-05",
+      "note": "13.4 km Saturday, sessions 12:01→00:11. No calendar entry, no ticket mail found."
+    },
+    {
+      "d": "2023-10-14",
+      "note": "10.4 km Saturday, sessions to 23:19. Calendar says only \"Langs eemnes\"."
+    }
+  ]
 }
