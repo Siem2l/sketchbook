@@ -33,6 +33,27 @@ for the `sketchbook` group.
 
 ## Sketches
 
+- **flash** (`2026-08-flash`) — a tattoo brief generator built so that nothing
+  chooses the idea. Asked for "a tattoo idea", a language model collapses onto
+  snake / moth / dagger every time, so it doesn't get a vote: about half of
+  rolls walk the subject out of the tree of life instead, taking a uniform draw
+  over the ~650 taxonomic orders under a kingdom and then a random offset inside
+  one, which samples flat over the tree rather than over popularity and turns up
+  a webspinner where the model would have said wolf. Everything else — lineage,
+  technique, format, a hard constraint, a twist — comes from six hand-written
+  decks combined by the same seeded PRNG the other sketches use, so a brief is a
+  pure function of its printed seed. The constraint row is what separates a
+  brief from a mood board. References are fetched live and client-side, which
+  restricts the sources to the keyless CORS-open ones: the Met Collection API,
+  iNaturalist, and the Biodiversity Heritage Library's plates reached through
+  Wikimedia Commons (BHL's own API needs a key). Commons searches are strict AND
+  and its BHL category is mostly whole scanned books, so the queries cascade up
+  the taxonomy until something answers and filter to `filetype:bitmap`. ♥ and ✕
+  on any row reweight the decks permanently in localStorage — killed entries
+  keep a floor so an impatient afternoon can't narrow the deck for good — which
+  means the page converges on your taste rather than on the middle of a corpus.
+  The wall is allowed to fail; the brief renders offline.
+
 - **splinter** (`2026-07-splinter`) — a Vectorheart debris field in real 3D
   you can walk around and draw into. Two references, one generator: Chapter
   Three's flat angular shards at one pole, MC-202's extruded hardware at the

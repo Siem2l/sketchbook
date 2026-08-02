@@ -1,0 +1,11 @@
+{
+  "title": "flash",
+  "date": "2026-08-02",
+  "tags": [
+    "tattoo-study",
+    "seeded",
+    "archives",
+    "interactive"
+  ],
+  "description": "A tattoo brief generator built so that nothing chooses the idea. The subject is walked out of the tree of life at random — a uniform draw over taxonomic orders rather than over popularity, which is what turns up a webspinner instead of a wolf — and the treatment comes from six hand-written decks combined by a seeded PRNG. References are pulled live from the Met, iNaturalist and the Biodiversity Heritage Library's plates on Wikimedia Commons. Every row carries a hard constraint, because a constraint is what separates a brief from a mood board, and ♥/✕ reweight the decks permanently so the thing narrows towards you rather than towards the middle of a corpus."
+}

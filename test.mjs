@@ -12,6 +12,7 @@ const PORT = 5178;
 const BASE = `http://localhost:${PORT}`;
 const SKETCH = `${BASE}/sketches/2026-07-inconstructions/`;
 const SPLINTER = `${BASE}/sketches/2026-07-splinter/`;
+const FLASH = `${BASE}/sketches/2026-08-flash/`;
 
 let passed = 0;
 const failures = [];
@@ -590,6 +591,175 @@ try {
       assert.ok(await sp(q, () => window.__splinter.pieces()) > 0);
       await q.close();
     });
+  }
+
+  // --------------------------------------------------------------------- flash
+  {
+    // flash talks to three public archives, so anything that depends on the
+    // network is asserted loosely or not at all — what's pinned down here is the
+    // half that is pure: the seeded draw, the weighting, and the shelf. A 404
+    // from a museum's own API is theirs, not ours, so those are filtered out.
+    const OURS = (m) => !/Failed to load resource/.test(m);
+
+    async function openFlash({ width = 1500, height = 1000 } = {}) {
+      const page = await browser.newPage({ viewport: { width, height } });
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+      await page.goto(FLASH, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__flash?.ready(), null, { timeout: 30000 });
+      page.errors = errors;
+      return page;
+    }
+    const fl = (p, fn) => p.evaluate(fn);
+    // Each browser.newPage() gets its own storage, so persistence has to be
+    // tested by reloading the same page rather than opening a second one.
+    const reloadFlash = async (page) => {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => window.__flash?.ready(), null, { timeout: 30000 });
+    };
+
+    const p = await openFlash();
+    await fl(p, () => window.__flash.reset());
+
+    await test('flash renders a complete brief without runtime errors', async () => {
+      const b = await fl(p, () => window.__flash.brief());
+      for (const axis of ['subject', 'lineage', 'technique', 'format', 'constraint', 'twist']) {
+        assert.ok(b[axis]?.v, `the ${axis} row came out empty`);
+      }
+      assert.deepEqual(p.errors.filter(OURS), []);
+    });
+
+    await test('the same seed reproduces the same brief, a different one does not', async () => {
+      const r = await fl(p, () => ({
+        a: window.__flash.rollOffline('deadbeef'),
+        b: window.__flash.rollOffline('deadbeef'),
+        c: window.__flash.rollOffline('deadbeee'),
+      }));
+      assert.deepEqual(r.a, r.b, 'one seed produced two different briefs');
+      assert.notDeepEqual(r.a, r.c, 'two seeds produced the same brief');
+    });
+
+    await test('every deck is large enough for the cross-product to be the surprise', async () => {
+      const d = await fl(p, () => window.__flash.decks());
+      for (const [name, n] of Object.entries(d)) assert.ok(n >= 30, `deck ${name} is only ${n} long`);
+      const combos = Object.values(d).reduce((a, b) => a * b, 1);
+      assert.ok(combos > 1e8, `only ${combos} combinations`);
+    });
+
+    await test('killing an entry lowers its weight and keeping raises it', async () => {
+      const r = await fl(p, () => {
+        window.__flash.reset();
+        window.__flash.nudge('lineage:0', false);
+        const killed = window.__flash.weight('lineage:0');
+        window.__flash.nudge('lineage:0', true);
+        window.__flash.nudge('lineage:0', true);
+        return { killed, kept: window.__flash.weight('lineage:0') };
+      });
+      assert.ok(r.killed < 1, `kill did not suppress: ${r.killed}`);
+      assert.ok(r.kept > 1, `keep did not boost: ${r.kept}`);
+    });
+
+    await test('a killed entry stays reachable rather than being removed', async () => {
+      // The floor is what stops one impatient afternoon permanently narrowing
+      // the deck — a killed entry has to stay possible, only rare.
+      const w = await fl(p, () => {
+        window.__flash.reset();
+        for (let i = 0; i < 40; i++) window.__flash.nudge('twist:3', false);
+        return window.__flash.weight('twist:3');
+      });
+      assert.ok(w > 0, 'a killed entry reached zero and can never come back');
+      assert.ok(w < 0.05, `kill floor is too generous: ${w}`);
+    });
+
+    await test('weights survive a reload', async () => {
+      await fl(p, () => { window.__flash.reset(); window.__flash.nudge('format:2', true); });
+      await reloadFlash(p);
+      assert.ok(await fl(p, () => window.__flash.weight('format:2')) > 1,
+        'the deck forgot its weighting across a reload');
+      await fl(p, () => window.__flash.reset());
+    });
+
+    await test('a locked row survives a re-roll and an unlocked one does not', async () => {
+      await fl(p, () => window.__flash.setLock('constraint', true));
+      const before = await fl(p, () => window.__flash.brief());
+      let changed = false;
+      for (let i = 0; i < 6 && !changed; i++) {
+        await p.click('#reroll-open');
+        await p.waitForTimeout(700);
+        const after = await fl(p, () => window.__flash.brief());
+        assert.equal(after.constraint.v, before.constraint.v, 'a locked row was re-rolled');
+        if (after.twist.v !== before.twist.v || after.lineage.v !== before.lineage.v) changed = true;
+      }
+      assert.ok(changed, 'six re-rolls never moved an unlocked row');
+      await fl(p, () => window.__flash.setLock('constraint', false));
+    });
+
+    await test('the seed box drives the brief and the url follows it', async () => {
+      await p.fill('#seed', 'c0ffee01');
+      await p.press('#seed', 'Enter');
+      await p.waitForFunction(() => window.__flash.seed() === 'c0ffee01', null, { timeout: 25000 });
+      assert.match(p.url(), /#c0ffee01$/);
+    });
+
+    await test('saving puts the brief on the shelf, and it survives a reload', async () => {
+      await fl(p, () => { window.__flash.reset(); });
+      await p.click('#save');
+      await p.waitForTimeout(200);
+      assert.equal((await fl(p, () => window.__flash.saved())).length, 1);
+      assert.equal(await p.textContent('#shelf-n'), '1', 'the shelf counter did not move');
+      await reloadFlash(p);
+      assert.equal((await fl(p, () => window.__flash.saved())).length, 1, 'the shelf did not persist');
+      await fl(p, () => window.__flash.reset());
+    });
+
+    await test('a keystroke typed into the seed box is not read as a shortcut', async () => {
+      await fl(p, () => window.__flash.reset());
+      await p.fill('#seed', '');
+      await p.type('#seed', 'ssrr');
+      assert.equal(await p.inputValue('#seed'), 'ssrr', 'the seed box swallowed its own keystrokes');
+      assert.equal((await fl(p, () => window.__flash.saved())).length, 0, 's typed in a field still saved');
+      await p.fill('#seed', await fl(p, () => window.__flash.seed()));
+    });
+
+    await test('the copied brief carries every row and its seed', async () => {
+      const txt = await fl(p, () => window.__flash.briefText());
+      for (const k of ['SUBJECT', 'LINEAGE', 'TECHNIQUE', 'FORMAT', 'HARD RULE', 'TWIST', 'seed']) {
+        assert.ok(txt.includes(k), `the copied brief is missing ${k}`);
+      }
+    });
+
+    await test('the reference wall fills from more than one archive', async () => {
+      // Networked, so this is the one assertion allowed to be soft: the wall may
+      // be thin for an obscure subject, but it should not be single-sourced
+      // across several rolls, and it must never break the page.
+      let best = 0;
+      for (let i = 0; i < 3; i++) {
+        await p.click('#roll');
+        await p.waitForTimeout(7000);
+        const badges = await fl(p, () => window.__flash.wall().map((r) => r.badge));
+        best = Math.max(best, new Set(badges).size);
+      }
+      assert.ok(best >= 2, `the wall never drew on more than one source (best: ${best})`);
+      assert.deepEqual(p.errors.filter(OURS), []);
+    });
+
+    await test('flash reflows to a narrow screen without sideways scroll', async () => {
+      // Resized rather than reopened: this catches a wall that has already been
+      // populated failing to reflow, which a fresh narrow load would not.
+      await p.setViewportSize({ width: 390, height: 780 });
+      await p.waitForTimeout(600);
+      const narrow = await fl(p, () => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.ok(narrow <= 1, `the page scrolls sideways by ${narrow}px at 390px wide`);
+      await p.setViewportSize({ width: 1500, height: 1000 });
+      await p.waitForTimeout(300);
+      const wide = await fl(p, () => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.ok(wide <= 1, `the page scrolls sideways by ${wide}px at 1500px wide`);
+      assert.deepEqual(p.errors.filter(OURS), []);
+    });
+
+    await fl(p, () => window.__flash.reset());
+    await p.close();
   }
 
 } finally {
