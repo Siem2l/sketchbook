@@ -17,6 +17,7 @@ const VIEWPORT = { width: 1200, height: 900 };
 const SETTLE_MS = 1500;
 const MAX_BYTES = 400 * 1024;
 const MAX_WIDTH = 800;
+const MIN_WIDTH = 400;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -100,8 +101,11 @@ async function main() {
 
       // Downscale if the full-viewport capture is larger than we want
       // to commit. Do the resize in-browser (canvas) so we don't need
-      // an extra image-processing dependency.
-      if (buffer.length > MAX_BYTES) {
+      // an extra image-processing dependency. One pass at MAX_WIDTH is
+      // enough for a canvas sketch, but a page that is mostly photographs
+      // (flash's reference wall) still lands well over budget as a PNG, so
+      // keep stepping the width down until it fits or we hit the floor.
+      for (let maxWidth = MAX_WIDTH; buffer.length > MAX_BYTES && maxWidth >= MIN_WIDTH; maxWidth = Math.round(maxWidth * 0.8)) {
         const base64In = buffer.toString('base64');
         const resizedBase64 = await page.evaluate(
           async ({ base64In, maxWidth }) => {
@@ -120,7 +124,7 @@ async function main() {
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             return canvas.toDataURL('image/png').split(',')[1];
           },
-          { base64In, maxWidth: MAX_WIDTH }
+          { base64In, maxWidth }
         );
         buffer = Buffer.from(resizedBase64, 'base64');
       }
