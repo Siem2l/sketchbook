@@ -289,29 +289,41 @@ function rollSync(seed) {
   return { brief: b, objectSubject, wantTaxon, walkFracs, rnd };
 }
 
-async function roll(seed, locks = {}, prev = null) {
+const taxonSubject = (walked) => {
+  const t = walked.taxon;
+  return {
+    deck: 'taxon', idx: t.id, key: `root:${walked.root.id}`,
+    v: strip(t.preferred_common_name) || t.name,
+    latin: t.name,
+    note: '',
+    q: strip(t.preferred_common_name) || t.name,
+    taxon: t, order: walked.order, root: walked.root, depth: walked.depth,
+    link: `https://www.inaturalist.org/taxa/${t.id}`,
+    photo: bigPhoto(t.default_photo?.medium_url || t.default_photo?.url),
+  };
+};
+
+// The deck half is pure and instant; the taxonomic walk is up to six sequential
+// calls to a live archive. Building them together meant a slow iNaturalist held
+// the entire brief — seed included — off the screen for as long as it took. So
+// the decks land first and the subject upgrades in place when the walk returns.
+function rollDecks(seed, locks = {}, prev = null) {
   const { brief: b, objectSubject, wantTaxon, walkFracs, rnd } = rollSync(seed);
   b.subject = objectSubject;
-  if (wantTaxon) {
-    const walked = await walkTaxon(walkFracs).catch(() => null);
-    if (walked) {
-      const t = walked.taxon;
-      b.subject = {
-        deck: 'taxon', idx: t.id, key: `root:${walked.root.id}`,
-        v: strip(t.preferred_common_name) || t.name,
-        latin: t.name,
-        note: '',
-        q: strip(t.preferred_common_name) || t.name,
-        taxon: t, order: walked.order, root: walked.root, depth: walked.depth,
-        link: `https://www.inaturalist.org/taxa/${t.id}`,
-        photo: bigPhoto(t.default_photo?.medium_url || t.default_photo?.url),
-      };
-    }
-  }
+  b.wantTaxon = wantTaxon; b.walkFracs = walkFracs; b.rnd = rnd;
   // Locked rows survive the re-roll untouched.
   for (const name of AXES) if (locks[name] && prev?.[name]) b[name] = prev[name];
-  b.rnd = rnd;
   return b;
+}
+
+// Resolves true when it actually replaced the subject, so the caller knows
+// whether a second render is worth doing.
+async function walkInSubject(b) {
+  if (!b.wantTaxon || locks.subject) return false;
+  const walked = await walkTaxon(b.walkFracs).catch(() => null);
+  if (!walked || b !== current) return false;   // a newer roll won the race
+  b.subject = taxonSubject(walked);
+  return true;
 }
 
 const AXES = ['subject', 'lineage', 'technique', 'format', 'constraint', 'twist'];
@@ -526,8 +538,9 @@ function interleave(list) {
 async function go(seed, keepLocks = false) {
   const prev = current;
   if (!keepLocks) locks = {};
-  current = await roll(seed, locks, prev);
+  current = rollDecks(seed, locks, prev);
   renderBrief();
+  if (await walkInSubject(current)) renderBrief();
   loadWall(current);
 }
 
@@ -541,15 +554,7 @@ async function spin(name) {
       ? await walkTaxon([rnd(), rnd(), rnd()]).catch(() => null)
       : null;
     if (walked) {
-      const t = walked.taxon;
-      current.subject = {
-        deck: 'taxon', idx: t.id, key: `root:${walked.root.id}`,
-        v: strip(t.preferred_common_name) || t.name, latin: t.name, note: '',
-        q: strip(t.preferred_common_name) || t.name,
-        taxon: t, order: walked.order, root: walked.root, depth: walked.depth,
-        link: `https://www.inaturalist.org/taxa/${t.id}`,
-        photo: bigPhoto(t.default_photo?.medium_url || t.default_photo?.url),
-      };
+      current.subject = taxonSubject(walked);
     } else {
       current.subject = drawFrom('object', OBJECTS, Math.random());
     }
