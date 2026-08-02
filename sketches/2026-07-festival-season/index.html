@@ -87,19 +87,6 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);-
 .scat .pt:hover{stroke:var(--ink);stroke-width:2}
 .scatcap{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:10px}
 
-/* radial gauges */
-.gauges{display:flex;gap:clamp(14px,2vw,26px);flex-wrap:wrap}
-.gcard{width:clamp(180px,20vw,220px);border:1.5px solid var(--ink);border-radius:5px;background:var(--panel);padding:18px}
-.gcard .gname{font-family:var(--serif);font-weight:700;font-size:17px;line-height:1.1;letter-spacing:-.01em}
-.gcard .gdate{font-family:var(--mono);font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
-.grings{display:flex;justify-content:space-between;margin:16px 0 6px}
-.gring{text-align:center;width:33%}
-.gring svg{width:100%;height:auto}
-.gring .rbg{fill:none;stroke:var(--surface-3);stroke-width:9}
-.gring .rfg{fill:none;stroke-width:9;stroke-linecap:round;transform:rotate(-90deg);transform-origin:center;transition:stroke-dashoffset 1.3s var(--ease)}
-.gring .rlab{font-family:var(--mono);font-size:10px;fill:var(--ink);font-weight:600}
-.gring .gk{font-family:var(--mono);font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:5px;display:block}
-.gnote{font-family:var(--serif);font-style:italic;font-size:12.5px;color:var(--ink-2);line-height:1.4;border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
 
 /* device ladder */
 .ladder{display:flex;flex-direction:column;gap:7px;width:min(80vw,980px)}
@@ -112,21 +99,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);-
 .ladder .lyears{display:grid;grid-template-columns:minmax(120px,168px) 1fr;gap:14px;margin-top:4px}
 .ladder .lyears div{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted)}
 
-/* the silence — no chart, because there is nothing to chart */
-.silence{width:min(74vw,940px)}
-.silence-count{font-family:var(--serif);font-size:clamp(18px,2.2vw,26px);color:var(--ink-2);margin-bottom:20px}
-.silence-count b{color:var(--accent);font-size:1.6em;font-weight:800;letter-spacing:-.02em}
-.silence-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:5px 22px}
-.sitem{display:flex;align-items:baseline;gap:8px;padding:5px 0;border-bottom:1px dashed var(--line-2)}
-.sitem i{width:7px;height:7px;border-radius:2px;flex:none;opacity:.45}
-.sitem .sn{font-size:13px;color:var(--ink-2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.sitem .sd{font-family:var(--mono);font-size:10px;color:var(--muted);flex:none}
 
-/* the dark */
-.dark{width:min(78vw,1080px)}
-.dark svg{width:100%;height:auto;display:block;overflow:visible}
-.dark .dbar{transition:opacity .5s var(--ease)}
-.dark text{fill:var(--muted);font-family:var(--mono);font-size:10px}
 
 /* recovery curves small multiples */
 .rcgrid{display:grid;grid-template-columns:repeat(2,minmax(220px,300px));gap:clamp(14px,2vw,24px)}
@@ -134,7 +107,17 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);-
 .rcard{border:1.5px solid var(--ink);border-radius:5px;background:var(--panel);padding:16px}
 .rcard .rt{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .rcard .rn{font-family:var(--serif);font-weight:700;font-size:15px}
-.rcard .rd{font-family:var(--mono);font-size:11px;color:var(--pos)}
+.rcard .rd{font-family:var(--mono);font-size:11px;color:var(--pos);white-space:nowrap;flex:none}
+.rcard{transition:background .12s var(--ease)}.rcard:hover{background:var(--surface-2)}
+
+/* ledger era filter */
+.tfilter{display:flex;gap:0;margin:0 0 14px;border:1.5px solid var(--ink);width:max-content;max-width:100%;flex-wrap:wrap}
+.tfilter button{font-family:var(--mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+  padding:7px 14px;border:0;background:none;color:var(--ink-2);cursor:pointer;border-right:1px solid var(--line-2)}
+.tfilter button:last-child{border-right:0}
+.tfilter button:hover{color:var(--ink)}
+.tfilter button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.tfilter button .n{opacity:.6;margin-left:6px}
 .rcard svg{width:100%;height:auto;margin-top:8px;overflow:visible}
 .rcard .rcline{fill:none;stroke-width:2;stroke-linejoin:round;transition:stroke-dashoffset 1.6s var(--ease)}
 .rcard .rcband{opacity:.16}
@@ -230,21 +213,10 @@ footer b{color:var(--ink-2);font-weight:600}footer code{font-family:var(--mono);
       <span><i style="background:var(--concert)"></i>Concert</span></div>
   </section>
 
-  <!-- Act I cont.: the dark -->
-  <section class="scene" data-scene="1" data-act="unrecorded">
-    <div class="scene-head"><div class="kick">2022–2024 · days over 10 km</div></div>
-    <div class="dark" id="dark"></div>
-    <div class="scatcap">each bar a day over 10 km · filled = heart rate recorded · hollow = nothing</div>
-  </section>
 
-  <!-- Act II: the silence -->
-  <section class="scene" data-scene="2" data-act="silences">
-    <div class="scene-head"><div class="kick">Dec ’23 — Apr ’25 · nights with no instrument</div></div>
-    <div class="silence" id="silence"></div>
-  </section>
 
   <!-- Act III: the Garmin ground -->
-  <section class="scene" data-scene="3" data-act="steps">
+  <section class="scene" data-scene="1" data-act="steps">
     <div class="scene-head"><div class="kick">from May ’25 · steps per day</div></div>
     <div class="terr" id="terr"></div>
     <div class="terrleg">
@@ -254,21 +226,16 @@ footer b{color:var(--ink-2);font-weight:600}footer code{font-family:var(--mono);
   </section>
 
   <!-- Act IV: the cost -->
-  <section class="scene" data-scene="4" data-act="cost">
+  <section class="scene" data-scene="2" data-act="cost">
     <div class="scene-head"><div class="kick">every measured night · distance against HRV drop</div></div>
     <div class="scat" id="scat"></div>
     <div class="scatcap">↓ down-right = moved a lot AND crashed · dot size = how little you slept</div>
   </section>
 
-  <!-- Act V: gauges -->
-  <section class="scene" data-scene="5" data-act="worst four">
-    <div class="scene-head"><div class="kick">the four costliest nights · HRV drop, sleep, body battery</div></div>
-    <div class="gauges" id="gauges"></div>
-  </section>
 
   <!-- Act VI: recovery + resolution -->
-  <section class="scene" data-scene="6" data-act="recovery">
-    <div class="scene-head"><div class="kick">the same four nights · HRV over the days after</div></div>
+  <section class="scene" data-scene="3" data-act="recovery">
+    <div class="scene-head"><div class="kick">the four costliest nights · HRV over the days after</div></div>
     <div class="rcgrid" id="rcgrid"></div>
     <div class="resolve" id="resolve"></div>
   </section>
@@ -278,6 +245,11 @@ footer b{color:var(--ink-2);font-weight:600}footer code{font-family:var(--mono);
 <!-- LEDGER -->
 <section class="blk"><div class="wrap">
   <div class="blk-h reveal"><div class="kick">every entry</div><p class="sub" id="tblsub"></p></div>
+  <div class="tfilter reveal" id="tfilter" role="group" aria-label="filter by era">
+    <button data-era="all" aria-pressed="true">both eras<span class="n"></span></button>
+    <button data-era="pre" aria-pressed="false">pre-Garmin<span class="n"></span></button>
+    <button data-era="garmin" aria-pressed="false">Garmin<span class="n"></span></button>
+  </div>
   <div class="tablewrap reveal"><table>
     <thead><tr><th data-sort="d">Date</th><th data-sort="name">Event</th><th>Type</th><th>Measured</th>
       <th class="num" data-sort="peak">Peak</th><th class="num" data-sort="dRHR">ΔRHR</th>
@@ -360,7 +332,10 @@ EV.forEach(e=>{
   const bl=dates.map(d=>DAYS[d]?.bl).filter(v=>v!=null),bh=dates.map(d=>DAYS[d]?.bh).filter(v=>v!=null);
   e.bbLow=bl.length?Math.min(...bl):null;e.bbHigh=bh.length?Math.max(...bh):null;
   let rec=null;if(hb!=null)for(let k=1;k<=8;k++){const d=addDays(e.dates[e.dates.length-1],k);const r=DAYS[d];if(r&&r.hv!=null&&r.hlo!=null&&r.hv>=r.hlo){rec=k;break;}}
-  e.recDays=rec;e.peakDay=e.dates[e.stepsArr.indexOf(e.peak)];
+  // Whether recovery was measurable at all: it needs a trailing baseline, but
+  // not an HRV reading during the night itself — which is why the count of
+  // nights with a recDays can exceed the count with a dHRV.
+  e.recDays=rec;e.hrvBase=hb!=null;e.peakDay=e.dates[e.stepsArr.indexOf(e.peak)];
   e.spill=SPILL[e.d]||0; e.night=e.peak+e.spill;
   e.dt=new Date(e.d+'T00:00');
   e.measured='garmin';
@@ -420,27 +395,19 @@ document.querySelectorAll('.reveal:not(.in)').forEach(el=>revO.observe(el));
 })();
 
 /* ---------- worst four (by HRV) ---------- */
-const worst4=EV.filter(e=>e.dHRV!=null&&e.sleepMin!=null).sort((a,b)=>a.dHRV-b.dHRV).slice(0,4);
+// hrvCurveSVG gives up below MIN_HRV_PTS readings in the window, and a card
+// with a heading, a "back in 5n" and an empty box reads as a broken renderer
+// rather than as missing data. So the four are picked from the nights that
+// actually have a curve to show.
+const MIN_HRV_PTS=3;
+const hrvPts=e=>{let n=0;for(let k=-2;k<=Math.max(4,e.nd+3);k++){const r=DAYS[addDays(e.d,k)];if(r&&r.hv!=null)n++;}return n;};
+const worst4=EV.filter(e=>e.dHRV!=null&&e.sleepMin!=null&&hrvPts(e)>=MIN_HRV_PTS).sort((a,b)=>a.dHRV-b.dHRV).slice(0,4);
 
-/* ---------- Scene C: radial gauges ---------- */
-(function(){
-  function ring(frac,color,label,unit){const r=34,C=2*Math.PI*r,off=C*(1-clamp(frac,0,1));
-    return `<div class="gring"><svg viewBox="0 0 90 90"><circle class="rbg" cx="45" cy="45" r="${r}"/>
-      <circle class="rfg" cx="45" cy="45" r="${r}" stroke="${color}" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${RM?off.toFixed(1):C.toFixed(1)}" data-off="${off.toFixed(1)}"/>
-      <text class="rlab" x="45" y="49" text-anchor="middle">${label}</text></svg><span class="gk">${unit}</span></div>`;}
-  document.getElementById('gauges').innerHTML=worst4.map(e=>{
-    const hrvFrac=Math.abs(e.dHRV)/70, sleepFrac=(8-Math.min(8,e.sleepMin))/8, bbFrac=(e.bbHigh!=null&&e.bbLow!=null)?(e.bbHigh-e.bbLow)/100:0;
-    return `<div class="gcard" data-i="${EV.indexOf(e)}" style="cursor:pointer">
-      <div class="gname">${e.n}</div><div class="gdate">${e.dt.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})}</div>
-      <div class="grings">${ring(hrvFrac,cssv('--neg'),e.dHRV+'%','HRV fall')}${ring(sleepFrac,cssv('--accent'),e.sleepMin+'h','sleep')}${ring(bbFrac,cssv('--festival'),(e.bbHigh!=null?e.bbHigh+'→'+e.bbLow:'—'),'battery')}</div>
-      <div class="gnote">${e.note}</div></div>`;}).join('');
-  document.querySelectorAll('#gauges .gcard').forEach(c=>c.addEventListener('click',()=>openDeep(+c.dataset.i)));
-})();
 
 /* ---------- HRV curve helper ---------- */
 function hrvCurveSVG(e,W,H,cls){
   const pl=6,pr=6,pt=10,pb=10;const cd=[];for(let k=-2;k<=Math.max(4,e.nd+3);k++){const dd=addDays(e.d,k);cd.push({k,r:DAYS[dd]});}
-  const hv=cd.filter(o=>o.r&&o.r.hv!=null);if(hv.length<3)return '';
+  const hv=cd.filter(o=>o.r&&o.r.hv!=null);if(hv.length<MIN_HRV_PTS)return '';
   const xs=cd.length-1,xS=i=>pl+i/xs*(W-pl-pr);
   const vs=hv.map(o=>o.r.hv).concat(cd.filter(o=>o.r&&o.r.hlo).map(o=>o.r.hlo),cd.filter(o=>o.r&&o.r.hhi).map(o=>o.r.hhi));
   const vmin=Math.min(...vs)-4,vmax=Math.max(...vs)+4,yS=v=>pt+(vmax-v)/(vmax-vmin)*(H-pt-pb);
@@ -455,15 +422,21 @@ function hrvCurveSVG(e,W,H,cls){
 
 /* ---------- Scene D: recovery + resolution ---------- */
 (function(){
-  document.getElementById('rcgrid').innerHTML=worst4.map(e=>`<div class="rcard">
+  // These cards carry the click-through to the night's stub now that the gauge
+  // scene they used to share it with is gone.
+  document.getElementById('rcgrid').innerHTML=worst4.map(e=>`<div class="rcard" data-i="${EV.indexOf(e)}" style="cursor:pointer">
      <div class="rt"><span class="rn">${e.n}</span><span class="rd">${e.recDays!=null?'back in '+e.recDays+'n':'—'}</span></div>
      ${hrvCurveSVG(e,300,120,'rcline')}</div>`).join('');
-  const rec=EV.filter(e=>e.recDays!=null).map(e=>e.recDays).sort((a,b)=>a-b);const withH=EV.filter(e=>e.dHRV!=null).length;
+  document.querySelectorAll('#rcgrid .rcard').forEach(c=>c.addEventListener('click',()=>openDeep(+c.dataset.i)));
+  const rec=EV.filter(e=>e.recDays!=null).map(e=>e.recDays).sort((a,b)=>a-b);
+  // Denominator is the nights recovery could be judged on at all. Comparing
+  // against the dHRV count instead produced a ratio bigger than one.
+  const measurable=EV.filter(e=>e.hrvBase).length;
   const med=rec.length%2?rec[(rec.length-1)/2]:Math.round((rec[rec.length/2-1]+rec[rec.length/2])/2*10)/10;
   const longest=Math.max(...rec),le=EV.find(e=>e.recDays===longest);
   document.getElementById('resolve').innerHTML=
    `<div class="rz"><div class="rzv">${med}</div><div class="rzk">median nights back to baseline</div></div>
-    <div class="rz"><div class="rzv">${rec.length}<span class="rzu">/${withH}</span></div><div class="rzk">measured nights that climbed back within a week</div></div>
+    <div class="rz"><div class="rzv">${rec.length}<span class="rzu">/${measurable}</span></div><div class="rzk">measurable nights that were back inside baseline within 8</div></div>
     <div class="rz"><div class="rzv">${longest}</div><div class="rzk">longest, after ${le.n}</div></div>`;
 })();
 
@@ -510,8 +483,13 @@ let sortKey='d',sortDir=1,LEDGER=EV.slice();
 // is deliberately not sortable — the two units are not comparable and converting
 // them silently would invent precision the data doesn't have.
 const MEAS={garmin:'steps · HR · sleep',samsung:'distance only',none:'nothing'};
+// Era filter. Garmin rows are the live EV objects — the stub click looks them up
+// with EV.indexOf — so they are never copied; only the pre-Garmin rows, which are
+// copies anyway, carry an explicit era tag.
+let era='all';
+const isPre=e=>e.era==='pre';
 function renderTable(){
-  const rows=LEDGER.slice().sort((a,b)=>{if(sortKey==='name')return sortDir*a.n.localeCompare(b.n);if(sortKey==='d')return sortDir*(a.dt-b.dt);let x=a[sortKey],y=b[sortKey];if(x==null)x=-1e9;if(y==null)y=-1e9;return sortDir*(x-y);});
+  const rows=LEDGER.filter(e=>era==='all'||(era==='pre')===isPre(e)).slice().sort((a,b)=>{if(sortKey==='name')return sortDir*a.n.localeCompare(b.n);if(sortKey==='d')return sortDir*(a.dt-b.dt);let x=a[sortKey],y=b[sortKey];if(x==null)x=-1e9;if(y==null)y=-1e9;return sortDir*(x-y);});
   document.getElementById('tbody').innerHTML=rows.map(e=>{
     const g=e.measured==='garmin', i=g?EV.indexOf(e):-1;
     const dd=e.dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'});
@@ -599,45 +577,19 @@ fetch('/data/events.json').then(r=>r.ok?r.json():Promise.reject(new Error('HTTP 
       `<div class="lyears"><div></div><div>${yrs}</div></div>`;
   })();
 
-  /* --- Act IV: the days the watch was off --- */
-  (function(){
-    // Only days inside a window where the watch was reporting at all can say
-    // anything; outside those the zero is meaningless.
-    const win=[['2022-12-01','2023-03-04'],['2024-04-23','2024-08-11']];
-    const inWin=d=>win.some(([a,b])=>d>=a&&d<=b);
-    const big=Object.entries(SAM).filter(([d,v])=>v.km>=10&&inWin(d)).sort();
-    if(!big.length)return;
-    const W=1080,H=300,pl=44,pr=12,pt=18,pb=54;
-    const bw=(W-pl-pr)/big.length, mx=Math.max(...big.map(([,v])=>v.km));
-    const bars=big.map(([d,v],i)=>{
-      const x=pl+i*bw, h=(v.km/mx)*(H-pt-pb), y=H-pb-h, on=v.hr>0;
-      return `<rect class="dbar" x="${(x+bw*.15).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*.7).toFixed(1)}" height="${h.toFixed(1)}"
-        fill="${on?'var(--festival)':'none'}" stroke="${on?'none':'var(--neg)'}" stroke-width="1.2" stroke-dasharray="${on?'':'3 2'}"/>
-        <text x="${(x+bw/2).toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle">${v.km.toFixed(0)}</text>
-        <text x="${(x+bw/2).toFixed(1)}" y="${H-pb+14}" text-anchor="middle" transform="rotate(-40 ${(x+bw/2).toFixed(1)} ${H-pb+14})">${d.slice(5)}</text>`;}).join('');
-    const off=big.filter(([,v])=>!v.hr).length;
-    document.getElementById('dark').innerHTML=`<svg viewBox="0 0 ${W} ${H}">
-      <line x1="${pl}" y1="${H-pb}" x2="${W-pr}" y2="${H-pb}" stroke="var(--line-2)"/>
-      <text x="${pl}" y="${pt+4}" font-size="11">km walked</text>${bars}</svg>`;
-    document.querySelector('#dark').insertAdjacentHTML('afterend',
-      `<p class="scatcap" style="color:var(--neg)">${off} of ${big.length} days over 10 km recorded no heart rate at all</p>`);
-  })();
 
-  /* --- Act II: the silence. No chart — there is nothing to chart. --- */
-  (function(){
-    const gap=PRE.filter(e=>e.measured==='none');
-    document.getElementById('silence').innerHTML=
-      `<div class="silence-count"><b>${gap.length}</b> nights out, nothing measured — ${
-        dayOf(gap[0].d).toLocaleDateString('en-GB',{month:'short',year:'numeric'})} to ${
-        dayOf(gap[gap.length-1].d).toLocaleDateString('en-GB',{month:'short',year:'numeric'})}</div>
-       <div class="silence-list">${gap.map(e=>
-        `<div class="sitem"><i style="background:${HEX[e.t]||'var(--muted)'}"></i>
-          <span class="sn">${e.n}</span>
-          <span class="sd">${dayOf(e.d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})}</span></div>`).join('')}</div>`;
-  })();
 
   /* --- one ledger, both eras --- */
-  LEDGER=EV.concat(PRE.map(e=>Object.assign({},e,{dt:dayOf(e.d)}))).sort((a,b)=>a.dt-b.dt);
+  LEDGER=EV.concat(PRE.map(e=>Object.assign({},e,{dt:dayOf(e.d),era:'pre'}))).sort((a,b)=>a.dt-b.dt);
+  const counts={all:LEDGER.length,pre:LEDGER.filter(isPre).length,garmin:LEDGER.filter(e=>!isPre(e)).length};
+  document.querySelectorAll('#tfilter button').forEach(b=>{
+    b.querySelector('.n').textContent=counts[b.dataset.era];
+    b.addEventListener('click',()=>{
+      era=b.dataset.era;
+      document.querySelectorAll('#tfilter button').forEach(o=>o.setAttribute('aria-pressed',String(o===b)));
+      renderTable();
+    });
+  });
   renderTable();
   document.getElementById('tblsub').textContent=
     `${LEDGER.length} entries · ${EV.length} with a full physiological record, `+
