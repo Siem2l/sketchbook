@@ -58,9 +58,6 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);-
 .world{display:flex;height:100vh;width:max-content;will-change:transform}
 .scene{flex:none;width:100vw;height:100vh;position:relative;display:flex;flex-direction:column;justify-content:center;padding:64px clamp(24px,5vw,80px) 88px;border-right:1px dashed var(--line-2);overflow:hidden}
 .scene-head{max-width:640px;margin-bottom:26px}
-.scene-head h2{font-family:var(--serif);font-size:clamp(26px,3.4vw,46px);margin:12px 0 0;font-weight:760;letter-spacing:-.015em;line-height:1.02;text-wrap:balance}
-.scene-head p{color:var(--ink-2);font-size:15px;margin:12px 0 0;max-width:56ch}
-.scene-head p b{color:var(--ink)}
 
 /* progress rail */
 .rail{position:fixed;left:0;right:0;bottom:0;z-index:40;display:none;height:40px;background:var(--panel);border-top:1.5px solid var(--ink);align-items:center;padding:0 clamp(18px,4vw,44px);gap:0;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase}
@@ -150,7 +147,6 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);-
 section.blk{padding:clamp(56px,8vw,96px) 0;position:relative}
 section.blk::before{content:"";position:absolute;top:0;left:clamp(18px,4vw,44px);right:clamp(18px,4vw,44px);height:1px;background:var(--line-2)}
 .blk-h{margin-bottom:30px}.blk-h .kick{margin-bottom:14px}
-.blk-h h2{font-family:var(--serif);font-size:clamp(26px,4vw,42px);margin:0;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
 .blk-h .sub{color:var(--ink-2);font-size:15px;margin:10px 0 0}
 .tablewrap{overflow-x:auto;border:1.5px solid var(--ink);border-radius:5px;background:var(--panel)}
 table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:660px;font-family:var(--mono)}
@@ -204,7 +200,6 @@ td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 footer{padding:52px 0 96px;color:var(--muted);font-size:12px;line-height:1.7;position:relative}
 footer::before{content:"";position:absolute;top:0;left:clamp(18px,4vw,44px);right:clamp(18px,4vw,44px);height:1px;background:var(--line-2)}
 footer b{color:var(--ink-2);font-weight:600}footer code{font-family:var(--mono);font-size:11px;color:var(--ink-2)}
-.signoff{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink);margin-bottom:22px}
 </style>
 </head>
 <body>
@@ -212,25 +207,22 @@ footer b{color:var(--ink-2);font-weight:600}footer code{font-family:var(--mono);
 <div class="grain"></div>
 
 <header class="hero"><div class="wrap">
-  <div class="kick reveal in"><span class="no">№ 01–77</span> · for Siem · 2023–26</div>
+  <div class="kick reveal in"><span class="no">№ 01–77</span> 2023–26</div>
   <h1 class="reveal in">Four years of nights,<br>on <em>one long track.</em></h1>
-  <p class="dek reveal in">You kept no diary of the festivals, raves, crew shifts and trips — but your calendar did, and three different watches kept partial notes. Below, the whole run goes left to right. <b>Scroll down to travel it</b>: the ground is what was measured, every stop is a night out, and the stretches where the ground falls away are the years <b>nothing was recording</b>.</p>
   <div class="readout reveal in">
     <div class="cell"><div class="v"><span class="num" data-count="77">0</span></div><div class="k">nights out, 2023–26</div></div>
     <div class="cell"><div class="v"><span class="num" data-count="66097">0</span></div><div class="k">record · Wildeburg 12 Jul</div></div>
     <div class="cell"><div class="v"><span class="num" data-count="18">0</span></div><div class="k">with no body data at all</div></div>
   </div>
-  <div class="cue reveal in">scroll to travel four years<span class="ar"><b></b><b></b><b></b></span></div>
+  <div class="cue reveal in">scroll<span class="ar"><b></b><b></b><b></b></span></div>
 </div></header>
 
 <!-- THE RIDE -->
 <div class="track" id="track"><div class="pin" id="pin"><div class="world" id="world">
 
   <!-- Act I: the years you only have the fact -->
-  <section class="scene" data-scene="0" data-act="Act I · the fact">
-    <div class="scene-head"><div class="kick"><span class="no">Act I</span> 2022 — 2024</div>
-      <h2>For two years, all you have is that you went.</h2>
-      <p>Back here there was no Garmin — three phones and two Galaxy Watches, each keeping its own notes and taking them with it when it left. The step counts went with them. What survived is <b>walking</b>, so the ground is kilometres, and the nights are the spikes.</p></div>
+  <section class="scene" data-scene="0" data-act="walking">
+    <div class="scene-head"><div class="kick">2022–2024 · km walked per day</div></div>
     <div class="terr" id="terrpre"></div>
     <div class="terrleg">
       <span><i style="background:var(--festival)"></i>Festival</span><span><i style="background:var(--crew)"></i>Crew</span>
@@ -239,27 +231,21 @@ footer b{color:var(--ink-2);font-weight:600}footer code{font-family:var(--mono);
   </section>
 
   <!-- Act I cont.: the dark -->
-  <section class="scene" data-scene="1" data-act="Act I · the dark">
-    <div class="scene-head"><div class="kick"><span class="no">Act I</span> the dark</div>
-      <h2>And on the biggest days, not even that.</h2>
-      <p>The watch logged heart rate on most ordinary days of those years. On the days you walked furthest it logged <b>nothing</b> — in a locker, or flat, or still at home. Even where an instrument existed, it went quiet exactly where the story was.</p></div>
+  <section class="scene" data-scene="1" data-act="unrecorded">
+    <div class="scene-head"><div class="kick">2022–2024 · days over 10 km</div></div>
     <div class="dark" id="dark"></div>
     <div class="scatcap">each bar a day over 10 km · filled = heart rate recorded · hollow = nothing</div>
   </section>
 
   <!-- Act II: the silence -->
-  <section class="scene" data-scene="2" data-act="Act II · the silences">
-    <div class="scene-head"><div class="kick"><span class="no">Act II</span> Dec ’23 — Apr ’25</div>
-      <h2>Then the nights nothing kept at all.</h2>
-      <p>Two silences: the A54 logged nothing until <b>Apr ’24</b>, and after <b>Aug ’24</b> the Samsung watch had stopped while the Garmin hadn’t started — nine months with no instrument at all. A few more fall inside coverage on days the watch simply recorded nothing. These happened; the tickets and rosters are in your inbox. <b>Not one left a mark anything kept.</b></p></div>
+  <section class="scene" data-scene="2" data-act="silences">
+    <div class="scene-head"><div class="kick">Dec ’23 — Apr ’25 · nights with no instrument</div></div>
     <div class="silence" id="silence"></div>
   </section>
 
   <!-- Act III: the Garmin ground -->
-  <section class="scene" data-scene="3" data-act="Act III · the ground">
-    <div class="scene-head"><div class="kick"><span class="no">Act III</span> from May ’25</div>
-      <h2>Then it could finally measure.</h2>
-      <p>A watch that stayed on. Most days: ~11k steps, and the peaks are the nights. From here on the ground is <b>steps</b> again — and for the first time each night has a price attached. Tap a peak to open its stub.</p></div>
+  <section class="scene" data-scene="3" data-act="steps">
+    <div class="scene-head"><div class="kick">from May ’25 · steps per day</div></div>
     <div class="terr" id="terr"></div>
     <div class="terrleg">
       <span><i style="background:var(--festival)"></i>Festival</span><span><i style="background:var(--crew)"></i>Crew</span>
@@ -268,27 +254,21 @@ footer b{color:var(--ink-2);font-weight:600}footer code{font-family:var(--mono);
   </section>
 
   <!-- Act IV: the cost -->
-  <section class="scene" data-scene="4" data-act="Act IV · the cost">
-    <div class="scene-head"><div class="kick"><span class="no">Act IV</span> the cost</div>
-      <h2>It isn't the steps that wreck you.</h2>
-      <p>Every night placed by how far you walked <b>and</b> how far your HRV fell the morning after. The small dots — the low-sleep nights — sink to the bottom. <b>Sleep is the tell.</b></p></div>
+  <section class="scene" data-scene="4" data-act="cost">
+    <div class="scene-head"><div class="kick">every measured night · distance against HRV drop</div></div>
     <div class="scat" id="scat"></div>
     <div class="scatcap">↓ down-right = moved a lot AND crashed · dot size = how little you slept</div>
   </section>
 
   <!-- Act V: gauges -->
-  <section class="scene" data-scene="5" data-act="Act V · the worst">
-    <div class="scene-head"><div class="kick"><span class="no">Act V</span> the four that cost most</div>
-      <h2>The nights your body billed you for.</h2>
-      <p>Three dials each: how far HRV fell, how little you slept, how empty the battery ran.</p></div>
+  <section class="scene" data-scene="5" data-act="worst four">
+    <div class="scene-head"><div class="kick">the four costliest nights · HRV drop, sleep, body battery</div></div>
     <div class="gauges" id="gauges"></div>
   </section>
 
   <!-- Act VI: recovery + resolution -->
-  <section class="scene" data-scene="6" data-act="Act VI · the recovery">
-    <div class="scene-head"><div class="kick"><span class="no">Act VI</span> the recovery</div>
-      <h2>But you always came back.</h2>
-      <p>Same four nights, the days after. The line dips, then climbs into your normal range — the grey band. <b>Not one knocked you off baseline for good.</b></p></div>
+  <section class="scene" data-scene="6" data-act="recovery">
+    <div class="scene-head"><div class="kick">the same four nights · HRV over the days after</div></div>
     <div class="rcgrid" id="rcgrid"></div>
     <div class="resolve" id="resolve"></div>
   </section>
@@ -297,7 +277,7 @@ footer b{color:var(--ink-2);font-weight:600}footer code{font-family:var(--mono);
 
 <!-- LEDGER -->
 <section class="blk"><div class="wrap">
-  <div class="blk-h reveal"><div class="kick"><span class="no">Coda</span> the record</div><h2>Every entry</h2><p class="sub" id="tblsub"></p></div>
+  <div class="blk-h reveal"><div class="kick">every entry</div><p class="sub" id="tblsub"></p></div>
   <div class="tablewrap reveal"><table>
     <thead><tr><th data-sort="d">Date</th><th data-sort="name">Event</th><th>Type</th><th>Measured</th>
       <th class="num" data-sort="peak">Peak</th><th class="num" data-sort="dRHR">ΔRHR</th>
@@ -306,11 +286,7 @@ footer b{color:var(--ink-2);font-weight:600}footer code{font-family:var(--mono);
 </div></section>
 
 <footer><div class="wrap">
-  <p class="signoff reveal">Four years, seventy-seven nights, three watches and two long silences — and Liquicity every single summer.</p>
-  <p><b>The instruments.</b> Daily steps are stored per device and don’t travel, so every phone migration reset them — which is why the early years read as walks and not as steps, and why 2018 to 2022 is simply gone.</p>
   <div class="ladder reveal" id="ladder"></div>
-  <p><b>How this was built.</b> <b>The events come from Google Calendar and Gmail, not from the body data.</b> The earlier version of this page found its nights by detecting step-spikes ≥ 18k, which quietly drops anything that doesn't involve walking far — club nights, concerts, indoor festivals. Reading the calendar directly turned up ~48 events in 2023–25 that method never saw, and six inside its own window (Op de Ring, Intercell VTSS, Soenda Indoor Nov ’25, Sef, Koningsdag ’25, Dotan).</p>
-  <p><b>What was measuring, when.</b> <b>2022-12 → 2024-08 (Acts I):</b> a Samsung Health export — no daily step totals survive the phone migrations, so the ground there is walk+run distance from logged sessions, and heart rate only in two bursts. <b>2024-08 → 2025-05 (Act II):</b> nothing at all. <b>2025-05-22 → now (Acts III–VI):</b> GarminDB on the homelab — <code>daily_summary</code>, <code>resting_hr</code>, <code>hrv</code> (overnight RMSSD + baseline band), <code>sleep</code> stages, body battery (HRV from 10 Jun 2025). The two eras use different units and the page does not convert between them; the one place they overlap, Wildeburg 2026, reads 23.4 km/day on the phone against 46,269 / 54,676 steps on the Garmin.</p>
   <p><b>Definitions.</b> <b>ΔRHR</b> vs trailing-28-day median · <b>HRV a.m.</b> = lowest overnight HRV the mornings after vs baseline · <b>Recover</b> = nights until HRV re-enters your baseline band. Trips (gray) are real spikes, not festivals. Still guessed: Lofi Patio, Pride Utrecht, Blackout ’23 and Liquicity family day — the last two are hedged in the calendar itself. Five days over 10 km have no name at all (5 Aug ’23, 14 Oct ’23, 9 Dec ’23, 28 Apr ’24, 31 Jan ’26).</p>
 </div></footer>
 
@@ -486,9 +462,9 @@ function hrvCurveSVG(e,W,H,cls){
   const med=rec.length%2?rec[(rec.length-1)/2]:Math.round((rec[rec.length/2-1]+rec[rec.length/2])/2*10)/10;
   const longest=Math.max(...rec),le=EV.find(e=>e.recDays===longest);
   document.getElementById('resolve').innerHTML=
-   `<div class="rz"><div class="rzv">${med}</div><div class="rzk">median nights back to baseline — the usual price of a night out</div></div>
+   `<div class="rz"><div class="rzv">${med}</div><div class="rzk">median nights back to baseline</div></div>
     <div class="rz"><div class="rzv">${rec.length}<span class="rzu">/${withH}</span></div><div class="rzk">measured nights that climbed back within a week</div></div>
-    <div class="rz"><div class="rzv">${longest}</div><div class="rzk">the longest it ever took — after ${le.n}, then fine</div></div>`;
+    <div class="rz"><div class="rzv">${longest}</div><div class="rzk">longest, after ${le.n}</div></div>`;
 })();
 
 /* ---------- the horizontal pan ---------- */
