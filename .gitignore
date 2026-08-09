@@ -2,3 +2,8 @@ node_modules/
 dist/
 gallery-data.json
 *.artifact.bak
+
+# Rendered experiment variants: derived output, and exactly reproducible from
+# the seed + n recorded inside every ranking in lab/results/. The rankings are
+# the data worth keeping; the pngs are a cache.
+lab/variants/

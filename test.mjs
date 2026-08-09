@@ -1160,6 +1160,138 @@ try {
     await h.close();
   }
 
+  // --------------------------------------------------------------------- lab
+  {
+    const { sampleVariants, MODES: LAB_MODES, PALETTES: LAB_PALS } =
+      await import('./lab/variants.mjs');
+
+    // Pure-node checks on the sampler. Stratification is the reason the
+    // experiment's ranking means anything — over a lumpy sample a ranking
+    // reports on the lumps — and it fails silently, so it gets asserted.
+    await test('the sampler covers modes and palettes evenly', async () => {
+      const v = sampleVariants({ n: 64, seed: 1 });
+      const count = (k) => v.reduce((a, x) => ((a[x[k]] = (a[x[k]] || 0) + 1), a), {});
+      const modes = count('mode');
+      assert.deepEqual(Object.keys(modes).sort(), [...LAB_MODES].sort());
+      assert.ok(Object.values(modes).every((n) => n === 16), `uneven modes: ${JSON.stringify(modes)}`);
+      const pals = count('palette');
+      assert.equal(Object.keys(pals).length, LAB_PALS.length);
+      assert.ok(Object.values(pals).every((n) => n >= 10 && n <= 11),
+        `uneven palettes: ${JSON.stringify(pals)}`);
+    });
+
+    await test('every continuous axis spans its full range', async () => {
+      const v = sampleVariants({ n: 64, seed: 1 });
+      // Latin hypercube puts one draw in each of n equal strata, so the extremes
+      // must land in the outer 1/n of the range. Uniform sampling would not
+      // guarantee this, which is the whole point of using it.
+      for (const [k, lo, hi] of [['zoom', 0.3, 3], ['warp', 0, 1.5], ['sea', 0.1, 0.9]]) {
+        const vals = v.map((x) => x[k]);
+        const span = (hi - lo) / 64;
+        assert.ok(Math.min(...vals) < lo + span, `${k} never reached its floor`);
+        assert.ok(Math.max(...vals) > hi - span, `${k} never reached its ceiling`);
+      }
+      assert.deepEqual([...new Set(v.map((x) => x.octaves))].sort(), [1, 2, 3, 4, 5]);
+    });
+
+    await test('the same seed reproduces the same variants, a different one does not', async () => {
+      assert.deepEqual(sampleVariants({ n: 32, seed: 4 }), sampleVariants({ n: 32, seed: 4 }));
+      assert.notDeepEqual(sampleVariants({ n: 32, seed: 4 }), sampleVariants({ n: 32, seed: 5 }));
+      // n is part of a set's identity, not just its length — the strata move.
+      assert.notDeepEqual(sampleVariants({ n: 32, seed: 4 })[0], sampleVariants({ n: 64, seed: 4 })[0]);
+    });
+
+    // The ranking page, against a fixture rather than a real render, so the
+    // suite never depends on someone having rendered 64 variants first.
+    const { mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+    const FIX = new URL('./lab/_fixture/', import.meta.url).pathname;
+    const PNG = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+      'base64');
+    try {
+      mkdirSync(FIX, { recursive: true });
+      const fixture = sampleVariants({ n: 6, seed: 99 }).map((v) => ({ ...v, file: `${v.id}.png` }));
+      for (const v of fixture) writeFileSync(`${FIX}${v.file}`, PNG);
+      writeFileSync(`${FIX}manifest.json`, JSON.stringify(
+        { seed: 99, n: 6, sketch: '2026-07-message-noise', variants: fixture }));
+
+      const page = await browser.newPage({ viewport: { width: 1000, height: 950 } });
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+      await page.goto(`${BASE}/lab/rank/?set=_fixture`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(800);
+      const rk = (fn) => page.evaluate(fn);
+
+      // The experiment's validity condition. If the page ever renders a recipe,
+      // the ranking stops being blind and every result taken with it is void —
+      // and nothing else in the pipeline would notice.
+      await test('the ranking page shows no part of the recipe', async () => {
+        const txt = await rk(() => window.__rank.visibleText());
+        const leaks = [...LAB_PALS, ...LAB_MODES, 'v00', 'zoom', 'warp', 'octaves', 'sea', 'bands']
+          .filter((w) => txt.includes(w));
+        assert.deepEqual(leaks, [], `recipe words on screen: ${leaks.join(', ')}`);
+        assert.deepEqual(errors, []);
+      });
+
+      await test('presentation order is shuffled, so manifest position is not a cue', async () => {
+        const order = (await rk(() => window.__rank.payload())).presentationOrder;
+        const sorted = [...order].sort();
+        assert.equal(order.length, 6);
+        assert.deepEqual(sorted, fixture.map((v) => v.id).sort(), 'a variant went missing');
+        // Six items shuffle to their own order 1 time in 720; across two loads
+        // both matching sorted order would be 1 in ~500k.
+        const second = await browser.newPage();
+        await second.goto(`${BASE}/lab/rank/?set=_fixture`, { waitUntil: 'networkidle' });
+        await second.waitForTimeout(600);
+        const other = (await second.evaluate(() => window.__rank.payload())).presentationOrder;
+        await second.close();
+        assert.ok(JSON.stringify(order) !== JSON.stringify(sorted)
+          || JSON.stringify(other) !== JSON.stringify(sorted), 'order was never shuffled');
+      });
+
+      await test('rating walks the whole set and records dwell time and position', async () => {
+        for (let i = 0; i < 6; i++) { await page.keyboard.press(String(1 + (i % 5))); await page.waitForTimeout(80); }
+        await page.waitForTimeout(300);
+        const pay = await rk(() => window.__rank.payload());
+        assert.equal(Object.keys(pay.ratings).length, 6);
+        assert.equal(pay.variantSeed, 99);
+        assert.equal(pay.variantN, 6);
+        for (const r of Object.values(pay.ratings)) {
+          assert.ok(r.score >= 1 && r.score <= 5);
+          assert.ok(typeof r.position === 'number');
+          assert.ok(r.ms === null || r.ms >= 0);
+        }
+      });
+
+      await test('the back key revises a rating rather than adding one', async () => {
+        await page.goto(`${BASE}/lab/rank/?set=_fixture`, { waitUntil: 'networkidle' });
+        await page.waitForTimeout(600);
+        await page.keyboard.press('3');
+        await page.keyboard.press('4');
+        await page.waitForTimeout(150);
+        assert.equal(await rk(() => window.__rank.rated()), 2);
+        await page.keyboard.press('ArrowLeft');
+        await page.waitForTimeout(150);
+        assert.equal(await rk(() => window.__rank.rated()), 1, 'back did not drop the rating it returned to');
+        assert.equal(await rk(() => window.__rank.cursor()), 1);
+      });
+
+      await test('a missing variant set explains how to render one', async () => {
+        const q = await browser.newPage();
+        await q.goto(`${BASE}/lab/rank/?set=_nothing_here`, { waitUntil: 'networkidle' });
+        await q.waitForTimeout(500);
+        const txt = await q.evaluate(() => document.body.innerText);
+        assert.match(txt, /lab\/render\.mjs/, `unhelpful empty state: ${txt.slice(0, 120)}`);
+        await q.close();
+      });
+
+      await page.close();
+    } finally {
+      rmSync(FIX, { recursive: true, force: true });
+    }
+  }
+
 } finally {
   await browser.close();
   if (!process.argv.includes('--keep')) server.kill('SIGTERM');

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>lab · blind ranking</title>
+  <style>
+    body { margin: 0; background: #0e0e11; color: #e8e6e0; font: 14px ui-monospace, monospace;
+           display: grid; place-items: center; min-height: 100vh; }
+    #wrap { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+    #frame { width: min(72vh, 92vw); aspect-ratio: 1; background: #17171c; border-radius: 4px;
+             display: grid; place-items: center; overflow: hidden; }
+    #frame img { width: 100%; height: 100%; display: block; image-rendering: auto; }
+    #scale { display: flex; gap: 0.4rem; }
+    button { background: #26262e; color: #e8e6e0; border: 1px solid #444; border-radius: 4px;
+             padding: 0.5rem 0.9rem; font: inherit; cursor: pointer; min-width: 3rem; }
+    button:hover { border-color: #7fb3a3; }
+    button.back { min-width: 0; padding: 0.4rem 0.7rem; }
+    #meta { color: #8a877e; font-size: 12px; display: flex; gap: 1.2rem; align-items: center; }
+    #bar { width: 100%; height: 3px; background: #26262e; border-radius: 2px; overflow: hidden; }
+    #bar div { height: 100%; background: #7fb3a3; width: 0; transition: width .15s; }
+    #done { display: none; text-align: center; line-height: 1.7; }
+    #done pre { text-align: left; background: #17171c; padding: 0.8rem; border-radius: 4px;
+                max-width: 46rem; overflow: auto; font-size: 11px; color: #8a877e; }
+    a { color: #7fb3a3; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="bar"><div></div></div>
+    <div id="frame"><img id="img" alt="" /></div>
+    <div id="scale">
+      <button class="back" data-back>←</button>
+      <button data-score="1">1</button>
+      <button data-score="2">2</button>
+      <button data-score="3">3</button>
+      <button data-score="4">4</button>
+      <button data-score="5">5</button>
+    </div>
+    <div id="meta">
+      <span id="progress"></span>
+      <span>1 = discard · 5 = would print it · keys 1–5, ← to revise</span>
+    </div>
+    <div id="done">
+      <p id="summary"></p>
+      <button id="save">download ranking json</button>
+      <p>Commit it to <code>lab/results/</code>, then:<br />
+        <code>node lab/compare.mjs lab/results/&lt;yours&gt;.json lab/results/&lt;agent&gt;.json</code></p>
+      <pre id="dump"></pre>
+    </div>
+  </div>
+  <script type="module" src="./rank.js"></script>
+</body>
+</html>

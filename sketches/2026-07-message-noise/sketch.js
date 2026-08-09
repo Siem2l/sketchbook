@@ -148,6 +148,7 @@ new p5((p) => {
   let baseWarp;            // domain-warp strength the message asked for
   let bands, zoom, warp, octaves, sea;  // live controls, seeded then yours
   let lut = [];            // band index → colour, rebuilt on palette/bands change
+  let showStamp = true;    // the harness in lab/ turns this off to rank blind
 
   const pal = () => PALETTES[palIx];
   const mode = () => MODES[modeIx];
@@ -250,6 +251,7 @@ new p5((p) => {
 
   // The whole recipe, minus the words: enough to find this image again.
   function drawStamp(g, f, m) {
+    if (!showStamp) return;
     g.noStroke();
     g.textFont('monospace');
     g.textSize(11 * f);
@@ -508,11 +510,51 @@ new p5((p) => {
     render(p);
   };
 
-  // Read-only view of what the stamp already prints, for the behaviour tests.
-  // The message itself is deliberately absent — it isn't readable from here
-  // any more than it is from the canvas.
+  // Read-only view of what the stamp already prints, for the behaviour tests —
+  // plus one setter, for the ranking harness in lab/. The message itself is
+  // never readable from here; it can be set, but not asked for.
   if (typeof window !== 'undefined') {
     window.__messageNoise = {
+      // Puts the sketch in an exact state and freezes it. The harness needs
+      // this because a variant has to be reproducible: driving the sliders and
+      // pressing the arrow key 350 times to arrive at t=1.234 is an
+      // approximation, not a reproduction.
+      //
+      // `stamp: false` is what makes blind ranking possible at all — the stamp
+      // prints the palette, the mode and every parameter onto the image, so a
+      // ranker looking at a stamped frame is reading the recipe, not judging
+      // the picture.
+      //
+      // Returns the resulting state so the caller records what the sketch
+      // actually did rather than what it was asked to do. `message` is in the
+      // argument and absent from the return, which is the same asymmetry the
+      // rest of the sketch keeps.
+      apply: (spec = {}) => {
+        if (spec.message !== undefined) applySeed(spec.message);
+        if (spec.palette !== undefined) {
+          const i = PALETTES.findIndex((q) => q.name === spec.palette);
+          if (i >= 0) palIx = i;
+        }
+        if (spec.mode !== undefined) {
+          const i = MODES.indexOf(spec.mode);
+          if (i >= 0) modeIx = i;
+        }
+        if (spec.bands !== undefined) bands = Math.round(spec.bands);
+        if (spec.zoom !== undefined) zoom = spec.zoom;
+        if (spec.warp !== undefined) warp = spec.warp;
+        if (spec.octaves !== undefined) octaves = Math.round(spec.octaves);
+        if (spec.sea !== undefined) sea = spec.sea;
+        if (spec.t !== undefined) t = spec.t;
+        if (spec.stamp !== undefined) showStamp = !!spec.stamp;
+        // A variant is a still, not a moment in a loop.
+        frozen = true;
+        document.getElementById('freeze').textContent = 'resume';
+        buildLut();
+        syncControls();
+        return {
+          t, mode: mode(), palette: pal().name, bands, zoom, warp, octaves, sea,
+        };
+      },
       t: () => t,
       frozen: () => frozen,
       mode: () => mode(),
