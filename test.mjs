@@ -101,6 +101,71 @@ try {
     });
   }
 
+  // --------------------------------------------------------------------- pdok
+  // Also Node-side. The URL builders and the RD arithmetic are pure; geocode
+  // takes its fetch as an argument so it can be exercised without the network.
+  {
+    const P = await import('./sketches/2026-08-elsewhere/pdok.js');
+
+    await test('fetch tiles land on a 240 m grid', async () => {
+      assert.equal(P.fetchTileKey(138275, 455381), '576:1897');
+      assert.equal(P.fetchTileKey(138280, 455390), '576:1897');
+      assert.deepEqual(P.fetchTileBbox('576:1897'), [138240, 455280, 138480, 455520]);
+    });
+
+    await test('the ortho bbox is easting-first, because northing-first is silently blank', async () => {
+      const url = P.orthoUrl([138240, 455280, 138480, 455520], 480);
+      assert.match(url, /bbox=138240,455280,138480,455520/);
+      assert.match(url, /crs=EPSG:28992/);
+      assert.match(url, /layers=Actueel_orthoHR/);
+      assert.match(url, /width=480&height=480/);
+    });
+
+    await test('coverage urls carry the subset and the scalesize', async () => {
+      const url = P.coverageUrl('dsm_05m', [138240, 455280, 138480, 455520], 480);
+      assert.match(url, /coverageId=dsm_05m/);
+      assert.match(url, /subset=x\(138240,138480\)/);
+      assert.match(url, /subset=y\(455280,455520\)/);
+      assert.match(url, /scalesize=x\(480\),y\(480\)/);
+    });
+
+    await test('a journey knows its bearing, its distance and how long it takes', async () => {
+      const j = P.journey([138275, 455381], [92500, 437300]);   // Utrecht -> Rotterdam
+      assert.ok(Math.abs(j.km - 49.2) < 0.5, `km ${j.km}`);
+      assert.ok(Math.abs(j.bearing - 248) < 3, `bearing ${j.bearing}`);
+      assert.equal(j.rose, 'WSW');
+      assert.ok(j.seconds > 1.7 && j.seconds < 2.5, `seconds ${j.seconds}`);
+      assert.ok(j.dirX < 0 && j.dirZ > 0, `dir ${j.dirX},${j.dirZ}`);   // scene z opposes northing
+      assert.ok(Math.abs(Math.hypot(j.dirX, j.dirZ) - 1) < 1e-9);
+    });
+
+    await test('a journey next door is short but never instant', async () => {
+      const j = P.journey([138275, 455381], [138375, 455381]);
+      assert.ok(j.km < 0.2);
+      assert.ok(j.seconds >= 0.9 && j.seconds < 1.3, `seconds ${j.seconds}`);
+      assert.equal(j.rose, 'E');
+    });
+
+    await test('geocode picks the address over the street it sits on', async () => {
+      const stub = async () => ({
+        ok: true,
+        json: async () => ({ response: { docs: [
+          { type: 'weg', weergavenaam: 'Prins Hendriklaan, Utrecht', centroide_rd: 'POINT(138539.295 455255.488)' },
+          { type: 'adres', weergavenaam: 'Prins Hendriklaan 17, 3583EB Utrecht', centroide_rd: 'POINT(138275.467 455380.628)' },
+        ] } }),
+      });
+      const g = await P.geocode('Prins Hendriklaan 17', stub);
+      assert.equal(g.name, 'Prins Hendriklaan 17, 3583EB Utrecht');
+      assert.ok(Math.abs(g.x - 138275.467) < 0.01);
+      assert.ok(Math.abs(g.y - 455380.628) < 0.01);
+    });
+
+    await test('geocode says so when the country has never heard of the place', async () => {
+      const stub = async () => ({ ok: true, json: async () => ({ response: { docs: [] } }) });
+      await assert.rejects(() => P.geocode('nowhere at all', stub), /no match/);
+    });
+  }
+
   // ------------------------------------------------------------------ helpers
   const state = (p, fn) => p.evaluate(fn);
   const parts = (p) => state(p, () => window.__inconstructions.parts());
