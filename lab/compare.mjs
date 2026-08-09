@@ -136,6 +136,23 @@ const na = norm(a), nb = norm(b);
 const gaps = ids.map((id, i) => ({ id, a: a[i], b: b[i], gap: na[i] - nb[i] }))
   .sort((p, q) => Math.abs(q.gap) - Math.abs(p.gap));
 
+// With a floor-heavy rating distribution — the first real human pass put 42 of
+// 64 at the bottom — tau-b is dominated by how a 42-way tie is scored, and two
+// rankers can agree strongly just by both saying "most of this is bad". That is
+// a low bar and not the question. The question is whether they pick the *same*
+// good ones, so: how much do the top-k sets overlap, against what chance alone
+// would give.
+const keep = Math.max(1, a.filter((s) => s > Math.min(...a)).length);
+const topK = (v) => new Set(ids.map((id, i) => [id, v[i]])
+  .sort((p, q) => q[1] - p[1] || (p[0] < q[0] ? -1 : 1))
+  .slice(0, keep).map(([id]) => id));
+const tA = topK(a), tB = topK(b);
+const hit = [...tA].filter((id) => tB.has(id)).length;
+const expected = (keep * keep) / ids.length;
+console.log(`\n  top-${keep} overlap    ${hit}/${keep}`
+  + `  (chance would give ~${expected.toFixed(1)})`);
+console.log(`  jaccard         ${(hit / (2 * keep - hit)).toFixed(3)}`);
+
 console.log(`\n  widest disagreements (${nameA} → ${nameB})`);
 for (const g of gaps.slice(0, 8)) {
   const dir = g.gap > 0 ? `${nameA} liked it more` : `${nameB} liked it more`;

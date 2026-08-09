@@ -1,0 +1,397 @@
+{
+  "version": 1,
+  "ranker": "human",
+  "sketch": "2026-07-message-noise",
+  "variantSeed": 1,
+  "variantN": 64,
+  "sessionSeed": 3864860535,
+  "ratedAt": "2026-08-09T11:53:07.186Z",
+  "presentationOrder": [
+    "v024",
+    "v050",
+    "v005",
+    "v043",
+    "v063",
+    "v030",
+    "v008",
+    "v036",
+    "v019",
+    "v047",
+    "v060",
+    "v009",
+    "v013",
+    "v004",
+    "v012",
+    "v020",
+    "v001",
+    "v038",
+    "v032",
+    "v003",
+    "v041",
+    "v031",
+    "v023",
+    "v025",
+    "v034",
+    "v002",
+    "v058",
+    "v057",
+    "v048",
+    "v011",
+    "v006",
+    "v028",
+    "v026",
+    "v046",
+    "v021",
+    "v040",
+    "v045",
+    "v014",
+    "v015",
+    "v052",
+    "v016",
+    "v062",
+    "v007",
+    "v033",
+    "v037",
+    "v000",
+    "v039",
+    "v018",
+    "v027",
+    "v042",
+    "v059",
+    "v029",
+    "v049",
+    "v053",
+    "v010",
+    "v044",
+    "v017",
+    "v055",
+    "v054",
+    "v022",
+    "v056",
+    "v061",
+    "v035",
+    "v051"
+  ],
+  "ratings": {
+    "v024": {
+      "score": 1,
+      "ms": 3549,
+      "position": 0
+    },
+    "v050": {
+      "score": 3,
+      "ms": 1260,
+      "position": 1
+    },
+    "v005": {
+      "score": 4,
+      "ms": 3218,
+      "position": 2
+    },
+    "v043": {
+      "score": 1,
+      "ms": 1262,
+      "position": 3
+    },
+    "v063": {
+      "score": 1,
+      "ms": 1315,
+      "position": 4
+    },
+    "v030": {
+      "score": 1,
+      "ms": 1200,
+      "position": 5
+    },
+    "v008": {
+      "score": 3,
+      "ms": 1233,
+      "position": 6
+    },
+    "v036": {
+      "score": 2,
+      "ms": 942,
+      "position": 7
+    },
+    "v019": {
+      "score": 1,
+      "ms": 1045,
+      "position": 8
+    },
+    "v047": {
+      "score": 5,
+      "ms": 1958,
+      "position": 9
+    },
+    "v060": {
+      "score": 1,
+      "ms": 999,
+      "position": 10
+    },
+    "v009": {
+      "score": 1,
+      "ms": 949,
+      "position": 11
+    },
+    "v013": {
+      "score": 1,
+      "ms": 1392,
+      "position": 12
+    },
+    "v004": {
+      "score": 3,
+      "ms": 1825,
+      "position": 13
+    },
+    "v012": {
+      "score": 1,
+      "ms": 1219,
+      "position": 14
+    },
+    "v020": {
+      "score": 5,
+      "ms": 3116,
+      "position": 15
+    },
+    "v001": {
+      "score": 1,
+      "ms": 1351,
+      "position": 16
+    },
+    "v038": {
+      "score": 1,
+      "ms": 3139,
+      "position": 17
+    },
+    "v032": {
+      "score": 4,
+      "ms": 1407,
+      "position": 18
+    },
+    "v003": {
+      "score": 1,
+      "ms": 1229,
+      "position": 19
+    },
+    "v041": {
+      "score": 1,
+      "ms": 1975,
+      "position": 20
+    },
+    "v031": {
+      "score": 1,
+      "ms": 837,
+      "position": 21
+    },
+    "v023": {
+      "score": 1,
+      "ms": 1547,
+      "position": 22
+    },
+    "v025": {
+      "score": 3,
+      "ms": 1175,
+      "position": 23
+    },
+    "v034": {
+      "score": 4,
+      "ms": 1053,
+      "position": 24
+    },
+    "v002": {
+      "score": 1,
+      "ms": 738,
+      "position": 25
+    },
+    "v058": {
+      "score": 1,
+      "ms": 674,
+      "position": 26
+    },
+    "v057": {
+      "score": 1,
+      "ms": 793,
+      "position": 27
+    },
+    "v048": {
+      "score": 1,
+      "ms": 1136,
+      "position": 28
+    },
+    "v011": {
+      "score": 1,
+      "ms": 801,
+      "position": 29
+    },
+    "v006": {
+      "score": 1,
+      "ms": 977,
+      "position": 30
+    },
+    "v028": {
+      "score": 5,
+      "ms": 801,
+      "position": 31
+    },
+    "v026": {
+      "score": 4,
+      "ms": 1485,
+      "position": 32
+    },
+    "v046": {
+      "score": 1,
+      "ms": 588,
+      "position": 33
+    },
+    "v021": {
+      "score": 1,
+      "ms": 671,
+      "position": 34
+    },
+    "v040": {
+      "score": 1,
+      "ms": 1053,
+      "position": 35
+    },
+    "v045": {
+      "score": 1,
+      "ms": 1088,
+      "position": 36
+    },
+    "v014": {
+      "score": 3,
+      "ms": 1065,
+      "position": 37
+    },
+    "v015": {
+      "score": 1,
+      "ms": 727,
+      "position": 38
+    },
+    "v052": {
+      "score": 1,
+      "ms": 1020,
+      "position": 39
+    },
+    "v016": {
+      "score": 1,
+      "ms": 1193,
+      "position": 40
+    },
+    "v062": {
+      "score": 2,
+      "ms": 937,
+      "position": 41
+    },
+    "v007": {
+      "score": 4,
+      "ms": 982,
+      "position": 42
+    },
+    "v033": {
+      "score": 1,
+      "ms": 1559,
+      "position": 43
+    },
+    "v037": {
+      "score": 3,
+      "ms": 1250,
+      "position": 44
+    },
+    "v000": {
+      "score": 1,
+      "ms": 689,
+      "position": 45
+    },
+    "v039": {
+      "score": 3,
+      "ms": 1830,
+      "position": 46
+    },
+    "v018": {
+      "score": 1,
+      "ms": 3287,
+      "position": 47
+    },
+    "v027": {
+      "score": 1,
+      "ms": 1265,
+      "position": 48
+    },
+    "v042": {
+      "score": 1,
+      "ms": 1549,
+      "position": 49
+    },
+    "v059": {
+      "score": 1,
+      "ms": 3911,
+      "position": 50
+    },
+    "v029": {
+      "score": 1,
+      "ms": 944,
+      "position": 51
+    },
+    "v049": {
+      "score": 1,
+      "ms": 1151,
+      "position": 52
+    },
+    "v053": {
+      "score": 4,
+      "ms": 1488,
+      "position": 53
+    },
+    "v010": {
+      "score": 1,
+      "ms": 2196,
+      "position": 54
+    },
+    "v044": {
+      "score": 4,
+      "ms": 1749,
+      "position": 55
+    },
+    "v017": {
+      "score": 1,
+      "ms": 2051,
+      "position": 56
+    },
+    "v055": {
+      "score": 1,
+      "ms": 1151,
+      "position": 57
+    },
+    "v054": {
+      "score": 2,
+      "ms": 565,
+      "position": 58
+    },
+    "v022": {
+      "score": 4,
+      "ms": 929,
+      "position": 59
+    },
+    "v056": {
+      "score": 5,
+      "ms": 992,
+      "position": 60
+    },
+    "v061": {
+      "score": 1,
+      "ms": 974,
+      "position": 61
+    },
+    "v035": {
+      "score": 1,
+      "ms": 2871,
+      "position": 62
+    },
+    "v051": {
+      "score": 1,
+      "ms": 4085,
+      "position": 63
+    }
+  }
+}
