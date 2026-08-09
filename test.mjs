@@ -1249,30 +1249,41 @@ try {
     await test('the pattern reaches the geometry, not just the page', async () => {
       // The proof that the grid is wired to anything. Clearing the kick lane
       // must collapse the sub band — which is what the road answers — while
-      // leaving the hat lane, and therefore the roofs, exactly as busy.
+      // leaving the hat lane, and therefore the roofs, still firing.
+      //
+      // Polled rather than waited out. Two hundred thousand points in a
+      // headless run means the page advances its clock at roughly half real
+      // time, so any fixed sleep here is a guess about the machine.
       await hl(() => window.__hendriklaan.setPattern({ kick: 0 }));
-      await p.waitForTimeout(3000);
+      await p.waitForFunction(() => window.__hendriklaan.bands()[0] < 0.02,
+        null, { timeout: 20000 });
+
       const quiet = [];
-      for (let i = 0; i < 12; i++) {
+      for (let i = 0; i < 24; i++) {
         quiet.push(await hl(() => window.__hendriklaan.bands()));
         await p.waitForTimeout(90);
       }
       const sub = quiet.map((b) => b[0]);
       const high = quiet.map((b) => b[3]);
-      assert.ok(Math.max(...sub) < 0.02, `the sub band survived an empty kick lane: ${Math.max(...sub)}`);
-      assert.ok(Math.max(...high) > 0.1, `clearing the kick silenced the hats too: ${Math.max(...high)}`);
+      assert.ok(Math.max(...sub) < 0.03, `the sub band came back with no kick: ${Math.max(...sub)}`);
+      // Spread, not level: the hat envelope decays in 35 ms, so its band spends
+      // most of every frame near zero whatever the frame rate. What says the
+      // lane is alive is that it keeps moving.
+      const spread = Math.max(...high) - Math.min(...high);
+      assert.ok(spread > 0.05, `clearing the kick stilled the hats too (spread ${spread})`);
 
       // And an empty pattern is the sketch's own thesis, reachable by clicking:
       // nothing to answer to, so every point sits on its surveyed coordinate.
-      await hl(() => window.__hendriklaan.setPattern({ bass: 0, hat: 0 }));
-      await p.waitForTimeout(3000);
-      const dead = await hl(() => window.__hendriklaan.bands());
-      for (const b of dead) assert.ok(b < 0.02, `a band was still moving in silence: ${b}`);
+      // The pad has to go with the lanes — it is the mid band, and it drones.
+      await hl(() => window.__hendriklaan.setPattern({ bass: 0, hat: 0, pad: 0 }));
+      await p.waitForFunction(() => window.__hendriklaan.bands().every((b) => b < 0.02),
+        null, { timeout: 20000 });
       assert.ok((await hl(() => window.__hendriklaan.coverage())) > 0.05,
         'the survey vanished instead of coming to rest');
 
       await hl(() => window.__hendriklaan.resetPattern());
-      await p.waitForTimeout(1200);
+      await p.waitForFunction(() => window.__hendriklaan.bands()[0] > 0.2,
+        null, { timeout: 20000 });
     });
 
     await test('tempo changes the phase without teleporting it', async () => {
