@@ -166,6 +166,82 @@ try {
     });
   }
 
+  // -------------------------------------------------------------------- place
+  {
+    const { assemble } = await import('./sketches/2026-08-elsewhere/place.js');
+    const { decodeFloatTiff: decode } = await import('./sketches/2026-08-elsewhere/geotiff.js');
+    const ND = 3.4028234663852886e+38;
+    const grid = (w, h, fn) => {
+      const d = new Float32Array(w * h);
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) d[j * w + i] = fn(i, j);
+      return { width: w, height: h, data: d, nodata: ND };
+    };
+    const blank = (n) => new Uint8ClampedArray(n * 4);
+
+    await test('a place stands on its own ground, not on NAP', async () => {
+      const dsm = grid(8, 8, (i, j) => (i === 4 && j === 4 ? 18 : 12));
+      const dtm = grid(8, 8, () => 12);
+      const p = assemble({ dsm, dtm, rgb: blank(64), width: 8, height: 8 });
+      assert.equal(p.datum, 12);
+      assert.equal(p.y[4 * 8 + 4], 6);
+      assert.equal(p.y[0], 0);
+      assert.equal(p.hag[4 * 8 + 4], 6);
+    });
+
+    await test('nodata becomes flat ground rather than a hole or a NaN', async () => {
+      const dsm = grid(4, 4, (i) => (i === 0 ? ND : 3));
+      const dtm = grid(4, 4, (i) => (i === 0 ? ND : 3));
+      const p = assemble({ dsm, dtm, rgb: blank(16), width: 4, height: 4 });
+      for (const v of p.y) assert.ok(Number.isFinite(v), `non-finite height ${v}`);
+      for (const v of p.hag) assert.ok(Number.isFinite(v) && v >= 0, `bad hag ${v}`);
+      assert.equal(p.water[0], 1);
+      assert.equal(p.water[1], 0);
+      assert.equal(p.y[0], 0);
+    });
+
+    await test('colour comes across as rgb, dropping the alpha', async () => {
+      const rgb = new Uint8ClampedArray(2 * 2 * 4);
+      rgb.set([10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255]);
+      const flat = grid(2, 2, () => 1);
+      const p = assemble({ dsm: flat, dtm: flat, rgb, width: 2, height: 2 });
+      assert.deepEqual([...p.colour.slice(0, 6)], [10, 20, 30, 40, 50, 60]);
+      assert.equal(p.colour.length, 2 * 2 * 3);
+    });
+
+    await test('normals lean away from a slope and are flat on the level', async () => {
+      // a ramp rising in +i, so the surface normal tips towards -i
+      const p = assemble({
+        dsm: grid(8, 8, (i) => i * 2), dtm: grid(8, 8, () => 0),
+        rgb: blank(64), width: 8, height: 8,
+      });
+      assert.ok(p.normal[(4 * 8 + 4) * 2] < -40, `nx ${p.normal[(4 * 8 + 4) * 2]}`);
+      const level = grid(8, 8, () => 5);
+      const q = assemble({ dsm: level, dtm: level, rgb: blank(64), width: 8, height: 8 });
+      assert.equal(q.normal[(4 * 8 + 4) * 2], 0);
+      assert.equal(q.normal[(4 * 8 + 4) * 2 + 1], 0);
+    });
+
+    await test('the real baked place assembles into a plausible Dutch street', async () => {
+      const load = (f) => {
+        const b = readFileSync(`public/data/elsewhere/prins-hendriklaan/${f}`);
+        return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+      };
+      const dsm = await decode(load('dsm.tif'));
+      const dtm = await decode(load('dtm.tif'));
+      const p = assemble({ dsm, dtm, rgb: blank(dsm.width * dsm.height), width: dsm.width, height: dsm.height });
+      // Utrecht sits at about two metres above Amsterdam Ordnance Datum.
+      assert.ok(p.datum > 0 && p.datum < 6, `datum ${p.datum} m NAP`);
+      let lo = Infinity, hi = -Infinity, bad = 0, wet = 0;
+      for (const v of p.y) { if (!Number.isFinite(v)) bad++; if (v < lo) lo = v; if (v > hi) hi = v; }
+      for (const v of p.water) wet += v;
+      assert.equal(bad, 0, `${bad} non-finite heights`);
+      assert.ok(hi > 20 && hi < 60, `tallest thing is ${hi} m above the ground`);
+      assert.ok(lo > -8, `lowest thing is ${lo} m below the ground`);
+      // Canals and gaps, not most of the frame.
+      assert.ok(wet / p.water.length < 0.35, `${(100 * wet / p.water.length).toFixed(1)}% of cells had no return`);
+    });
+  }
+
   // ------------------------------------------------------------------ helpers
   const state = (p, fn) => p.evaluate(fn);
   const parts = (p) => state(p, () => window.__inconstructions.parts());
@@ -1540,6 +1616,14 @@ try {
       await p.click('#beat-reset');
       await p.waitForFunction(() => location.hash === '', null, { timeout: 3000 });
       await p.click('#beat-close');
+
+      // Leave the source as this block found it. Opening the grid deliberately
+      // starts the audio, and the microphone test further down clicks through
+      // from `field` — without this it starts from `tone`, lands on `mic`, and
+      // fails on an assertion that has nothing to do with what it tests.
+      await hl(() => window.__hendriklaan.setAudio('field'));
+      await p.waitForTimeout(200);
+      assert.equal(await hl(() => window.__hendriklaan.audioMode()), 'field');
     });
 
     await test('a link carries the pattern, and arriving on one opens the grid', async () => {

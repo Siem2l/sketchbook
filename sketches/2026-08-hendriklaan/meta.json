@@ -8,6 +8,6 @@
     "webgl",
     "noise"
   ],
-  "description": "240 metres of Utrecht around Prins Hendriklaan 17, cut out of the AHN5 LiDAR survey and played by ear. The survey's own classification splits the street three ways, so ground answers the sub, canopy the mids, roofs the highs — and silence puts every point back exactly where it was measured.",
+  "description": "240 metres of Utrecht around Prins Hendriklaan 17, cut out of the AHN5 LiDAR survey and played by ear. The survey's own classification splits the street three ways, so ground answers the sub, canopy the mids, roofs the highs — and silence puts every point back exactly where it was measured. The beat driving it is a sixteen-step grid you can edit in the corner and send to someone in a link.",
   "thumbnail": "thumb.png"
 }

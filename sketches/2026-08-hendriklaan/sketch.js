@@ -33,6 +33,15 @@
 // the same lattice plane. Simplex has no preferred direction and the facades
 // break up.
 //
+// The tune is editable and the survey is not. That asymmetry is the point.
+// Every control on the page that touches the geometry — gain, point size,
+// projection, colour — changes how the measurement is *drawn*; the beat editor
+// changes what it is *answering to*, and nothing anywhere changes where a point
+// is. Empty the grid and the block does not go still gradually, it goes still
+// exactly, because with no band energy the displacement term is identically
+// zero. That is the same claim this comment opens with, made clickable rather
+// than argued. The pad needed a switch before it was true — see beat.js.
+//
 // One thing that turned out not to be worth doing: colouring by height above a
 // fitted ground surface rather than by NAP. The ground under this window rises
 // 1.08 m across 240 m against a 32 m vertical range, so a per-cell ground grid
@@ -880,6 +889,7 @@ async function main() {
     },
     editorOpen: () => editor.isOpen(),
     toggleEditor: () => editor.toggle(),
+    setAudio: (mode) => cycleAudioTo(mode),
     setColour, setOrtho, setFrozen,
     audioMode: () => audio.mode,
   };

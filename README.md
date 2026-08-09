@@ -60,8 +60,16 @@ for the `sketchbook` group.
   through real oscillators, and the microphone. Each band carries its own slow
   AGC because a room mic and a synth bus are nowhere near each other in level;
   without it the built-in bank pinned every band above 0.79 and the street
-  stopped answering the music. Colour by height, class, intensity, or by the
-  band mapping itself. Drag to orbit, `o` for the isometric elevation, `s`
+  stopped answering the music. The pattern itself is editable: `b` opens a
+  sixteen-step grid in the corner where kick, bass and hat are one 16-bit mask
+  each, with the built-in pattern drawn underneath as dashed outlines so a hit
+  you removed stays visible. Tempo, swing, a four-bar bass-note row, and a
+  switch for the pad — which had to exist, because the pad is the mid band and
+  a drone you cannot turn off means an empty grid still leaves the canopy
+  breathing. Edits ride in the URL hash, stripped again the moment the pattern
+  is the built-in one, so the canonical page never carries one. Colour by
+  height, class, intensity, or by the band mapping itself. Drag to orbit, `o`
+  for the isometric elevation, `s`
   exports at 3x. AHN5 is CC BY 4.0.
 
 - **edge** (`2026-08-edge`) — four edge-detection operators on one source, side
