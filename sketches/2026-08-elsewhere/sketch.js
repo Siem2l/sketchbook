@@ -170,7 +170,19 @@ async function main() {
         field.uploadHeight(layer, surf, terr);
         field.uploadPhoto(layer, rgba);
         setLayer(tilesA, layer, bbox[0], bbox[1], TILE_SPAN);
-        bornA[layer] = view.clock;
+        // A tile that merely sharpens ground the coarse frame is already
+        // showing is a refinement, not a change of place, and should arrive
+        // without ceremony. Firing the fall-and-pop for those meant every
+        // landing was followed by the whole square sinking and popping back,
+        // which read as the transition happening twice.
+        const cx = tilesA[coarseAt * 4], cz = tilesA[coarseAt * 4 + 1];
+        const cs = tilesA[coarseAt * 4 + 2];
+        // Overlap, not containment: a 240 m tile on a fixed grid rarely sits
+        // wholly inside a 480 m window, and the straddling ones were still
+        // firing, so a corner of the square kept sinking after every landing.
+        const shown = bbox[0] < cx + cs && bbox[0] + TILE_SPAN > cx
+          && bbox[1] < cz + cs && bbox[1] + TILE_SPAN > cz;
+        bornA[layer] = shown ? -1e4 : view.clock;
         slots.markReady(job.idx);
       })()
         .catch((e) => note('could not read the ground there: ' + e.message))
@@ -257,10 +269,15 @@ async function main() {
     gl.uniform1f(u.uToneGainB, 255 / Math.max(1, tb.hi - tb.lo));
     gl.uniform1f(u.uMix, flight ? flight.mix : 0);
     gl.uniform1f(u.uTime, view.clock);
+    // Both scaled to the square rather than to the journey: a 240 m window
+    // framed from 300 m cannot show a 105 m lift, which is what a 49 km flight
+    // used to ask for. Distance still shades the motion, between a hop and a
+    // proper heave, but everything stays in the picture.
     const km = flight ? flight.j.km : 0;
+    const far = Math.min(1, Math.log10(1 + km * 10) / 2.7);
     gl.uniform1f(u.uArc, phase === 'flying' ? 1 : 0);
-    gl.uniform1f(u.uLift, flight ? Math.min(120, 24 + 30 * Math.log10(1 + km * 10)) : 0);
-    gl.uniform1f(u.uSwing, flight ? Math.min(210, 34 + 40 * Math.log10(1 + km * 10)) : 0);
+    gl.uniform1f(u.uLift, flight ? 6 + 13 * far : 0);
+    gl.uniform1f(u.uSwing, flight ? 5 + 14 * far : 0);
     gl.uniform1f(u.uColour, view.colour);
     gl.uniform1f(u.uPointK, m.pointK);
     gl.uniform1f(u.uSpan, 0.55);

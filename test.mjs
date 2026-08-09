@@ -1949,6 +1949,39 @@ try {
       assert.deepEqual(errors, []);
     });
 
+    await test('a jump stays in the picture, and lands only once', async () => {
+      // Reported from the live page: the square rose, left the frame, came back
+      // unchanged, and then sank and popped a second time. Two causes — a 49 km
+      // flight asking for a 105 m lift across a 240 m window, and every sharp
+      // tile firing its arrival changeover over ground the coarse frame was
+      // already showing. Coverage catches both: a collapse mid-flight, and a
+      // dip after the landing.
+      await p.waitForFunction(() => window.__elsewhere.loading() === 0, null, { timeout: 90000 });
+      const settled = await el(() => window.__elsewhere.coverage());
+      await el(() => window.__elsewhere.jumpTo('Coolsingel 40, Rotterdam'));
+
+      const flying = [], landed = [];
+      for (let i = 0; i < 45; i++) {
+        const phase = await el(() => window.__elsewhere.phase());
+        const lit = await el(() => window.__elsewhere.coverage());
+        if (phase === 'flying') flying.push(lit);
+        else if (flying.length) landed.push(lit);
+        if (landed.length > 14) break;
+        await p.waitForTimeout(300);
+      }
+      assert.ok(flying.length > 3, 'never saw the flight');
+      // in the air the field spreads, so it covers more, never less
+      assert.ok(Math.min(...flying) > settled * 0.85,
+        `the picture emptied mid-flight (${Math.min(...flying).toFixed(2)} against ${settled.toFixed(2)})`);
+      assert.ok(Math.max(...flying) > settled,
+        'nothing moved: the flight covered no more than standing still');
+      // and once it has landed it stays landed
+      const lo = Math.min(...landed), hi = Math.max(...landed);
+      assert.ok(hi - lo < 0.06, `the square transitioned a second time after landing (${lo.toFixed(2)}..${hi.toFixed(2)})`);
+      assert.match(await p.textContent('#m-place'), /Coolsingel/);
+      assert.deepEqual(errors, []);
+    });
+
     await test('every colour mode draws the whole square', async () => {
       for (let i = 0; i < 3; i++) {
         await el((n) => window.__elsewhere.setColour(n), i);

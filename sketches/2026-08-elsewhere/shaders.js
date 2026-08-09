@@ -131,8 +131,16 @@ void main() {
   // arriving tile is a scatter of pixels dropping out and popping back rather
   // than a block appearing at once. Jumping: one clock for everybody, staggered
   // along the bearing, so the departure edge leaves first.
-  float u = dot(normalize(w - uCentre + 1e-4), uDir) * 0.5 + 0.5;
-  float tJump = clamp(uMix * 1.55 - 0.55 * u, 0.0, 1.0);
+  // The spread is what makes a jump read as particles rather than as a slab.
+  // Biasing it only along the bearing moved everything in lockstep: the whole
+  // field rose together, left the frame, and came back, which looks like the
+  // picture being swapped rather than like anything travelling. Two thirds of
+  // the lead is now per particle, so at any instant some are still standing in
+  // the old place, some are in the air, and some have already arrived.
+  float bias = dot(normalize(w - uCentre + 1e-4), uDir) * 0.5 + 0.5;
+  float r = hash1(w * 0.37 + 2.9);
+  float lead = 0.30 * bias + 0.50 * r;
+  float tJump = clamp(uMix * 1.8 - lead, 0.0, 1.0);
   float jitter = hash1(w + 7.1) * 0.65;
   float tLocal = clamp((uTime - A.born - jitter) / uSpan, 0.0, 1.0);
   float t = mix(tLocal, tJump, uJump);
@@ -144,17 +152,29 @@ void main() {
   // the size fade are the whole effect, and A is read throughout. Only a jump
   // has two places resident at once, and only a jump interpolates.
   float cross = 1.0 - abs(t * 2.0 - 1.0);
-  float pick = uJump > 0.5 ? tJump : 0.0;
+  // Height crosses over smoothly so a particle arcs from one roof to the next.
+  // Colour switches at the top of that arc instead of blending: a red pantile
+  // averaged with a grey road is mud, and the particle carrying its old colour
+  // up and bringing the new one down is the thing worth watching. The spread
+  // above means the population converts gradually even though each particle
+  // flips at once.
+  float pick = uJump > 0.5 ? t : 0.0;
+  float flip = uJump > 0.5 ? smoothstep(0.42, 0.58, t) : 0.0;
 
   // A particle keeps its ground and changes what it is standing on. Displacing
   // it by the true offset between two places is the obvious reading and it is
   // wrong: 49 km puts every particle off screen by mid-flight.
   float y = mix(A.y, B.y, pick) - (1.0 - uJump) * uDrop * cross;
-  vec3 rgb = mix(A.rgb, B.rgb, pick);
-  vec3 n = normalize(mix(A.n, B.n, pick));
+  vec3 rgb = mix(A.rgb, B.rgb, flip);
+  vec3 n = normalize(mix(A.n, B.n, flip));
 
-  vec2 stream = -uDir * uSwing * arc * (0.6 + 0.8 * hash1(w));
-  float lift = uLift * arc * (0.5 + hash1(w + 3.7));
+  // Scaled to the square, not to the journey. A 49 km flight was lifting every
+  // particle 105 m and sliding it 141 m across a 240 m window seen from 300 m,
+  // so the field simply left the picture. Distance still colours the motion,
+  // but only within what stays in frame.
+  vec2 stream = -uDir * uSwing * arc * (0.5 + 1.0 * r)
+              + vec2(hash1(w + 11.3) - 0.5, hash1(w + 19.7) - 0.5) * uSwing * arc * 0.7;
+  float lift = uLift * arc * (0.35 + 1.1 * r);
 
   vec3 p = vec3(w.x + stream.x - uCentre.x, y + lift, w.y + stream.y - uCentre.y);
   vec4 eye = uView * vec4(p, 1.0);
