@@ -242,6 +242,69 @@ try {
     });
   }
 
+  // -------------------------------------------------------------------- slots
+  {
+    const { createSlots } = await import('./sketches/2026-08-elsewhere/slots.js');
+    const fill = (s, cx, cz) => { for (const j of s.reshelve(cx, cz)) s.markReady(j.idx); return s; };
+
+    await test('a first reshelve claims the whole ring, nearest tile first', async () => {
+      const s = createSlots({ ring: 5 });
+      const jobs = s.reshelve(0, 0);
+      assert.equal(jobs.length, 25);
+      assert.equal(new Set(jobs.map((j) => j.idx)).size, 25, 'two tiles were given the same slot');
+      assert.ok(Math.abs(jobs[0].tx) + Math.abs(jobs[0].tz) <= 1, 'a corner was requested before the centre');
+    });
+
+    await test('stepping one tile costs one edge, not the whole ring', async () => {
+      // The bug the mock found: indexing slots by ring position meant a
+      // one-tile step re-pointed all 25 and the picture went black while moving.
+      const s = fill(createSlots({ ring: 5 }), 0, 0);
+      const jobs = s.reshelve(1, 0);
+      assert.equal(jobs.length, 5, `${jobs.length} tiles reloaded for a one-tile step`);
+      assert.ok(jobs.every((j) => j.tx === 3), 'something other than the leading edge reloaded');
+    });
+
+    await test('a diagonal step costs two edges less the shared corner', async () => {
+      assert.equal(fill(createSlots({ ring: 5 }), 0, 0).reshelve(1, 1).length, 9);
+    });
+
+    await test('standing still costs nothing', async () => {
+      assert.equal(fill(createSlots({ ring: 5 }), 0, 0).reshelve(0, 0).length, 0);
+    });
+
+    await test('an evicted slot keeps its contents until something replaces them', async () => {
+      // Blanking on eviction punched a black square in the leading edge for as
+      // long as the fetch took. The stale ground is hidden by the clip instead.
+      const s = fill(createSlots({ ring: 5 }), 0, 0);
+      const evicted = s.indexOf(-2, 0);
+      s.reshelve(1, 0);
+      assert.notEqual(s.slots[evicted].tx, null, 'evicted slot was blanked');
+      assert.equal(s.slots[evicted].ready, false);
+    });
+
+    await test('every tile in the ring is findable by its own coordinate', async () => {
+      const s = fill(createSlots({ ring: 5 }), 7, -3);
+      assert.equal(s.readyCount(), 25);
+      for (let j = -2; j <= 2; j++) {
+        for (let i = -2; i <= 2; i++) {
+          const idx = s.indexOf(7 + i, -3 + j);
+          assert.ok(idx !== undefined, `missing tile ${7 + i}:${-3 + j}`);
+          assert.equal(s.slots[idx].tx, 7 + i);
+        }
+      }
+    });
+
+    await test('rebasing re-keys the map after a landing moves every tile', async () => {
+      const s = fill(createSlots({ ring: 5 }), 0, 0);
+      const idx = s.indexOf(0, 0);
+      for (const slot of s.slots) if (slot.tx !== null) { slot.tx += 100; slot.tz -= 40; }
+      s.rebase();
+      assert.equal(s.indexOf(0, 0), undefined, 'the old coordinate still resolves');
+      assert.equal(s.indexOf(100, -40), idx, 'the tile did not move with its slot');
+      assert.equal(s.reshelve(100, -40).length, 0, 'the ring was not whole from the new centre');
+    });
+  }
+
   // ------------------------------------------------------------------ helpers
   const state = (p, fn) => p.evaluate(fn);
   const parts = (p) => state(p, () => window.__inconstructions.parts());
