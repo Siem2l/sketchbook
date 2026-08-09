@@ -32,6 +32,10 @@ if (!query) {
 const span = Number(opt('span', 480));
 const size = Number(opt('size', 480));
 const slugArg = opt('slug', null);
+// Uncompressed by default: 35% more bytes for a decode that is 3,900x faster in
+// a browser. --compress keeps one fixture on the deflate-plus-predictor path so
+// the decoder's hardest branch stays tested.
+const compress = args.includes('--compress');
 
 const slugify = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
@@ -65,7 +69,8 @@ mkdirSync(dir, { recursive: true });
 
 const cov = (id) => `${WCS}?service=WCS&version=2.0.1&request=GetCoverage&coverageId=${id}`
   + `&subset=x(${bbox[0]},${bbox[2]})&subset=y(${bbox[1]},${bbox[3]})`
-  + `&scalesize=x(${size}),y(${size})&format=image/tiff`;
+  + `&scalesize=x(${size}),y(${size})&format=image/tiff`
+  + (compress ? '' : '&geotiff:compression=None');
 // WMS 1.3.0 with EPSG:28992 is easting-first. Northing-first returns HTTP 200
 // and a valid 1.6 KB blank JPEG, which is a silent hour of debugging.
 const ortho = `${WMS}?service=WMS&version=1.3.0&request=GetMap&layers=Actueel_orthoHR`

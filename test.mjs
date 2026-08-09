@@ -167,147 +167,48 @@ try {
   }
 
   // -------------------------------------------------------------------- place
+  // What survives on the CPU now that the rasters are textures: the two
+  // measurements a place needs once, which cannot be worked out per particle.
+  // Normals, height above ground, the walls and the canopy all moved into the
+  // vertex shader with the rewrite, and are covered by the browser tests.
   {
-    const { assemble } = await import('./sketches/2026-08-elsewhere/place.js');
-    const { decodeFloatTiff: decode } = await import('./sketches/2026-08-elsewhere/geotiff.js');
+    const { median, toneOf } = await import('./sketches/2026-08-elsewhere/place.js');
     const ND = 3.4028234663852886e+38;
-    const grid = (w, h, fn) => {
-      const d = new Float32Array(w * h);
-      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) d[j * w + i] = fn(i, j);
-      return { width: w, height: h, data: d, nodata: ND };
-    };
-    const blank = (n) => new Uint8ClampedArray(n * 4);
 
-    await test('a place stands on its own ground, not on NAP', async () => {
-      const dsm = grid(8, 8, (i, j) => (i === 4 && j === 4 ? 18 : 12));
-      const dtm = grid(8, 8, () => 12);
-      const p = assemble({ dsm, dtm, rgb: blank(64), width: 8, height: 8 });
-      assert.equal(p.datum, 12);
-      // surface is what was measured; y is where the particle is drawn
-      assert.equal(p.surface[4 * 8 + 4], 6);
-      assert.equal(p.surface[0], 0);
-      assert.equal(p.y[0], 0);
-      assert.equal(p.hag[4 * 8 + 4], 6);
+    await test('the datum is the median ground, ignoring cells with no return', async () => {
+      const d = new Float32Array([ND, 1, 2, 3, 4, 5, ND]);
+      assert.equal(median(d), 3);
+      // Utrecht really does sit at about two metres above Amsterdam Ordnance Datum
+      const { decodeFloatTiff } = await import('./sketches/2026-08-elsewhere/geotiff.js');
+      const b = readFileSync('public/data/elsewhere/prins-hendriklaan/dtm.tif');
+      const g = await decodeFloatTiff(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+      const datum = median(g.data);
+      assert.ok(datum > 0 && datum < 6, `datum ${datum} m NAP is not a Dutch street`);
     });
 
-    await test('a facade gets particles, because a surface model has no walls', async () => {
-      // A block with a 9 m drop all round. Seen from above that drop is a
-      // discontinuity between two cells, not a surface, so nothing lands on it
-      // unless the edge cells are spent down the face.
-      const dsm = grid(16, 16, (i, j) => (i >= 5 && i <= 10 && j >= 5 && j <= 10 ? 9 : 0));
-      const dtm = grid(16, 16, () => 0);
-      const p = assemble({ dsm, dtm, rgb: blank(256), width: 16, height: 16 });
-      let onFace = 0, onRoof = 0;
-      for (let j = 5; j <= 10; j++) {
-        for (let i = 5; i <= 10; i++) {
-          const edge = i === 5 || i === 10 || j === 5 || j === 10;
-          if (!edge) continue;
-          const v = p.y[j * 16 + i];
-          if (v < 8.5 && v >= 0) onFace++; else onRoof++;
-          assert.ok(v >= 0 && v <= 9, `particle left the building at ${v}`);
-        }
-      }
-      assert.ok(onFace > 0, 'the walls got nothing');
-      assert.ok(onRoof > 0, 'the roofline dissolved — every edge cell fell off');
-      // the middle of the roof is untouched
-      assert.equal(p.y[8 * 16 + 8], 9);
+    await test('a place with nothing but no-return cells still has a datum', async () => {
+      assert.equal(median(new Float32Array([ND, ND, ND])), 0);
     });
 
-    await test('a canopy is spread through its own column, a smooth roof is not', async () => {
-      // rough and tall: vegetation. every cell alternates, so curvature is high
-      const tree = grid(12, 12, (i, j) => 10 + ((i + j) % 2) * 1.2);
-      const flat = grid(12, 12, () => 0);
-      const veg = assemble({ dsm: tree, dtm: flat, rgb: blank(144), width: 12, height: 12 });
-      let spread = 0;
-      for (let k = 0; k < veg.y.length; k++) if (veg.y[k] < 9) spread++;
-      assert.ok(spread > veg.y.length * 0.3, `only ${spread} of ${veg.y.length} particles left the canopy top`);
-      for (const v of veg.y) assert.ok(v >= 0, `a particle went below the ground at ${v}`);
-
-      // tall but smooth: a flat roof, and it must stay a flat roof
-      const roof = grid(12, 12, () => 10);
-      const solid = assemble({ dsm: roof, dtm: flat, rgb: blank(144), width: 12, height: 12 });
-      for (let j = 2; j < 10; j++) {
-        for (let i = 2; i < 10; i++) assert.equal(solid.y[j * 12 + i], 10, 'a flat roof was scattered');
-      }
-    });
-
-    await test('nodata becomes flat ground rather than a hole or a NaN', async () => {
-      const dsm = grid(4, 4, (i) => (i === 0 ? ND : 3));
-      const dtm = grid(4, 4, (i) => (i === 0 ? ND : 3));
-      const p = assemble({ dsm, dtm, rgb: blank(16), width: 4, height: 4 });
-      for (const v of p.y) assert.ok(Number.isFinite(v), `non-finite height ${v}`);
-      for (const v of p.hag) assert.ok(Number.isFinite(v) && v >= 0, `bad hag ${v}`);
-      assert.equal(p.water[0], 1);
-      assert.equal(p.water[1], 0);
-      assert.equal(p.y[0], 0);
-    });
-
-    await test('colour comes across as rgb, dropping the alpha', async () => {
-      const rgb = new Uint8ClampedArray(2 * 2 * 4);
-      rgb.set([10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255]);
-      const flat = grid(2, 2, () => 1);
-      // an identity tone, so this is testing the channel handling and not the
-      // percentile stretch that normally sits on top of it
-      const p = assemble({ dsm: flat, dtm: flat, rgb, width: 2, height: 2, tone: { lo: 0, hi: 255 } });
-      assert.deepEqual([...p.colour.slice(0, 6)], [10, 20, 30, 40, 50, 60]);
-      assert.equal(p.colour.length, 2 * 2 * 3);
-    });
-
-    await test('the stretch opens the photograph up without tinting it', async () => {
-      // a photo living in 60..150, the narrow low slice an orthophoto actually
-      // occupies, with one strongly warm pixel to watch the hue of
+    await test('the tone finds the slice the photograph actually occupies', async () => {
+      // an image living in 60..150, the narrow low slice an orthophoto really uses
       const n = 64 * 64;
-      const rgb = new Uint8ClampedArray(n * 4);
+      const rgba = new Uint8ClampedArray(n * 4);
       for (let i = 0; i < n; i++) {
-        const v = 60 + (i % 90);
-        rgb[i*4] = v; rgb[i*4+1] = v; rgb[i*4+2] = v; rgb[i*4+3] = 255;
+        const v = 60 + (i % 91);
+        rgba[i*4] = v; rgba[i*4+1] = v; rgba[i*4+2] = v; rgba[i*4+3] = 255;
       }
-      rgb[0] = 150; rgb[1] = 90; rgb[2] = 60;      // a pantile
-      const flat = grid(64, 64, () => 1);
-      const p = assemble({ dsm: flat, dtm: flat, rgb, width: 64, height: 64 });
-      let lo = 255, hi = 0;
-      for (const v of p.colour) { if (v < lo) lo = v; if (v > hi) hi = v; }
-      assert.ok(hi > 230, `the stretch left the top at ${hi}`);
-      assert.ok(lo < 20, `the stretch left the bottom at ${lo}`);
-      // Stretching each channel on its own drags shadows blue. Scaling by the
-      // luminance ratio keeps the hue that was photographed: red stays the
-      // largest channel, and by roughly the same margin.
-      const [R, G, B] = [p.colour[0], p.colour[1], p.colour[2]];
-      assert.ok(R > G && G > B, `hue inverted: ${R},${G},${B}`);
-      assert.ok(Math.abs((R / B) - (150 / 60)) < 0.25, `saturation drifted: ${R}/${B}`);
+      const t = toneOf(rgba, n);
+      assert.ok(Math.abs(t.lo - 62) < 4, `lo ${t.lo}`);
+      assert.ok(Math.abs(t.hi - 148) < 4, `hi ${t.hi}`);
     });
 
-    await test('normals lean away from a slope and are flat on the level', async () => {
-      // a ramp rising in +i, so the surface normal tips towards -i
-      const p = assemble({
-        dsm: grid(8, 8, (i) => i * 2), dtm: grid(8, 8, () => 0),
-        rgb: blank(64), width: 8, height: 8,
-      });
-      assert.ok(p.normal[(4 * 8 + 4) * 2] < -40, `nx ${p.normal[(4 * 8 + 4) * 2]}`);
-      const level = grid(8, 8, () => 5);
-      const q = assemble({ dsm: level, dtm: level, rgb: blank(64), width: 8, height: 8 });
-      assert.equal(q.normal[(4 * 8 + 4) * 2], 0);
-      assert.equal(q.normal[(4 * 8 + 4) * 2 + 1], 0);
-    });
-
-    await test('the real baked place assembles into a plausible Dutch street', async () => {
-      const load = (f) => {
-        const b = readFileSync(`public/data/elsewhere/prins-hendriklaan/${f}`);
-        return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
-      };
-      const dsm = await decode(load('dsm.tif'));
-      const dtm = await decode(load('dtm.tif'));
-      const p = assemble({ dsm, dtm, rgb: blank(dsm.width * dsm.height), width: dsm.width, height: dsm.height });
-      // Utrecht sits at about two metres above Amsterdam Ordnance Datum.
-      assert.ok(p.datum > 0 && p.datum < 6, `datum ${p.datum} m NAP`);
-      let lo = Infinity, hi = -Infinity, bad = 0, wet = 0;
-      for (const v of p.y) { if (!Number.isFinite(v)) bad++; if (v < lo) lo = v; if (v > hi) hi = v; }
-      for (const v of p.water) wet += v;
-      assert.equal(bad, 0, `${bad} non-finite heights`);
-      assert.ok(hi > 20 && hi < 60, `tallest thing is ${hi} m above the ground`);
-      assert.ok(lo > -8, `lowest thing is ${lo} m below the ground`);
-      // Canals and gaps, not most of the frame.
-      assert.ok(wet / p.water.length < 0.35, `${(100 * wet / p.water.length).toFixed(1)}% of cells had no return`);
+    await test('the tone never collapses to a point on a flat image', async () => {
+      // a blank white tile would otherwise give a gain of infinity
+      const n = 256;
+      const rgba = new Uint8ClampedArray(n * 4).fill(200);
+      const t = toneOf(rgba, n);
+      assert.ok(t.hi - t.lo >= 16, `span ${t.hi - t.lo}`);
     });
   }
 
@@ -2020,18 +1921,32 @@ try {
 
     await test('the opening place loads from disk and draws', async () => {
       const place = await el(() => window.__elsewhere.place());
-      assert.match(place.address, /Prins Hendriklaan/);
-      assert.equal(place.width, 480);
+      assert.match(place.name, /Prins Hendriklaan/);
+      // Utrecht sits at about two metres above Amsterdam Ordnance Datum
+      assert.ok(place.datum > 0 && place.datum < 6, `datum ${place.datum}`);
       // A shader that failed to link still leaves a canvas, just a black one.
       assert.ok((await el(() => window.__elsewhere.coverage())) > 0.08, 'nothing was drawn');
       assert.deepEqual(errors, []);
     });
 
-    await test('the square is drawn from one buffer that is never resized', async () => {
-      // 12x12 tiles of 32x32 cells. The ring caches more than the frame shows;
-      // the difference is the margin new ground lands in.
-      assert.equal(await el(() => window.__elsewhere.count()), 147456);
-      assert.equal(await p.textContent('#m-n'), '147,456');
+    await test('a particle is an index, so the count is exactly the survey grid', async () => {
+      // 240 m at AHN's half metre. There is no vertex buffer at all: the
+      // particle is its gl_VertexID and everything else is a texture lookup.
+      assert.equal(await el(() => window.__elsewhere.count()), 480 * 480);
+      assert.equal(await p.textContent('#m-n'), '230,400');
+      assert.equal(await p.textContent('#m-span'), '240');
+    });
+
+    await test('sharp tiles stream in over the coarse opening frame', async () => {
+      // Layer 0 is the baked 480 m frame at one metre and paints with no round
+      // trip; layers 1..9 are 240 m tiles at half a metre that refine over it.
+      await p.waitForFunction(() => window.__elsewhere.loading() === 0, null, { timeout: 90000 });
+      const resident = await el(() => window.__elsewhere.layers());
+      assert.equal(resident[0], true, 'the baked frame is not resident');
+      assert.ok(resident.filter(Boolean).length > 4,
+        `only ${resident.filter(Boolean).length} layers landed`);
+      assert.ok((await el(() => window.__elsewhere.coverage())) > 0.08);
+      assert.deepEqual(errors, []);
     });
 
     await test('every colour mode draws the whole square', async () => {

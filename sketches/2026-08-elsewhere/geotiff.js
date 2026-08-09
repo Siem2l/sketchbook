@@ -86,10 +86,16 @@ export async function decodeFloatTiff(arrayBuffer) {
   const planeBytes = new Uint8Array(rowBytes);
   const planeView = new DataView(planeBytes.buffer);
 
+  // Every strip at once rather than one after another. Each inflate is a whole
+  // stream pipeline that yields to the event loop, and a 480-row raster has 120
+  // of them; sequentially, against a busy main thread, that is a minute.
+  const strips = compression === 8
+    ? await Promise.all(offsets.map((o, i) => inflate(u8.subarray(o, o + counts[i]))))
+    : offsets.map((o, i) => u8.subarray(o, o + counts[i]));
+
   let row = 0;
   for (let s = 0; s < offsets.length && row < height; s++) {
-    const raw = u8.subarray(offsets[s], offsets[s] + counts[s]);
-    const strip = compression === 8 ? await inflate(raw) : raw;
+    const strip = strips[s];
     const rows = Math.min(rowsPerStrip, height - row);
     for (let r = 0; r < rows; r++, row++) {
       const line = strip.subarray(r * rowBytes, (r + 1) * rowBytes);

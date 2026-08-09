@@ -1,23 +1,25 @@
 // elsewhere — a square of the Netherlands you can slide across the country.
 //
 // Nothing here is generated. Heights are AHN, the national half-metre surface
-// and terrain models; colour is the current orthophoto. Both arrive live from
-// PDOK for whatever address you ask for and are decoded in the page — which is
+// and terrain models; colour is the current orthophoto at 25 cm. Both arrive
+// live from PDOK for whatever ground you are over and are decoded in the page —
 // possible only because PDOK's coverage service is CORS-open. The AHN point
 // cloud is not: the COPC tiles behind the hendriklaan sketch cannot be read
 // from a browser at all, so this trades real classified returns for a regular
-// grid and gets every Dutch address in exchange.
+// grid and gets every address in the country in exchange.
 //
-// The rule the whole thing is built around: there are N particles, allocated
-// once, and nothing ever creates or destroys one. Sliding the window re-points
-// them at new ground. Jumping tells all of them where to stand next.
+// A place lives in textures. A particle is its gl_VertexID, and everything
+// about it — where it stands, how high, what colour, which way it faces — is a
+// texture lookup in the vertex shader. Nothing is written per particle, so
+// sliding the window is a uniform and a tile arriving is one upload.
 import { decodeFloatTiff } from './geotiff.js';
-import { assemble } from './place.js';
+import { median, toneOf } from './place.js';
 import { createSlots } from './slots.js';
-import { createField, emptyTile, CELL, TILE_CELLS, TILE_SPAN, RING, SPAN, HALF } from './field.js';
-import { cachedFetch } from './pdok.js';
+import { createField, CELL, SPAN, HALF, GRID, TILE_SPAN, TILE_H, TILE_P, LAYERS } from './field.js';
+import { cachedFetch, coverageUrl, orthoUrl, fetchTileKey, fetchTileBbox } from './pdok.js';
 
 const BAKED = '/data/elsewhere/prins-hendriklaan';
+const NODATA_FLOOR = 1e30;
 const $ = (id) => document.getElementById(id);
 const note = (m) => { $('note').textContent = m ?? ''; };
 
@@ -29,55 +31,12 @@ const perspective = (fovy, aspect, near, far) => {
   return new Float32Array([f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0]);
 };
 
-async function decodeOrtho(blob, width, height) {
-  const bitmap = await createImageBitmap(blob);
-  const oc = new OffscreenCanvas(width, height);
-  const c2 = oc.getContext('2d');
-  c2.drawImage(bitmap, 0, 0, width, height);
-  return c2.getImageData(0, 0, width, height).data;
-}
-
-// The opening frame is baked into the repo as PDOK's own three files, so first
-// paint costs no round trip and the thumbnail is deterministic. It is baked
-// coarse — 480 m at 1 m cells — because that is 1.3 MB rather than the 4.8 MB
-// four sharp tiles would cost, and the sharp tiles stream over it anyway.
-async function loadBaked(base, cache) {
-  const meta = await (await fetch(`${base}/place.json`)).json();
-  const [dsmBuf, dtmBuf, orthoBuf] = await Promise.all([
-    cachedFetch(`${base}/dsm.tif`, cache),
-    cachedFetch(`${base}/dtm.tif`, cache),
-    cachedFetch(`${base}/ortho.jpg`, cache),
-  ]);
-  const [dsm, dtm] = await Promise.all([decodeFloatTiff(dsmBuf), decodeFloatTiff(dtmBuf)]);
-  const rgb = await decodeOrtho(new Blob([orthoBuf], { type: 'image/jpeg' }), dsm.width, dsm.height);
-  return { meta, data: assemble({ dsm, dtm, rgb, width: dsm.width, height: dsm.height }) };
-}
-
-// A raster covers a bbox at some cell size; a render tile wants TILE_CELLS
-// squared samples starting at a world corner. Nearest-neighbour is right here:
-// the baked opening frame is coarser than the field, and interpolating it would
-// invent detail the survey does not have.
-function sampleTile(src, meta, tx, tz) {
-  const out = emptyTile();
-  const [minx, , , maxy] = meta.bbox;
-  for (let j = 0; j < TILE_CELLS; j++) {
-    for (let i = 0; i < TILE_CELLS; i++) {
-      const wx = tx * TILE_SPAN + i * CELL;
-      const wz = tz * TILE_SPAN + j * CELL;
-      const sx = Math.round((wx - minx) / meta.cell);
-      // rasters are north-up: row 0 is the top edge, which is maxy
-      const sy = Math.round((maxy - wz) / meta.cell);
-      if (sx < 0 || sy < 0 || sx >= src.width || sy >= src.height) continue;
-      const p = j * TILE_CELLS + i, q = sy * src.width + sx;
-      out.y[p] = src.y[q];
-      out.colour[p*3] = src.colour[q*3];
-      out.colour[p*3+1] = src.colour[q*3+1];
-      out.colour[p*3+2] = src.colour[q*3+2];
-      out.normal[p*2] = src.normal[q*2];
-      out.normal[p*2+1] = src.normal[q*2+1];
-    }
-  }
-  return out;
+async function decodePhoto(buf, size) {
+  const bitmap = await createImageBitmap(new Blob([buf], { type: 'image/jpeg' }));
+  const oc = new OffscreenCanvas(size, size);
+  const c2 = oc.getContext('2d', { willReadFrequently: true });
+  c2.drawImage(bitmap, 0, 0, size, size);
+  return c2.getImageData(0, 0, size, size).data;
 }
 
 async function main() {
@@ -86,35 +45,131 @@ async function main() {
   const gl = canvas.getContext('webgl2', { antialias: true });
   if (!gl) { $('veil').textContent = 'this sketch needs WebGL2'; return; }
 
-  const cache = 'caches' in window ? await caches.open('elsewhere-v1').catch(() => null) : null;
-  let baked;
+  const cache = 'caches' in window ? await caches.open('elsewhere-v2').catch(() => null) : null;
+  let field;
   try {
-    baked = await loadBaked(BAKED, cache);
+    field = createField(gl);
+  } catch (e) {
+    $('veil').textContent = 'the shaders would not compile: ' + e.message;
+    return;
+  }
+
+  // Nine texture layers, addressed by which ground they hold. Layer 0 is the
+  // coarse opening frame — 480 m at one metre, never evicted — and layers 1..8
+  // are 240 m tiles at half a metre, recycled as the window moves. A layer
+  // carries its own span, so both kinds live in the same array and the shader
+  // takes whichever is finest over a given patch of ground.
+  const tilesA = new Float32Array(LAYERS * 4);
+  const tilesB = new Float32Array(LAYERS * 4);
+  const bornA = new Float32Array(LAYERS).fill(-1e4);
+  const slots = createSlots({ ring: 3 });
+  // One layer per ring slot, and layer 0 reserved for the baked frame. With one
+  // fewer than this, two slots shared a layer and overwrote each other.
+  const layerOf = (idx) => 1 + idx;
+
+  const place = { datum: 0, tone: { lo: 0, hi: 255 }, centre: [0, 0], name: '—' };
+  const view = { colour: 1, grain: 0.9, clock: 0 };
+  const cam = { x: 0, z: 0, yaw: 0.72, pitch: 0.40, dist: 300 };
+
+  function setLayer(arr, layer, ox, oz, span) {
+    arr[layer * 4] = ox; arr[layer * 4 + 1] = oz;
+    arr[layer * 4 + 2] = span; arr[layer * 4 + 3] = 1;
+  }
+
+  // Heights go to the GPU as metres above the place's datum, with no-return
+  // cells dropped to the terrain beneath them. Every tile is levelled to the
+  // same datum: per tile the median ground moves, and adjacent tiles would step
+  // against each other wherever the land does.
+  function levelled(dsm, dtm, datum) {
+    const n = dsm.length;
+    const surf = new Float32Array(n), terr = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const g = dtm[i] < NODATA_FLOOR ? dtm[i] : datum;
+      const s = dsm[i] < NODATA_FLOOR ? dsm[i] : g;
+      surf[i] = s - datum;
+      terr[i] = g - datum;
+    }
+    return { surf, terr };
+  }
+
+  async function loadOpening() {
+    const meta = await (await fetch(`${BAKED}/place.json`)).json();
+    const [dsmBuf, dtmBuf, photoBuf] = await Promise.all([
+      cachedFetch(`${BAKED}/dsm.tif`, cache),
+      cachedFetch(`${BAKED}/dtm.tif`, cache),
+      cachedFetch(`${BAKED}/ortho.jpg`, cache),
+    ]);
+    const [dsm, dtm] = await Promise.all([decodeFloatTiff(dsmBuf), decodeFloatTiff(dtmBuf)]);
+    const rgba = await decodePhoto(photoBuf, TILE_P);
+    place.datum = median(dtm.data);
+    place.tone = toneOf(rgba, TILE_P * TILE_P);
+    place.centre = meta.centre;
+    place.name = meta.name;
+    const { surf, terr } = levelled(dsm.data, dtm.data, place.datum);
+    field.uploadHeight(0, surf, terr);
+    field.uploadPhoto(0, rgba);
+    setLayer(tilesA, 0, meta.bbox[0], meta.bbox[1], meta.bbox[2] - meta.bbox[0]);
+    bornA[0] = -1e4;                                // no changeover on first paint
+  }
+
+  let inflight = 0;
+  const queue = [];
+  const CONCURRENCY = 4;
+
+  function pump() {
+    while (inflight < CONCURRENCY && queue.length) {
+      const job = queue.shift();
+      const slot = slots.slots[job.idx];
+      if (slot.tx !== job.tx || slot.tz !== job.tz) continue;   // the window moved on
+      inflight++;
+      const bbox = fetchTileBbox(`${job.tx}:${job.tz}`);
+      (async () => {
+        const [dsmBuf, dtmBuf, photoBuf] = await Promise.all([
+          cachedFetch(coverageUrl('dsm_05m', bbox, TILE_H), cache),
+          cachedFetch(coverageUrl('dtm_05m', bbox, TILE_H), cache),
+          cachedFetch(orthoUrl(bbox, TILE_P), cache),
+        ]);
+        const [dsm, dtm] = await Promise.all([decodeFloatTiff(dsmBuf), decodeFloatTiff(dtmBuf)]);
+        const rgba = await decodePhoto(photoBuf, TILE_P);
+        if (slot.tx !== job.tx || slot.tz !== job.tz) return;
+        const layer = layerOf(job.idx);
+        const { surf, terr } = levelled(dsm.data, dtm.data, place.datum);
+        field.uploadHeight(layer, surf, terr);
+        field.uploadPhoto(layer, rgba);
+        setLayer(tilesA, layer, bbox[0], bbox[1], TILE_SPAN);
+        bornA[layer] = view.clock;
+        slots.markReady(job.idx);
+      })()
+        .catch((e) => note('could not read the ground there: ' + e.message))
+        .finally(() => { inflight--; pump(); });
+    }
+  }
+
+  function reshelve() {
+    const ctx = Math.floor(cam.x / TILE_SPAN), ctz = Math.floor(cam.z / TILE_SPAN);
+    for (const job of slots.reshelve(ctx, ctz)) {
+      // A recycled layer stops being resident the moment it is repointed, so
+      // the shader falls back to the coarse frame rather than drawing ground
+      // from somewhere else in the country.
+      tilesA[layerOf(job.idx) * 4 + 3] = 0;
+      queue.push(job);
+    }
+    pump();
+  }
+
+  try {
+    await loadOpening();
   } catch (e) {
     $('veil').textContent = 'could not read the opening place: ' + e.message;
     return;
   }
+  cam.x = place.centre[0];
+  cam.z = place.centre[1];
+  reshelve();
 
-  const field = createField(gl);
-  const slots = createSlots({ ring: RING });
-  const cam = { x: baked.meta.centre[0], z: baked.meta.centre[1], yaw: 0.72, pitch: 0.40, dist: 215 };
-  const view = { colour: 1, grain: 0.9, clock: 0 };   // the ramp opens; c reaches the photograph
-
-  function fill() {
-    const ctx = Math.floor(cam.x / TILE_SPAN), ctz = Math.floor(cam.z / TILE_SPAN);
-    for (const job of slots.reshelve(ctx, ctz)) {
-      const slot = slots.slots[job.idx];
-      const next = sampleTile(baked.data, baked.meta, job.tx, job.tz);
-      field.writeTile(job.idx, { tx: job.tx, tz: job.tz, prev: next, next, born: -10 });
-      slot.data = next;
-      slots.markReady(job.idx);
-    }
-  }
-  fill();
-
-  $('m-place').textContent = baked.meta.name;
+  $('m-place').textContent = place.name;
   $('m-n').textContent = field.count.toLocaleString('en-US');
-  $('m-datum').textContent = baked.data.datum.toFixed(2);
+  $('m-datum').textContent = place.datum.toFixed(2);
   $('m-span').textContent = String(SPAN);
 
   const FOV = 0.82;
@@ -151,10 +206,19 @@ async function main() {
     field.drawFrame(m.view, m.proj);
     gl.useProgram(field.program);
     const u = field.uniforms;
+    field.bindTextures();
     gl.uniformMatrix4fv(u.uView, false, m.view);
     gl.uniformMatrix4fv(u.uProj, false, m.proj);
-    gl.uniform3f(u.uCentre, cam.x, 0, cam.z);
+    gl.uniform2f(u.uCentre, cam.x, cam.z);
     gl.uniform2f(u.uDir, 0, 1);
+    gl.uniform4fv(u.uTilesA, tilesA);
+    gl.uniform4fv(u.uTilesB, tilesB);
+    gl.uniform1fv(u.uBornA, bornA);
+    gl.uniform1i(u.uGrid, GRID);
+    gl.uniform1f(u.uCell, CELL);
+    gl.uniform1f(u.uHalf, HALF);
+    gl.uniform1f(u.uToneLo, place.tone.lo / 255);
+    gl.uniform1f(u.uToneGain, 255 / Math.max(1, place.tone.hi - place.tone.lo));
     gl.uniform1f(u.uMix, 0);
     gl.uniform1f(u.uTime, view.clock);
     gl.uniform1f(u.uArc, 0);
@@ -166,12 +230,11 @@ async function main() {
     gl.uniform1f(u.uDrop, 11);
     gl.uniform1f(u.uJump, 0);
     gl.uniform1f(u.uSize, view.grain);
-    gl.uniform1f(u.uHalf, HALF);
     gl.uniform1f(u.uTop, 18);
     field.drawPoints();
   }
 
-  // ------------------------------------------------------------- controls
+  // --------------------------------------------------------------- controls
   const COLOURS = ['lit photo', 'height ramp', 'photo texture'];
   const setColour = (i) => { view.colour = i; $('colour').textContent = COLOURS[i]; };
   setColour(view.colour);
@@ -183,8 +246,8 @@ async function main() {
     canvas.width = Math.round(innerWidth * 3);
     canvas.height = Math.round(innerHeight * 3);
     render(canvas.width, canvas.height);
-    // Read it back in the same tick: without preserveDrawingBuffer the
-    // composite is gone the moment the frame yields.
+    // Read back in the same tick: without preserveDrawingBuffer the composite
+    // is gone the moment the frame yields.
     const url = canvas.toDataURL('image/png');
     canvas.width = Math.round(innerWidth * dpr);
     canvas.height = Math.round(innerHeight * dpr);
@@ -192,9 +255,23 @@ async function main() {
     a.href = url;
     a.download = `elsewhere-${Math.round(cam.x)}-${Math.round(cam.z)}.png`;
     a.click();
-    note('saved at ×3');
+    note('saved at x3');
   }
   $('save').onclick = savePNG;
+
+  const keys = new Set();
+  addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    const k = e.key.toLowerCase();
+    keys.add(k);
+    if (['w','a','s','d'].includes(k)) e.preventDefault();
+    if (k === 'c') setColour((view.colour + 1) % COLOURS.length);
+    else if (k === 's') savePNG();
+    else if (k === 'h') document.querySelectorAll('#ui, #meta, #hint').forEach((n) => {
+      n.style.display = n.style.display === 'none' ? '' : 'none';
+    });
+  });
+  addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
   let drag = null;
   canvas.addEventListener('pointerdown', (e) => {
@@ -213,23 +290,29 @@ async function main() {
   canvas.addEventListener('pointercancel', endDrag);
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    cam.dist = Math.max(90, Math.min(1800, cam.dist * Math.exp(e.deltaY * 0.0011)));
+    cam.dist = Math.max(60, Math.min(1800, cam.dist * Math.exp(e.deltaY * 0.0011)));
   }, { passive: false });
 
-  addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT') return;
-    const k = e.key.toLowerCase();
-    if (k === 'c') setColour((view.colour + 1) % COLOURS.length);
-    else if (k === 's') savePNG();
-    else if (k === 'h') document.querySelectorAll('#ui, #meta, #hint').forEach((n) => {
-      n.style.display = n.style.display === 'none' ? '' : 'none';
-    });
-  });
-
   let last = performance.now();
+  let lastTile = '';
   function frame(now) {
-    view.clock += Math.min(0.05, (now - last) / 1000);
+    const dt = Math.min(0.05, (now - last) / 1000);
+    view.clock += dt;
     last = now;
+
+    const speed = 34 * (keys.has('shift') ? 4 : 1) * dt;
+    const fwd = [-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw)];
+    const right = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
+    const go = (v, k) => { cam.x += v[0] * k; cam.z += v[2] * k; };
+    if (keys.has('w')) go(fwd, speed);
+    if (keys.has('s')) go(fwd, -speed);
+    if (keys.has('d')) go(right, speed);
+    if (keys.has('a')) go(right, -speed);
+    // Reshelve only when the window crosses into a new fetch tile. Sliding
+    // inside one costs nothing at all, because the window is a uniform.
+    const here = fetchTileKey(cam.x, cam.z);
+    if (here !== lastTile) { lastTile = here; reshelve(); }
+
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
     if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -242,13 +325,15 @@ async function main() {
   $('veil').classList.add('gone');
 
   window.__elsewhere = {
-    ready: () => slots.readyCount() === RING * RING,
-    place: () => baked.meta,
+    ready: () => tilesA[3] > 0.5,
     count: () => field.count,
+    place: () => ({ ...place }),
     state: () => ({ ...view }),
-    setColour: (i) => { view.colour = i; },
-    setCam: (o) => Object.assign(cam, o),
     centre: () => ({ x: cam.x, z: cam.z }),
+    loading: () => queue.length + inflight,
+    layers: () => Array.from({ length: LAYERS }, (_, i) => tilesA[i * 4 + 3] > 0.5),
+    setColour,
+    setCam: (o) => Object.assign(cam, o),
     // A shader that failed to link still leaves a canvas; it just leaves a
     // black one, so coverage is the only assertion that catches it.
     coverage: () => {

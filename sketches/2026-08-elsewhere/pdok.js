@@ -20,10 +20,17 @@ export function fetchTileBbox(key) {
   return [minx, miny, minx + FETCH_SPAN, miny + FETCH_SPAN];
 }
 
+// geotiff:compression=None costs 35% more bytes — 923 KB against 683 KB — and
+// is 3,900 times faster to decode in a browser: 14 ms against 55 seconds,
+// measured on the same tile. Deflate is not slow because inflating is slow. It
+// is slow because a striped TIFF has 120 strips, each needing its own
+// DecompressionStream, and each of those yields to the event loop. Against a
+// render loop drawing 296k points those yields never come back. Bandwidth is
+// cheap and the main thread is not.
 export const coverageUrl = (id, bbox, size) =>
   `${WCS}?service=WCS&version=2.0.1&request=GetCoverage&coverageId=${id}`
   + `&subset=x(${bbox[0]},${bbox[2]})&subset=y(${bbox[1]},${bbox[3]})`
-  + `&scalesize=x(${size}),y(${size})&format=image/tiff`;
+  + `&scalesize=x(${size}),y(${size})&format=image/tiff&geotiff:compression=None`;
 
 // WMS 1.3.0 with EPSG:28992 is easting-first. Northing-first returns HTTP 200
 // and a valid 1.6 KB blank JPEG, so nothing reports this as a mistake.

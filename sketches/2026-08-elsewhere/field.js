@@ -1,20 +1,25 @@
-// The vertex buffer and everything that writes into it.
+// The GPU side: two texture arrays and a draw call with no vertex buffer.
 //
-// Allocated once and never resized. A particle is never created and never
-// destroyed for the life of the page; loading a place writes into it, and
-// jumping tells every particle where to stand next. That rule is the reason a
-// jump has to have the destination in hand before anything moves.
+// A place lives in textures, not in a vertex buffer. Heights go up as RG32F —
+// surface and terrain, in metres above the place's datum — and the orthophoto
+// as RGBA8 at four times the height resolution, because the photo's source is
+// 8 cm and there is no reason for colour to inherit the half-metre grid the
+// heights are stuck with.
+//
+// The consequences are the point of the whole rewrite. A tile arriving is one
+// texSubImage3D instead of a thousand vertex writes. Sliding the window is a
+// uniform. Nothing is written per particle at any time, so the drawn resolution
+// is free to be finer than the survey wherever the colour can carry it.
 import { POINT_VS, POINT_FS, FRAME_VS, FRAME_FS } from './shaders.js';
 
-export const CELL = 0.5;                          // AHN's native grid
-export const TILE_CELLS = 32;
-export const TILE_SPAN = TILE_CELLS * CELL;       // 16 m
-export const RING = 12;                           // cached
-export const SHOWN = 10;                          // drawn — the difference is the margin
-export const SPAN = SHOWN * TILE_SPAN;            // 160 m
+export const CELL = 0.5;                     // AHN's native grid
+export const SPAN = 240;                     // the drawn square, matching hendriklaan
 export const HALF = SPAN / 2;
-export const STRIDE = 32;
-const PER_TILE = TILE_CELLS * TILE_CELLS;
+export const GRID = Math.round(SPAN / CELL); // 480 cells across = 230,400 particles
+export const TILE_SPAN = 240;                // a fetch tile, on a global grid
+export const TILE_H = 480;                   // height texels a tile edge — 0.5 m
+export const TILE_P = 960;                   // photo texels a tile edge — 25 cm
+export const LAYERS = 10;                    // a 3x3 ring of fetch tiles, plus the baked frame
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);
@@ -32,72 +37,55 @@ function link(gl, vs, fs) {
   return p;
 }
 
-export const emptyTile = () => ({
-  y: new Float32Array(PER_TILE),
-  colour: new Uint8Array(PER_TILE * 3),
-  normal: new Int8Array(PER_TILE * 2),
-});
+function makeArray(gl, internal, format, type, size, layers, filter) {
+  const t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D_ARRAY, t);
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, internal, size, size, layers);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
 
 export function createField(gl) {
-  const count = RING * RING * PER_TILE;
-  const buf = new ArrayBuffer(count * STRIDE);
-  const f32 = new Float32Array(buf);
-  const u8 = new Uint8Array(buf);
-  const i8 = new Int8Array(buf);
+  // R32F is not filterable without OES_texture_float_linear, and the heights
+  // must not be smoothed across a roof edge anyway — a bilinear height would
+  // ramp the facades into slopes. Nearest for heights, linear for the photo.
+  if (!gl.getExtension('EXT_color_buffer_float')) { /* not needed to sample, only to render to */ }
+  const height = makeArray(gl, gl.RG32F, gl.RG, gl.FLOAT, TILE_H, LAYERS, gl.NEAREST);
+  const photo = makeArray(gl, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, TILE_P, LAYERS, gl.LINEAR);
 
   const program = link(gl, POINT_VS, POINT_FS);
-  const vbo = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-  gl.bufferData(gl.ARRAY_BUFFER, buf.byteLength, gl.DYNAMIC_DRAW);
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-  const attr = (name, size, type, norm, off) => {
-    const l = gl.getAttribLocation(program, name);
-    gl.enableVertexAttribArray(l);
-    gl.vertexAttribPointer(l, size, type, norm, STRIDE, off);
-  };
-  attr('aWorld', 2, gl.FLOAT, false, 0);
-  attr('aY', 2, gl.FLOAT, false, 8);
-  attr('aBorn', 1, gl.FLOAT, false, 16);
-  attr('aCA', 4, gl.UNSIGNED_BYTE, true, 20);
-  attr('aCB', 4, gl.UNSIGNED_BYTE, true, 24);
-  attr('aN', 4, gl.BYTE, true, 28);
-  gl.bindVertexArray(null);
+  const names = ['uHeight','uPhoto','uView','uProj','uCentre','uDir','uGrid','uCell','uHalf',
+    'uToneLo','uToneGain','uMix','uTime','uArc','uLift','uSwing','uColour','uPointK','uSpan','uDrop',
+    'uJump','uSize','uTop'];
+  const u = Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(program, n)]));
+  u.uTilesA = gl.getUniformLocation(program, 'uTilesA');
+  u.uTilesB = gl.getUniformLocation(program, 'uTilesB');
+  u.uBornA = gl.getUniformLocation(program, 'uBornA');
 
-  const names = ['uView','uProj','uCentre','uDir','uMix','uTime','uArc','uLift','uSwing',
-    'uColour','uPointK','uSpan','uDrop','uJump','uSize','uHalf','uTop'];
-  const uniforms = Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(program, n)]));
-  const EMPTY = emptyTile();
+  // WebGL2 still wants a bound VAO even when nothing is in it.
+  const emptyVao = gl.createVertexArray();
 
-  // A render tile is TILE_CELLS squared particles and contiguous in the buffer,
-  // so recycling one is a single upload. That is the only reason render tiles
-  // are 16 m while the tiles fetched from PDOK are 240 m.
-  function writeTile(idx, { tx, tz, prev, next, born }) {
-    const A = prev ?? EMPTY, B = next ?? prev ?? EMPTY;
-    const base = idx * PER_TILE;
-    const ox = tx * TILE_SPAN, oz = tz * TILE_SPAN;
-    for (let p = 0; p < PER_TILE; p++) {
-      const o = (base + p) * STRIDE, w = o >> 2;
-      f32[w] = ox + (p % TILE_CELLS) * CELL;
-      f32[w + 1] = oz + ((p / TILE_CELLS) | 0) * CELL;
-      f32[w + 2] = A.y[p];
-      f32[w + 3] = B.y[p];
-      // Jittered per particle, not per tile. This one line is the difference
-      // between a tile arriving as a block and a tile arriving as a scatter.
-      if (born !== undefined) f32[w + 4] = born + ((p * 2654435761) % 1013) / 1013 * 0.65;
-      u8[o + 20] = A.colour[p*3]; u8[o + 21] = A.colour[p*3+1]; u8[o + 22] = A.colour[p*3+2]; u8[o + 23] = 255;
-      u8[o + 24] = B.colour[p*3]; u8[o + 25] = B.colour[p*3+1]; u8[o + 26] = B.colour[p*3+2]; u8[o + 27] = 255;
-      i8[o + 28] = A.normal[p*2]; i8[o + 29] = A.normal[p*2+1];
-      i8[o + 30] = B.normal[p*2]; i8[o + 31] = B.normal[p*2+1];
-    }
-    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-    gl.bufferSubData(gl.ARRAY_BUFFER, base * STRIDE, u8, base * STRIDE, PER_TILE * STRIDE);
+  function uploadHeight(layer, dsm, dtm) {
+    // interleaved RG so one fetch in the shader gives both
+    const rg = new Float32Array(TILE_H * TILE_H * 2);
+    for (let i = 0; i < TILE_H * TILE_H; i++) { rg[i * 2] = dsm[i]; rg[i * 2 + 1] = dtm[i]; }
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, height);
+    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, TILE_H, TILE_H, 1, gl.RG, gl.FLOAT, rg);
   }
 
-  // The square's own edge, drawn rather than faded. Fog hides the fact that the
+  function uploadPhoto(layer, rgba) {
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, photo);
+    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, TILE_P, TILE_P, 1,
+      gl.RGBA, gl.UNSIGNED_BYTE, rgba);
+  }
+
+  // The square's edge, drawn rather than faded. Fog hides the fact that the
   // world stops; a frame says so, and says how big the sample is.
   const frameProgram = link(gl, FRAME_VS, FRAME_FS);
-  const frameU = {
+  const fu = {
     uView: gl.getUniformLocation(frameProgram, 'uView'),
     uProj: gl.getUniformLocation(frameProgram, 'uProj'),
   };
@@ -106,13 +94,13 @@ export function createField(gl) {
   {
     const seg = (a, b, c) => L.push(a[0], a[1], a[2], ...c, b[0], b[1], b[2], ...c);
     const dim = [0.22, 0.22, 0.27], amber = [0.88, 0.64, 0.09];
-    const H = HALF, gy = -0.5, tick = 18;
+    const H = HALF, gy = -0.5, tick = 26;
     seg([-H, gy, -H], [H, gy, -H], dim); seg([H, gy, -H], [H, gy, H], dim);
     seg([H, gy, H], [-H, gy, H], dim);   seg([-H, gy, H], [-H, gy, -H], dim);
     for (const [sx, sz] of [[-1,-1],[1,-1],[1,1],[-1,1]]) {
       seg([sx*H, gy, sz*H], [sx*(H-tick), gy, sz*H], amber);
       seg([sx*H, gy, sz*H], [sx*H, gy, sz*(H-tick)], amber);
-      seg([sx*H, gy, sz*H], [sx*H, gy + 10, sz*H], amber);
+      seg([sx*H, gy, sz*H], [sx*H, gy + 12, sz*H], amber);
     }
     gl.bindVertexArray(frameVao);
     const fb = gl.createBuffer();
@@ -127,17 +115,26 @@ export function createField(gl) {
   const frameVerts = L.length / 6;
 
   return {
-    count, program, uniforms, writeTile,
+    count: GRID * GRID,
+    program, uniforms: u, uploadHeight, uploadPhoto,
+    bindTextures() {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, height);
+      gl.uniform1i(u.uHeight, 0);
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, photo);
+      gl.uniform1i(u.uPhoto, 1);
+    },
     drawFrame(view, proj) {
       gl.useProgram(frameProgram);
-      gl.uniformMatrix4fv(frameU.uView, false, view);
-      gl.uniformMatrix4fv(frameU.uProj, false, proj);
+      gl.uniformMatrix4fv(fu.uView, false, view);
+      gl.uniformMatrix4fv(fu.uProj, false, proj);
       gl.bindVertexArray(frameVao);
       gl.drawArrays(gl.LINES, 0, frameVerts);
     },
     drawPoints() {
-      gl.bindVertexArray(vao);
-      gl.drawArrays(gl.POINTS, 0, count);
+      gl.bindVertexArray(emptyVao);
+      gl.drawArrays(gl.POINTS, 0, GRID * GRID);
       gl.bindVertexArray(null);
     },
   };
