@@ -38,7 +38,7 @@
 // 1.08 m across 240 m against a 32 m vertical range, so a per-cell ground grid
 // moves the ramp by 3% and costs a load-time pass. Utrecht is flat. NAP it is.
 
-import { DEFAULT, clone, mountEditor, sequence } from './beat.js';
+import { DEFAULT, clone, decode, encode, mountEditor, same, sequence } from './beat.js';
 
 const DATA = '/data/hendriklaan.json';
 const BIN = '/data/hendriklaan.bin';
@@ -616,7 +616,13 @@ async function main() {
   };
   // One object, mutated in place. The editor writes into it and the Listener
   // reads it on the next frame; there is no copy to keep in step.
-  const pattern = clone(DEFAULT);
+  //
+  // A hash is only read here, at load. Anything malformed is refused whole —
+  // half-reading it would hand someone a tune that is neither the one they
+  // were sent nor the built-in one, with nothing on screen to say which.
+  const fromLink = location.hash ? decode(location.hash) : null;
+  const badLink = Boolean(location.hash) && !fromLink;
+  const pattern = fromLink || clone(DEFAULT);
   const audio = new Listener(pattern);
 
   // ------------------------------------------------------------ input
@@ -691,9 +697,22 @@ async function main() {
   $('size').oninput = (e) => { view.pointScale = +e.target.value; $('size-v').textContent = view.pointScale.toFixed(1); };
   syncButtons();
 
+  // replaceState rather than pushState: an edit is not a navigation, and a
+  // drag across a lane would otherwise bury the back button under sixteen
+  // entries. Stripped entirely when the pattern is the built-in one, so the
+  // canonical URL stays clean and the thumbnail grabber never sees a hash.
+  let hashTimer = 0;
+  const writeHash = () => {
+    clearTimeout(hashTimer);
+    hashTimer = setTimeout(() => {
+      const h = same(pattern, DEFAULT) ? '' : '#' + encode(pattern);
+      history.replaceState(null, '', location.pathname + location.search + h);
+    }, 250);
+  };
+
   const editor = mountEditor($('beat'), {
     pattern,
-    onChange: () => {},                 // the hash is wired in the next commit
+    onChange: writeHash,
     // Opening the panel is a gesture, so it is allowed to start the audio.
     // Editing a beat you cannot hear is a worse default than a page that
     // starts making noise when you ask it for a beat editor.
@@ -706,10 +725,23 @@ async function main() {
     // "clear the rhythm", and the street would keep moving with an empty grid.
     pattern.kick = pattern.bass = pattern.hat = pattern.pad = 0;
     editor.repaint();
+    writeHash();
   };
   $('beat-reset').onclick = () => {
     Object.assign(pattern, clone(DEFAULT));
     editor.repaint();
+    writeHash();
+  };
+  $('beat-link').onclick = async () => {
+    const url = location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      note('link copied');
+    } catch {
+      // Clipboard access is origin- and permission-gated, and a control that
+      // silently does nothing is worse than one that hands you the text.
+      note(url);
+    }
   };
 
   // ------------------------------------------------------------ draw
@@ -807,6 +839,9 @@ async function main() {
     note('saved at ×3');
   }
 
+  if (fromLink) editor.open();
+  if (badLink) note('unreadable pattern in that link — showing the built-in one');
+
   requestAnimationFrame(frame);
 
   const drawnNow = () => Math.floor(count * (view.revealed ** 0.7));
@@ -835,8 +870,14 @@ async function main() {
     setPattern: (partial) => {
       Object.assign(pattern, partial);
       if (partial.notes) pattern.notes = [...partial.notes];
+      editor.repaint();
+      writeHash();
     },
-    resetPattern: () => { Object.assign(pattern, clone(DEFAULT)); editor.repaint(); },
+    resetPattern: () => {
+      Object.assign(pattern, clone(DEFAULT));
+      editor.repaint();
+      writeHash();
+    },
     editorOpen: () => editor.isOpen(),
     toggleEditor: () => editor.toggle(),
     setColour, setOrtho, setFrozen,

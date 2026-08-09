@@ -1454,6 +1454,62 @@ try {
       assert.equal(await hl(() => window.__hendriklaan.editorOpen()), false);
     });
 
+    await test('the default page writes no hash at all', async () => {
+      // The promise the thumbnail grabber and every other assertion here rest
+      // on: an untouched page is the page it always was.
+      await hl(() => window.__hendriklaan.resetPattern());
+      await p.click('#beat-open');
+      await p.click('#beat-close');
+      await p.waitForTimeout(500);
+      assert.equal(await p.evaluate(() => location.hash), '',
+        'an untouched page put a pattern in the URL');
+    });
+
+    await test('editing writes a hash, and returning to the built-in tune strips it', async () => {
+      await p.click('#beat-open');
+      await p.locator('#beat-grid .cell[data-lane="hat"][data-step="1"]').click();
+      await p.waitForFunction(() => location.hash.length > 0, null, { timeout: 3000 });
+      // The hat lane gains bit 1: 0x5555 -> 0x5557.
+      assert.equal(await p.evaluate(() => location.hash),
+        '#b=010111115557&n=2140&t=96&s=0&p=1');
+      await p.click('#beat-reset');
+      await p.waitForFunction(() => location.hash === '', null, { timeout: 3000 });
+      await p.click('#beat-close');
+    });
+
+    await test('a link carries the pattern, and arriving on one opens the grid', async () => {
+      const q = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+      await q.goto(`${HENDRIKLAAN}#b=0001000f5555&n=6543&t=140&s=25&p=0`,
+        { waitUntil: 'networkidle' });
+      await q.waitForFunction(() => window.__hendriklaan?.state().revealed >= 1, null, { timeout: 15000 });
+      const pat = await q.evaluate(() => window.__hendriklaan.pattern());
+      assert.equal(pat.kick, 0x0001);
+      assert.equal(pat.bass, 0x000f);
+      assert.equal(pat.hat, 0x5555);
+      assert.equal(pat.pad, 0);
+      assert.deepEqual(pat.notes, [6, 5, 4, 3]);
+      assert.equal(pat.bpm, 140);
+      assert.equal(pat.swing, 0.25);
+      assert.equal(await q.evaluate(() => window.__hendriklaan.editorOpen()), true);
+      await q.close();
+    });
+
+    await test('an unreadable link falls back to the built-in tune and says so', async () => {
+      const q = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+      const oops = [];
+      q.on('pageerror', (e) => oops.push(e.message));
+      await q.goto(`${HENDRIKLAAN}#b=zzzz&n=99`, { waitUntil: 'networkidle' });
+      await q.waitForFunction(() => window.__hendriklaan?.state().revealed >= 1, null, { timeout: 15000 });
+      const pat = await q.evaluate(() => window.__hendriklaan.pattern());
+      assert.equal(pat.kick, 0x0101);
+      assert.equal(pat.bass, 0x1111);
+      assert.equal(pat.hat, 0x5555);
+      assert.equal(pat.bpm, 96);
+      assert.match(await q.locator('#note').textContent(), /built-in/);
+      assert.deepEqual(oops, [], `a bad hash threw: ${oops.join('; ')}`);
+      await q.close();
+    });
+
     await test('freeze holds the frame, and releasing it starts the motion again', async () => {
       await hl(() => { window.__hendriklaan.setFrozen(true); });
       await p.waitForTimeout(400);
