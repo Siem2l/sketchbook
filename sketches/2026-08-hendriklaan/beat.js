@@ -19,6 +19,14 @@
 // finding new shapes instead of looping — and putting it on a sixteenth grid
 // would be drawing a control that lies about what the sound does.
 //
+// It does get a switch, though, and that was not the original plan. Emptying
+// the three lanes was supposed to stop the street dead — the sketch opens by
+// claiming that silence returns every point to its surveyed coordinate, and
+// the grid was meant to make that claim clickable rather than argued. It did
+// not: with the lanes clear the mid band still sat at 0.72 and the canopy kept
+// breathing, because the pad is not in the grid. One bit fixes it. A drone you
+// cannot switch off is not a drone, it is a floor.
+//
 // The amplitude wobbles on hat and bass stay tied to absolute beat count rather
 // than becoming per-cell velocity. Per-cell velocity is more controllable and
 // much flatter: every pass through the bar comes out identical, and a
@@ -50,6 +58,7 @@ export const DEFAULT = Object.freeze({
   kick: 0x0101,
   bass: 0x1111,
   hat: 0x5555,
+  pad: 1,                                // 0 or 1, not a lane — see above
   notes: Object.freeze([2, 1, 4, 0]),    // E3 D3 G3 C3
 });
 
@@ -90,14 +99,15 @@ export function sequence(t, beats, p) {
   const kick = env(since(p.kick, pos, p.swing), 0.13);
   const bass = env(since(p.bass, pos, p.swing), 0.22) * (0.6 + 0.4 * Math.sin(beats * 0.37));
   const hat = env(since(p.hat, pos, p.swing), 0.035) * (0.55 + 0.45 * Math.sin(beats * 1.7));
-  const pad = 0.16 + 0.34 * (0.5 + 0.5 * Math.sin(t * 0.29))
-                   + 0.30 * (0.5 + 0.5 * Math.sin(t * 0.107 + 1.3));
+  const pad = p.pad ? 0.16 + 0.34 * (0.5 + 0.5 * Math.sin(t * 0.29))
+                            + 0.30 * (0.5 + 0.5 * Math.sin(t * 0.107 + 1.3))
+                    : 0;
 
   return { kick, bass, pad, hat, note: NOTES[p.notes[((bar % 4) + 4) % 4]].hz };
 }
 
 export const same = (a, b) =>
-  a.bpm === b.bpm && a.swing === b.swing &&
+  a.bpm === b.bpm && a.swing === b.swing && a.pad === b.pad &&
   a.kick === b.kick && a.bass === b.bass && a.hat === b.hat &&
   a.notes.every((v, i) => v === b.notes[i]);
 
@@ -109,14 +119,15 @@ export const changes = (p) =>
   LANES.reduce((a, k) => a + popcount((p[k] ^ DEFAULT[k]) & 0xffff), 0)
   + p.notes.reduce((a, v, i) => a + (v === DEFAULT.notes[i] ? 0 : 1), 0)
   + (p.bpm === DEFAULT.bpm ? 0 : 1)
-  + (p.swing === DEFAULT.swing ? 0 : 1);
+  + (p.swing === DEFAULT.swing ? 0 : 1)
+  + (p.pad === DEFAULT.pad ? 0 : 1);
 
 // ---------------------------------------------------------------- the hash
 // Fixed-width and regex-checkable, so a mangled link fails loudly at the field
 // level instead of decoding into a pattern that is half someone else's.
 //
-//   b=010111115555&n=2140&t=96&s=0
-//     └kick┘└bass┘└hat─┘   E D G C
+//   b=010111115555&n=2140&t=96&s=0&p=1
+//     └kick┘└bass┘└hat─┘   E D G C          pad on
 //
 // Rejection is all-or-nothing on purpose. Half-reading a broken link would
 // hand someone a tune that is neither the one they were sent nor the built-in
@@ -128,16 +139,18 @@ export const encode = (p) =>
   `b=${hex4(p.kick)}${hex4(p.bass)}${hex4(p.hat)}`
   + `&n=${p.notes.join('')}`
   + `&t=${Math.round(p.bpm)}`
-  + `&s=${Math.round(p.swing * 100)}`;
+  + `&s=${Math.round(p.swing * 100)}`
+  + `&p=${p.pad ? 1 : 0}`;
 
 export function decode(str) {
   const q = new URLSearchParams(String(str || '').replace(/^#/, ''));
   const b = q.get('b') || '', n = q.get('n') || '';
-  const t = q.get('t') || '', s = q.get('s') || '';
+  const t = q.get('t') || '', s = q.get('s') || '', d = q.get('p') || '';
   if (!/^[0-9a-f]{12}$/.test(b)) return null;
   if (!/^[0-6]{4}$/.test(n)) return null;
   if (!/^\d{2,3}$/.test(t)) return null;
   if (!/^\d{1,2}$/.test(s)) return null;
+  if (!/^[01]$/.test(d)) return null;
   const bpm = +t, swing = +s;
   if (bpm < 40 || bpm > 200 || swing > 75) return null;
   return {
@@ -146,6 +159,7 @@ export function decode(str) {
     kick: parseInt(b.slice(0, 4), 16),
     bass: parseInt(b.slice(4, 8), 16),
     hat: parseInt(b.slice(8, 12), 16),
+    pad: +d,
     notes: n.split('').map(Number),
   };
 }

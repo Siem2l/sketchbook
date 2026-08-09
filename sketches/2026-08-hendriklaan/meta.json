@@ -1,0 +1,13 @@
+{
+  "title": "hendriklaan",
+  "date": "2026-08-09",
+  "tags": [
+    "lidar",
+    "point-cloud",
+    "audio",
+    "webgl",
+    "noise"
+  ],
+  "description": "240 metres of Utrecht around Prins Hendriklaan 17, cut out of the AHN5 LiDAR survey and played by ear. The survey's own classification splits the street three ways, so ground answers the sub, canopy the mids, roofs the highs — and silence puts every point back exactly where it was measured.",
+  "thumbnail": "thumb.png"
+}

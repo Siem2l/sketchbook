@@ -39,6 +39,31 @@ for the `sketchbook` group.
 
 ## Sketches
 
+- **hendriklaan** (`2026-08-hendriklaan`) — 240 metres of Utrecht around Prins
+  Hendriklaan 17, cut out of the AHN5 LiDAR survey and driven by sound. The
+  geometry is 201,635 real returns, not a generator. The tile it comes from is
+  228 MB and none of it was downloaded: AHN publishes COPC, so the octree index
+  is in the file header and `scripts/extract-hendriklaan.py` asks PDAL for a
+  bounding box over HTTP range requests — a 240 m window costs 16 seconds and a
+  few MB. Points ship as 8 bytes each (uint16 per axis over the window's own
+  extent, plus class and log intensity), 1.6 MB for the block, shuffled at
+  extraction so the load-in reveal fills the whole street at once rather than
+  one corner. The mapping from sound to motion is the survey's own
+  classification: 62% unclassified (canopy and street furniture), 21% ground,
+  16% building, which is already a three-way split, so ground answers the sub
+  and low bands, canopy the mids, roofs the highs. Displacement is a pure
+  function of band energy with nothing integrating velocity, so silence returns
+  every point to its surveyed coordinate exactly — gain 0 is the raw survey, and
+  a test asserts the cloud does not drift. Three sources: a built-in sequencer
+  that needs no AudioContext and therefore no gesture and no permission (which
+  is what lets the thumbnail and the tests see a moving page), the same pattern
+  through real oscillators, and the microphone. Each band carries its own slow
+  AGC because a room mic and a synth bus are nowhere near each other in level;
+  without it the built-in bank pinned every band above 0.79 and the street
+  stopped answering the music. Colour by height, class, intensity, or by the
+  band mapping itself. Drag to orbit, `o` for the isometric elevation, `s`
+  exports at 3x. AHN5 is CC BY 4.0.
+
 - **edge** (`2026-08-edge`) — four edge-detection operators on one source, side
   by side, because the differences between Sobel, Roberts, the Laplacian and a
   difference-of-gaussians are otherwise folklore. The operators live in

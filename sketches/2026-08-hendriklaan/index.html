@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>hendriklaan</title>
+  <style>
+    html, body { height: 100%; }
+    body { margin: 0; background: #0e0e11; color: #e8e6e0; font: 14px ui-monospace, monospace; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: grab; }
+    canvas.dragging { cursor: grabbing; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #8a877e; text-decoration: none; z-index: 3; }
+
+    #meta { position: fixed; top: 3rem; left: 1rem; z-index: 3; color: #8a877e; font-size: 11px; line-height: 1.7; max-width: 21rem; }
+    #meta b { color: #e8e6e0; font-weight: normal; }
+    #meta a { color: #7fb3a3; }
+    #hint { position: fixed; top: 1rem; right: 1rem; z-index: 3; color: #8a877e; text-align: right; line-height: 1.6; font-size: 12px; }
+
+    #ui { position: fixed; bottom: 0.75rem; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 2rem); z-index: 3;
+          display: flex; flex-direction: column; gap: 0.4rem; background: #17171cdd; padding: 0.5rem 0.7rem; border-radius: 8px; }
+    .row { display: flex; gap: 0.4rem; align-items: center; justify-content: center; flex-wrap: wrap; }
+    button { background: #26262e; color: #e8e6e0; border: 1px solid #444; border-radius: 4px; padding: 0.3rem 0.55rem; font: inherit; font-size: 13px; cursor: pointer; }
+    button:hover { border-color: #7fb3a3; }
+    button.on { border-color: #7fb3a3; color: #7fb3a3; }
+    label { display: flex; gap: 0.3rem; align-items: center; color: #8a877e; font-size: 11px; }
+    label .val { color: #e8e6e0; min-width: 2.2rem; }
+    input[type=range] { width: 5rem; accent-color: #7fb3a3; }
+    #note { color: #e0a316; font-size: 11px; min-height: 1em; text-align: center; }
+
+    /* Four meters, one per band, each labelled with the survey class it drives.
+       The mapping is the whole point of the page, so it is on screen, not in
+       the source. */
+    #bands { display: flex; gap: 0.5rem; align-items: flex-end; }
+    .band { width: 4.6rem; }
+    .band .lab { font-size: 9px; color: #8a877e; display: flex; justify-content: space-between; }
+    .band .lab i { font-style: normal; color: #555350; }
+    .band .bar { height: 4px; margin-top: 2px; background: #26262e; border-radius: 2px; overflow: hidden; }
+    .band .bar span { display: block; height: 100%; width: 0%; background: #7fb3a3; }
+
+    #veil { position: fixed; inset: 0; z-index: 4; display: grid; place-items: center; background: #0e0e11;
+            color: #8a877e; font-size: 12px; transition: opacity .5s; }
+    #veil.gone { opacity: 0; pointer-events: none; }
+    @media (max-width: 720px) { #meta, #hint { display: none; } }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← sketchbook</a>
+
+  <div id="meta">
+    <div><b id="m-addr">Prins Hendriklaan 17</b></div>
+    <div><b id="m-count">—</b> points · <span id="m-win">240 m</span> window</div>
+    <div>AHN5 (2023–2024), tile <span id="m-tile">—</span></div>
+    <div>EPSG:28992 · height in NAP</div>
+    <div><a href="https://www.ahn.nl/open-data" target="_blank" rel="noopener">AHN</a> · CC BY 4.0</div>
+  </div>
+
+  <div id="hint">
+    drag = orbit · wheel = dolly<br />
+    a = audio source · c = colour · o = ortho<br />
+    space = freeze · s = png ×3 · h = hide
+  </div>
+
+  <div id="ui">
+    <div class="row">
+      <button id="audio">listen: field</button>
+      <button id="colour">colour: height</button>
+      <button id="ortho">persp</button>
+      <button id="spin">spin</button>
+      <button id="freeze">freeze</button>
+      <button id="save">png ×3</button>
+    </div>
+    <div class="row">
+      <label>gain <input id="gain" type="range" min="0" max="3" step="0.05" value="1" /><span class="val" id="gain-v">1.00</span></label>
+      <label>size <input id="size" type="range" min="0.5" max="4" step="0.1" value="1.2" /><span class="val" id="size-v">1.2</span></label>
+      <div id="bands">
+        <div class="band"><div class="lab"><span>sub</span><i>ground</i></div><div class="bar"><span id="b0"></span></div></div>
+        <div class="band"><div class="lab"><span>low</span><i>ground</i></div><div class="bar"><span id="b1"></span></div></div>
+        <div class="band"><div class="lab"><span>mid</span><i>canopy</i></div><div class="bar"><span id="b2"></span></div></div>
+        <div class="band"><div class="lab"><span>high</span><i>building</i></div><div class="bar"><span id="b3"></span></div></div>
+      </div>
+    </div>
+    <div id="note"></div>
+  </div>
+
+  <div id="veil">reading 240 m of Utrecht…</div>
+
+  <script type="module" src="./sketch.js"></script>
+</body>
+</html>

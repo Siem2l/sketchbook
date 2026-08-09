@@ -1,0 +1,41 @@
+{
+  "source": "https://fsn1.your-objectstorage.com/hwh-ahn/AHN5_KM/01_LAZ/AHN5_C_138000_455000.COPC.LAZ",
+  "tile": "AHN5_C_138000_455000",
+  "dataset": "AHN5 (2023-2024)",
+  "licence": "CC BY 4.0 \u2014 Actueel Hoogtebestand Nederland",
+  "crs": "EPSG:7415 (Amersfoort / RD New + NAP height)",
+  "address": "Prins Hendriklaan 17, 3583EB Utrecht",
+  "centre": [
+    138275.467,
+    455380.628
+  ],
+  "bounds": [
+    138155.467,
+    455260.628,
+    0.317,
+    138395.467,
+    455500.628,
+    31.861
+  ],
+  "count": 201635,
+  "radius": 0.7,
+  "stride": 8,
+  "layout": "uint16 x, uint16 y, uint16 z, uint8 classification, uint8 intensity (log)",
+  "scale": [
+    0.0036621652552071412,
+    0.0036621652552071412,
+    0.0004813305867093919
+  ],
+  "origin": [
+    138155.467,
+    455260.628,
+    0.317
+  ],
+  "classes": {
+    "1": 125710,
+    "2": 42116,
+    "6": 33247,
+    "26": 551,
+    "9": 11
+  }
+}

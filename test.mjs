@@ -1243,6 +1243,50 @@ try {
       assert.ok(a.equals(await shot()), 'the cloud drifted while it was supposed to be at rest');
       await p.fill('#gain', '1');
       await p.dispatchEvent('#gain', 'input');
+      await p.waitForTimeout(200);
+    });
+
+    await test('the pattern reaches the geometry, not just the page', async () => {
+      // The proof that the grid is wired to anything. Clearing the kick lane
+      // must collapse the sub band — which is what the road answers — while
+      // leaving the hat lane, and therefore the roofs, exactly as busy.
+      await hl(() => window.__hendriklaan.setPattern({ kick: 0 }));
+      await p.waitForTimeout(3000);
+      const quiet = [];
+      for (let i = 0; i < 12; i++) {
+        quiet.push(await hl(() => window.__hendriklaan.bands()));
+        await p.waitForTimeout(90);
+      }
+      const sub = quiet.map((b) => b[0]);
+      const high = quiet.map((b) => b[3]);
+      assert.ok(Math.max(...sub) < 0.02, `the sub band survived an empty kick lane: ${Math.max(...sub)}`);
+      assert.ok(Math.max(...high) > 0.1, `clearing the kick silenced the hats too: ${Math.max(...high)}`);
+
+      // And an empty pattern is the sketch's own thesis, reachable by clicking:
+      // nothing to answer to, so every point sits on its surveyed coordinate.
+      await hl(() => window.__hendriklaan.setPattern({ bass: 0, hat: 0 }));
+      await p.waitForTimeout(3000);
+      const dead = await hl(() => window.__hendriklaan.bands());
+      for (const b of dead) assert.ok(b < 0.02, `a band was still moving in silence: ${b}`);
+      assert.ok((await hl(() => window.__hendriklaan.coverage())) > 0.05,
+        'the survey vanished instead of coming to rest');
+
+      await hl(() => window.__hendriklaan.resetPattern());
+      await p.waitForTimeout(1200);
+    });
+
+    await test('tempo changes the phase without teleporting it', async () => {
+      // beats accumulates rather than being derived from the clock, so a tempo
+      // change is continuous. Deriving it would rescale all elapsed history at
+      // once and jump the playhead mid-bar.
+      const a = await hl(() => window.__hendriklaan.state().beats);
+      await hl(() => window.__hendriklaan.setPattern({ bpm: 200 }));
+      const b = await hl(() => window.__hendriklaan.state().beats);
+      assert.ok(b - a >= 0 && b - a < 1, `the phase jumped by ${b - a} beats`);
+      await p.waitForTimeout(500);
+      assert.ok((await hl(() => window.__hendriklaan.state().beats)) > b,
+        'the phase stopped advancing after a tempo change');
+      await hl(() => window.__hendriklaan.resetPattern());
     });
 
     await test('freeze holds the frame, and releasing it starts the motion again', async () => {
@@ -1327,6 +1371,25 @@ try {
       }
     });
 
+    await test('the pad switch is the difference between quiet and silence', () => {
+      // Emptying the three lanes was supposed to stop the street dead, and did
+      // not: the mid band is the pad, the pad is not in the grid, and the
+      // canopy kept breathing at 0.72. This is the assertion that caught it.
+      const lanesOnly = { ...DEFAULT, kick: 0, bass: 0, hat: 0 };
+      const anyPad = [];
+      for (let i = 0; i < 400; i++) anyPad.push(sequence(i * 0.0137, 0, lanesOnly).pad);
+      assert.ok(Math.max(...anyPad) > 0.5, 'the pad should still drone with only the lanes cleared');
+
+      const nothing = { ...lanesOnly, pad: 0 };
+      for (let i = 0; i < 400; i++) {
+        const s = sequence(i * 0.0137, i * 0.0137 / OLD_BEAT, nothing);
+        assert.equal(s.kick, 0);
+        assert.equal(s.bass, 0);
+        assert.equal(s.hat, 0);
+        assert.equal(s.pad, 0, 'the pad switch did not reach the pad');
+      }
+    });
+
     await test('an empty lane is silent, and an empty pattern is silence', () => {
       const noKick = { ...DEFAULT, kick: 0 };
       const hats = [];
@@ -1394,15 +1457,15 @@ try {
     });
 
     await test('the built-in pattern encodes to the documented hash', () => {
-      assert.equal(encode(DEFAULT), 'b=010111115555&n=2140&t=96&s=0');
+      assert.equal(encode(DEFAULT), 'b=010111115555&n=2140&t=96&s=0&p=1');
     });
 
     await test('any pattern survives a round trip through the hash', () => {
       const cases = [
         DEFAULT,
         { ...DEFAULT, kick: 0xffff, bass: 0, hat: 0x8001, notes: [0, 6, 3, 3], bpm: 174, swing: 0.5 },
-        { ...DEFAULT, kick: 0, bass: 0, hat: 0, bpm: 40, swing: 0 },
-        { ...DEFAULT, bpm: 200, swing: 0.75 },
+        { ...DEFAULT, kick: 0, bass: 0, hat: 0, pad: 0, bpm: 40, swing: 0 },
+        { ...DEFAULT, bpm: 200, swing: 0.75, pad: 0 },
       ];
       for (const p of cases) {
         const back = decode(encode(p));
@@ -1418,16 +1481,18 @@ try {
 
     await test('a malformed hash is refused whole rather than half-read', () => {
       const bad = [
-        '', '#', 'b=zzzz&n=2140&t=96&s=0',           // not hex
-        'b=010111115555&n=2140&t=96',                 // missing swing
-        'b=01011111555&n=2140&t=96&s=0',              // 11 hex chars
-        'b=010111115555&n=2740&t=96&s=0',             // note index out of pool
-        'b=010111115555&n=214&t=96&s=0',              // three notes
-        'b=010111115555&n=2140&t=39&s=0',             // tempo below the floor
-        'b=010111115555&n=2140&t=201&s=0',            // tempo above the ceiling
-        'b=010111115555&n=2140&t=96&s=76',            // swing past three quarters
-        'b=010111115555&n=2140&t=-96&s=0',            // negative tempo
-        'n=2140&t=96&s=0',                            // no lanes at all
+        '', '#', 'b=zzzz&n=2140&t=96&s=0&p=1',         // not hex
+        'b=010111115555&n=2140&t=96',                   // missing swing and pad
+        'b=010111115555&n=2140&t=96&s=0',               // missing pad
+        'b=01011111555&n=2140&t=96&s=0&p=1',            // 11 hex chars
+        'b=010111115555&n=2740&t=96&s=0&p=1',           // note index out of pool
+        'b=010111115555&n=214&t=96&s=0&p=1',            // three notes
+        'b=010111115555&n=2140&t=39&s=0&p=1',           // tempo below the floor
+        'b=010111115555&n=2140&t=201&s=0&p=1',          // tempo above the ceiling
+        'b=010111115555&n=2140&t=96&s=76&p=1',          // swing past three quarters
+        'b=010111115555&n=2140&t=-96&s=0&p=1',          // negative tempo
+        'b=010111115555&n=2140&t=96&s=0&p=2',           // pad is one bit
+        'n=2140&t=96&s=0&p=1',                          // no lanes at all
       ];
       for (const s of bad) assert.equal(decode(s), null, `accepted ${JSON.stringify(s)}`);
     });
