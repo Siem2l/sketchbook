@@ -171,6 +171,61 @@ async function main() {
     field.drawPoints();
   }
 
+  // ------------------------------------------------------------- controls
+  const COLOURS = ['lit photo', 'height ramp', 'photo texture'];
+  const setColour = (i) => { view.colour = i; $('colour').textContent = COLOURS[i]; };
+  setColour(view.colour);
+  $('colour').onclick = () => setColour((view.colour + 1) % COLOURS.length);
+  $('grain').oninput = (e) => { view.grain = +e.target.value; };
+
+  function savePNG() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(innerWidth * 3);
+    canvas.height = Math.round(innerHeight * 3);
+    render(canvas.width, canvas.height);
+    // Read it back in the same tick: without preserveDrawingBuffer the
+    // composite is gone the moment the frame yields.
+    const url = canvas.toDataURL('image/png');
+    canvas.width = Math.round(innerWidth * dpr);
+    canvas.height = Math.round(innerHeight * dpr);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `elsewhere-${Math.round(cam.x)}-${Math.round(cam.z)}.png`;
+    a.click();
+    note('saved at ×3');
+  }
+  $('save').onclick = savePNG;
+
+  let drag = null;
+  canvas.addEventListener('pointerdown', (e) => {
+    drag = { x: e.clientX, y: e.clientY };
+    canvas.classList.add('dragging');
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    cam.yaw -= (e.clientX - drag.x) * 0.004;
+    cam.pitch = Math.max(0.06, Math.min(1.45, cam.pitch + (e.clientY - drag.y) * 0.003));
+    drag = { x: e.clientX, y: e.clientY };
+  });
+  const endDrag = () => { drag = null; canvas.classList.remove('dragging'); };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    cam.dist = Math.max(90, Math.min(1800, cam.dist * Math.exp(e.deltaY * 0.0011)));
+  }, { passive: false });
+
+  addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    const k = e.key.toLowerCase();
+    if (k === 'c') setColour((view.colour + 1) % COLOURS.length);
+    else if (k === 's') savePNG();
+    else if (k === 'h') document.querySelectorAll('#ui, #meta, #hint').forEach((n) => {
+      n.style.display = n.style.display === 'none' ? '' : 'none';
+    });
+  });
+
   let last = performance.now();
   function frame(now) {
     view.clock += Math.min(0.05, (now - last) / 1000);
