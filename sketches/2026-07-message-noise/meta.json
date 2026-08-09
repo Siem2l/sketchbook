@@ -4,8 +4,9 @@
   "tags": [
     "perlin",
     "tattoo-study",
-    "seeded"
+    "seeded",
+    "cartography"
   ],
-  "description": "A hidden message seeds a living noise map. Freeze the moment you like; only you know the words underneath.",
+  "description": "A hidden message seeds a living noise map — and picks its palette. Survey it as relief, contours, or engraving; freeze the moment you like. Only you know the words underneath.",
   "thumbnail": "thumb.png"
 }

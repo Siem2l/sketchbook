@@ -77,9 +77,14 @@ for the `sketchbook` group.
   is no colour picker. The page opens by building itself, nothing is saved, and
   the only thing that leaves is a 3x PNG.
 
-- **message noise** (`2026-07-message-noise`) — a hidden message is
-  hashed (cyrb128) into noise/random seeds and terrain parameters; the
-  map animates over 3D noise, spacebar freezes it, and the on-screen
-  `t` value plus the message reproduce any frame exactly. Contour mode
-  and 3x PNG export for tattoo/print reference. The message is never
-  stored, sent, or rendered.
+- **message noise** (`2026-07-message-noise`) — a hidden message is hashed
+  (cyrb128) into noise/random seeds, terrain parameters and a palette; the map
+  animates over 3D noise, spacebar freezes it, ←/→ step a frame at a time, and
+  the stamp along the bottom edge plus the message reproduce any frame exactly.
+  Four ways to survey the same terrain — filled relief, contour sheet, both at
+  once, and four-pass engraved cross-hatch — across six themes, with band
+  count, zoom, warp, octaves and sea level on live controls. p5's perlin only
+  occupies a narrow slice of 0..1 and the slice drifts as octaves are added, so
+  the field is stretched between measured per-octave percentiles before it is
+  banded; without that a twelve-band ramp renders five. 3x PNG export for
+  tattoo/print reference. The message is never stored, sent, or rendered.

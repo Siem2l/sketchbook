@@ -5,25 +5,50 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>message noise</title>
   <style>
-    body { margin: 0; background: #0e0e11; color: #e8e6e0; font: 14px ui-monospace, monospace; display: grid; place-items: center; min-height: 100vh; }
+    /* The panel is fixed to the bottom, so the canvas is pushed up off it —
+       otherwise it sits over the stamp, which is the one thing on the map
+       you have to be able to read. */
+    body { margin: 0; padding-bottom: 7rem; box-sizing: border-box; background: #0e0e11; color: #e8e6e0; font: 14px ui-monospace, monospace; display: grid; place-items: center; min-height: 100vh; }
     a.back { position: fixed; top: 1rem; left: 1rem; color: #8a877e; text-decoration: none; }
-    #ui { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); display: flex; gap: 0.5rem; align-items: center; background: #17171cdd; padding: 0.6rem 0.8rem; border-radius: 8px; }
-    input { background: #0e0e11; color: #e8e6e0; border: 1px solid #333; border-radius: 4px; padding: 0.4rem 0.6rem; width: 16rem; font: inherit; }
-    button { background: #26262e; color: #e8e6e0; border: 1px solid #444; border-radius: 4px; padding: 0.4rem 0.7rem; font: inherit; cursor: pointer; }
+    /* left/right + auto margins rather than left:50% + translate: a fixed box
+       anchored at 50% may only shrink-to-fit within the half-width left of it,
+       which wraps two tidy rows into four. */
+    #ui { position: fixed; bottom: 0.75rem; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0.4rem; background: #17171cdd; padding: 0.5rem 0.7rem; border-radius: 8px; }
+    .row { display: flex; gap: 0.4rem; align-items: center; justify-content: center; flex-wrap: wrap; }
+    input[type=text], input[type=password] { background: #0e0e11; color: #e8e6e0; border: 1px solid #333; border-radius: 4px; padding: 0.3rem 0.5rem; width: 11rem; font: inherit; font-size: 13px; }
+    button { background: #26262e; color: #e8e6e0; border: 1px solid #444; border-radius: 4px; padding: 0.3rem 0.55rem; font: inherit; font-size: 13px; cursor: pointer; }
     button:hover { border-color: #7fb3a3; }
-    #hint { position: fixed; top: 1rem; right: 1rem; color: #8a877e; }
+    label { display: flex; gap: 0.3rem; align-items: center; color: #8a877e; font-size: 11px; }
+    label .val { color: #e8e6e0; min-width: 2rem; }
+    input[type=range] { width: 4.5rem; accent-color: #7fb3a3; }
+    #hint { position: fixed; top: 1rem; right: 1rem; color: #8a877e; text-align: right; line-height: 1.5; font-size: 12px; }
   </style>
 </head>
 <body>
   <a class="back" href="/">← sketchbook</a>
-  <div id="hint">space = freeze · message stays only in your head</div>
+  <div id="hint">
+    space = freeze · ←/→ = step a frame (shift = ×10)<br />
+    c = palette · m = mode · r = reset<br />
+    message stays only in your head
+  </div>
   <div id="ui">
-    <input id="message" type="password" placeholder="hidden message…" autocomplete="off" />
-    <button id="reveal" title="show/hide message">👁</button>
-    <button id="apply">seed</button>
-    <button id="freeze">freeze</button>
-    <button id="mode">contour</button>
-    <button id="save">png ×3</button>
+    <div class="row">
+      <input id="message" type="password" placeholder="hidden message…" autocomplete="off" />
+      <button id="reveal" title="show/hide message">👁</button>
+      <button id="apply">seed</button>
+      <button id="freeze">freeze</button>
+      <button id="mode">mode</button>
+      <button id="palette">pal</button>
+      <button id="save">png ×3</button>
+    </div>
+    <div class="row">
+      <label>bands <input id="bands" type="range" min="3" max="32" step="1" /><span class="val" id="bands-val"></span></label>
+      <label>zoom <input id="zoom" type="range" min="0.3" max="3" step="0.01" /><span class="val" id="zoom-val"></span></label>
+      <label>warp <input id="warp" type="range" min="0" max="1.5" step="0.01" /><span class="val" id="warp-val"></span></label>
+      <label>oct <input id="octaves" type="range" min="1" max="5" step="1" /><span class="val" id="octaves-val"></span></label>
+      <label>sea <input id="sea" type="range" min="0.1" max="0.9" step="0.01" /><span class="val" id="sea-val"></span></label>
+      <button id="reset">reset</button>
+    </div>
   </div>
   <script type="module" src="./sketch.js"></script>
 </body>

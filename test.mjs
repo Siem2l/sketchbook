@@ -13,6 +13,7 @@ const BASE = `http://localhost:${PORT}`;
 const SKETCH = `${BASE}/sketches/2026-07-inconstructions/`;
 const SPLINTER = `${BASE}/sketches/2026-07-splinter/`;
 const FLASH = `${BASE}/sketches/2026-08-flash/`;
+const NOISE = `${BASE}/sketches/2026-07-message-noise/`;
 
 let passed = 0;
 const failures = [];
@@ -759,6 +760,183 @@ try {
     });
 
     await fl(p, () => window.__flash.reset());
+    await p.close();
+  }
+
+  // ------------------------------------------------------------ message noise
+  {
+    async function openNoise({ width = 1200, height = 980 } = {}) {
+      const page = await browser.newPage({ viewport: { width, height } });
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+      await page.goto(NOISE, { waitUntil: 'networkidle' });
+      page.errors = errors;
+      return page;
+    }
+    const mn = (p, fn) => p.evaluate(fn);
+    const seedWith = async (p, msg) => {
+      await p.fill('#message', msg);
+      await p.click('#apply');
+      await p.waitForTimeout(300);
+    };
+    const setParam = async (p, id, v) => {
+      await p.fill(`#${id}`, String(v));
+      await p.dispatchEvent(`#${id}`, 'input');
+      await p.waitForTimeout(200);
+    };
+
+    const p = await openNoise();
+    await p.waitForTimeout(1200);
+
+    await test('the map loads and breathes without errors', async () => {
+      assert.deepEqual(p.errors, []);
+      const a = await mn(p, () => window.__messageNoise.t());
+      await p.waitForTimeout(400);
+      assert.ok(await mn(p, () => window.__messageNoise.t()) > a, 'time never advanced');
+    });
+
+    await test('a message picks its own palette, and a different one differs', async () => {
+      await seedWith(p, 'the words under the map');
+      const a = await mn(p, () => window.__messageNoise.palette());
+      await seedWith(p, 'a different set of words entirely');
+      const b = await mn(p, () => window.__messageNoise.palette());
+      const seen = new Set([a, b]);
+      await seedWith(p, 'the words under the map');
+      assert.equal(await mn(p, () => window.__messageNoise.palette()), a,
+        'the same message chose a different palette the second time');
+      assert.ok(seen.size === 2 || a === b, 'palette is not message-derived');
+    });
+
+    await test('the message never reaches the url, the dom, or the stamp', async () => {
+      await seedWith(p, 'zzqqxx-secret-marker');
+      assert.ok(!p.url().includes('zzqqxx'), 'the message leaked into the url');
+      const html = await mn(p, () => document.body.innerHTML);
+      assert.ok(!html.includes('zzqqxx'), 'the message leaked into the dom');
+      assert.equal(await p.getAttribute('#message', 'type'), 'password');
+    });
+
+    await test('every mode renders, and the cycle wraps', async () => {
+      const modes = await mn(p, () => window.__messageNoise.modes());
+      const seen = [];
+      for (let i = 0; i < modes.length; i++) {
+        seen.push(await mn(p, () => window.__messageNoise.mode()));
+        await p.click('#mode');
+        await p.waitForTimeout(400);
+      }
+      assert.deepEqual(seen, modes);
+      assert.equal(await mn(p, () => window.__messageNoise.mode()), modes[0], 'the mode cycle did not wrap');
+      assert.deepEqual(p.errors, []);
+    });
+
+    await test('every palette is reachable, and the cycle wraps', async () => {
+      const pals = await mn(p, () => window.__messageNoise.palettes());
+      const first = await mn(p, () => window.__messageNoise.palette());
+      const seen = new Set();
+      for (let i = 0; i < pals.length; i++) {
+        seen.add(await mn(p, () => window.__messageNoise.palette()));
+        await p.click('#palette');
+        await p.waitForTimeout(150);
+      }
+      assert.equal(seen.size, pals.length, 'a palette was skipped');
+      assert.equal(await mn(p, () => window.__messageNoise.palette()), first, 'the palette cycle did not wrap');
+    });
+
+    // The reason NORM exists: raw p5 perlin used 5 of 12 bands, so most of a
+    // theme never appeared. This is the regression guard for that.
+    await test('the terrain spans its ramp rather than a slice of it', async () => {
+      for (const oct of [1, 2, 3, 4, 5]) {
+        await setParam(p, 'octaves', oct);
+        const { lo, hi, bandsUsed } = await mn(p, () => window.__messageNoise.spread());
+        assert.ok(hi - lo > 0.75, `octaves=${oct}: field spans only ${(hi - lo).toFixed(2)} of the ramp`);
+        assert.ok(bandsUsed >= 10, `octaves=${oct}: only ${bandsUsed} of 12 bands rendered`);
+      }
+      await p.click('#reset');
+      await p.waitForTimeout(200);
+    });
+
+    await test('space freezes the map and the arrows walk it a frame at a time', async () => {
+      await mn(p, () => document.activeElement.blur());
+      await p.keyboard.press('Space');
+      await p.waitForTimeout(300);
+      assert.equal(await mn(p, () => window.__messageNoise.frozen()), true);
+      const held = await mn(p, () => window.__messageNoise.t());
+      await p.waitForTimeout(400);
+      assert.equal(await mn(p, () => window.__messageNoise.t()), held, 'a frozen map kept moving');
+      await p.keyboard.press('ArrowRight');
+      await p.waitForTimeout(200);
+      const fwd = await mn(p, () => window.__messageNoise.t());
+      assert.ok(fwd > held, 'the right arrow did not step forward');
+      await p.keyboard.press('ArrowLeft');
+      await p.waitForTimeout(200);
+      assert.ok(Math.abs(await mn(p, () => window.__messageNoise.t()) - held) < 1e-9,
+        'the left arrow did not step back to where it started');
+    });
+
+    await test('stepping a running map freezes it, so the frame you found stays', async () => {
+      await p.keyboard.press('Space');           // resume
+      await p.waitForTimeout(200);
+      assert.equal(await mn(p, () => window.__messageNoise.frozen()), false);
+      await p.keyboard.press('ArrowRight');
+      await p.waitForTimeout(200);
+      assert.equal(await mn(p, () => window.__messageNoise.frozen()), true);
+    });
+
+    await test('the controls move the terrain and reset restores the message defaults', async () => {
+      const before = await mn(p, () => window.__messageNoise.params());
+      for (const [id, v] of [['bands', 5], ['zoom', 2.4], ['warp', 1.2], ['octaves', 4], ['sea', 0.72]]) {
+        await setParam(p, id, v);
+      }
+      assert.deepEqual(await mn(p, () => window.__messageNoise.params()),
+        { bands: 5, zoom: 2.4, warp: 1.2, octaves: 4, sea: 0.72 });
+      await p.click('#reset');
+      await p.waitForTimeout(250);
+      assert.deepEqual(await mn(p, () => window.__messageNoise.params()), before,
+        'reset did not return the terrain to what the message asked for');
+    });
+
+    await test('a keystroke typed into a control is not read as a shortcut', async () => {
+      const mode = await mn(p, () => window.__messageNoise.mode());
+      await p.fill('#message', 'm c r');
+      await p.waitForTimeout(200);
+      assert.equal(await mn(p, () => window.__messageNoise.mode()), mode,
+        'typing into the message box cycled the mode');
+      await p.focus('#zoom');
+      const zoom = (await mn(p, () => window.__messageNoise.params())).zoom;
+      await p.keyboard.press('ArrowRight');
+      await p.waitForTimeout(200);
+      assert.notEqual((await mn(p, () => window.__messageNoise.params())).zoom, zoom,
+        'a focused slider did not take its own arrow key');
+    });
+
+    await test('export produces a png named for the frame it captured', async () => {
+      await mn(p, () => document.activeElement.blur());
+      const dl = p.waitForEvent('download', { timeout: 60000 });
+      await p.click('#save');
+      const name = (await dl).suggestedFilename();
+      const { mode, palette, t } = await mn(p, () => ({
+        mode: window.__messageNoise.mode(),
+        palette: window.__messageNoise.palette(),
+        t: window.__messageNoise.t(),
+      }));
+      assert.equal(name, `message-noise-${mode}-${palette}-t${t.toFixed(3)}.png`);
+      // p5 1.11's Graphics.remove() throws, so the buffer is dropped by hand;
+      // if that regresses, the export canvas is left in the page.
+      assert.equal(await mn(p, () => document.querySelectorAll('canvas').length), 1,
+        'the export buffer was left behind in the dom');
+      assert.deepEqual(p.errors, []);
+    });
+
+    await test('the panel stays clear of the map it controls', async () => {
+      const clear = await mn(p, () => {
+        const c = document.querySelector('canvas').getBoundingClientRect();
+        const u = document.getElementById('ui').getBoundingClientRect();
+        // The stamp lives in the bottom-left of the canvas and has to stay readable.
+        return u.top >= c.bottom - 1;
+      });
+      assert.ok(clear, 'the control panel overlaps the canvas');
+    });
+
     await p.close();
   }
 
