@@ -16,6 +16,7 @@ const FLASH = `${BASE}/sketches/2026-08-flash/`;
 const NOISE = `${BASE}/sketches/2026-07-message-noise/`;
 const EDGE = `${BASE}/sketches/2026-08-edge/`;
 const HYDRA = `${BASE}/sketches/2026-08-hydra-edge/`;
+const HENDRIKLAAN = `${BASE}/sketches/2026-08-hendriklaan/`;
 
 let passed = 0;
 const failures = [];
@@ -1158,6 +1159,239 @@ try {
     });
 
     await h.close();
+  }
+
+  // ------------------------------------------------------------- hendriklaan
+  {
+    const errors = [];
+    // The microphone is denied on purpose. Two of this sketch's promises only
+    // hold on the fallback path — that the page moves with no gesture and no
+    // permission, and that a refusal says so instead of freezing — and a test
+    // runner that happened to have an audio device would never exercise them.
+    const p = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+    await p.addInitScript(() => {
+      navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error('denied'));
+    });
+    p.on('pageerror', (e) => errors.push(e.message));
+    p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    await p.goto(HENDRIKLAAN, { waitUntil: 'networkidle' });
+    await p.waitForFunction(() => window.__hendriklaan?.state().revealed >= 1, null, { timeout: 15000 });
+    const hl = (fn) => p.evaluate(fn);
+    // Canvas only, with the panel hidden. An element screenshot still captures
+    // whatever overlaps the element, and the four band meters sit on top of the
+    // canvas and keep moving by design even when the cloud is at rest — which
+    // is enough to fail a byte comparison on its own.
+    const shot = async () => {
+      await p.evaluate(() => { document.getElementById('ui').style.visibility = 'hidden'; });
+      const png = await p.locator('canvas').screenshot();
+      await p.evaluate(() => { document.getElementById('ui').style.visibility = ''; });
+      return png;
+    };
+
+    await test('the survey arrives whole and renders', async () => {
+      const h = await hl(() => window.__hendriklaan.header);
+      const n = await hl(() => window.__hendriklaan.count);
+      assert.equal(n, h.count);
+      assert.ok(n > 150000, `only ${n} points`);
+      assert.match(h.tile, /^AHN5_C_138000_455000$/);
+      assert.match(h.licence, /CC BY 4\.0/);
+      // 240 m square, the window the extraction script cuts
+      assert.equal(Math.round(h.bounds[3] - h.bounds[0]), 240);
+      assert.equal(Math.round(h.bounds[4] - h.bounds[1]), 240);
+      assert.ok((await hl(() => window.__hendriklaan.coverage())) > 0.05, 'nothing was drawn');
+      assert.deepEqual(errors, []);
+    });
+
+    await test('every colour mode draws the whole block', async () => {
+      for (let i = 0; i < 4; i++) {
+        await hl((n) => window.__hendriklaan.setColour(n), i);
+        await p.waitForTimeout(120);
+        const c = await hl(() => window.__hendriklaan.coverage());
+        assert.ok(c > 0.05, `colour mode ${i} drew almost nothing (coverage ${c})`);
+      }
+      await hl(() => window.__hendriklaan.setColour(0));
+      assert.deepEqual(errors, []);
+    });
+
+    await test('the built-in field moves the bands with no gesture and no audio context', async () => {
+      assert.equal(await hl(() => window.__hendriklaan.audioMode()), 'field');
+      const seen = [];
+      for (let i = 0; i < 20; i++) {
+        seen.push(await hl(() => window.__hendriklaan.bands()));
+        await p.waitForTimeout(90);
+      }
+      for (const b of seen.flat()) assert.ok(b >= 0 && b <= 1, `band out of range: ${b}`);
+      // The kick lands twice a bar at 96 bpm, so a two-second sample has to
+      // contain both a hit and a gap in the sub band.
+      const sub = seen.map((s) => s[0]);
+      assert.ok(Math.max(...sub) - Math.min(...sub) > 0.15,
+        `the sub band never moved (${Math.min(...sub)}..${Math.max(...sub)})`);
+    });
+
+    await test('silence leaves the survey exactly where it was measured', async () => {
+      // Displacement is a pure function of band energy, so at zero gain the
+      // clock can run for a second and not one point may move. This is the
+      // assertion that would fail the moment anything integrates velocity.
+      // The idle orbit has to stop first — it moves the camera, not the cloud,
+      // but it moves the pixels either way.
+      if ((await hl(() => window.__hendriklaan.state().spin))) await p.click('#spin');
+      await p.fill('#gain', '0');
+      await p.dispatchEvent('#gain', 'input');
+      await p.waitForTimeout(300);
+      const a = await shot();
+      await p.waitForTimeout(900);
+      assert.ok(a.equals(await shot()), 'the cloud drifted while it was supposed to be at rest');
+      await p.fill('#gain', '1');
+      await p.dispatchEvent('#gain', 'input');
+    });
+
+    await test('freeze holds the frame, and releasing it starts the motion again', async () => {
+      await hl(() => { window.__hendriklaan.setFrozen(true); });
+      await p.waitForTimeout(400);
+      const a = await shot();
+      await p.waitForTimeout(600);
+      assert.ok(a.equals(await shot()), 'a frozen frame kept changing');
+      await hl(() => { window.__hendriklaan.setFrozen(false); });
+      await p.waitForTimeout(500);
+      assert.ok(!a.equals(await shot()), 'releasing freeze did not resume');
+    });
+
+    await test('a refused microphone falls back to the field and says so', async () => {
+      await p.click('#audio');                       // field -> tone
+      await p.waitForTimeout(400);
+      assert.equal(await hl(() => window.__hendriklaan.audioMode()), 'tone');
+      await p.click('#audio');                       // tone -> mic, denied
+      await p.waitForTimeout(600);
+      assert.equal(await hl(() => window.__hendriklaan.audioMode()), 'field');
+      assert.match(await p.textContent('#note'), /microphone/i);
+      assert.ok((await hl(() => window.__hendriklaan.coverage())) > 0.05, 'the page stopped drawing');
+      assert.deepEqual(errors, []);
+    });
+
+    await test('ortho is a different projection, not a different scene', async () => {
+      const persp = await shot();
+      await hl(() => window.__hendriklaan.setOrtho(true));
+      await p.waitForTimeout(300);
+      assert.ok(!persp.equals(await shot()), 'ortho looked identical to perspective');
+      await hl(() => window.__hendriklaan.setOrtho(false));
+    });
+
+    await test('PNG export produces a download', async () => {
+      const [download] = await Promise.all([
+        p.waitForEvent('download', { timeout: 10000 }),
+        p.click('#save'),
+      ]);
+      assert.match(download.suggestedFilename(), /^hendriklaan-.*\.png$/);
+    });
+
+    await p.close();
+  }
+
+  // -------------------------------------------------------------------- beat
+  // The pattern model is pure, so it is tested in node rather than through a
+  // browser. The equivalence test is the important one: the masks in DEFAULT
+  // are only correct if they reproduce the arithmetic they replaced.
+  {
+    const { DEFAULT, NOTES, sequence, same, changes } =
+      await import('./sketches/2026-08-hendriklaan/beat.js');
+
+    // Verbatim copy of the sequencer as it stood before the editor existed.
+    // Kept here, not imported, precisely so that changing beat.js cannot
+    // quietly change what "the built-in tune" means.
+    const OLD_BPM = 96, OLD_BEAT = 60 / OLD_BPM;
+    const OLD_NOTES = [164.81, 146.83, 196.00, 130.81];
+    const oldSequence = (t) => {
+      const beat = t / OLD_BEAT;
+      const inBar = beat % 4;
+      const bar = Math.floor(beat / 4);
+      const env = (since, decay) => (since < 0 ? 0 : Math.exp(-since / decay));
+      return {
+        kick: env((inBar % 2) * OLD_BEAT, 0.13),
+        hat: env((beat % 0.5) * OLD_BEAT, 0.035) * (0.55 + 0.45 * Math.sin(beat * 1.7)),
+        bass: env((beat % 1) * OLD_BEAT, 0.22) * (0.6 + 0.4 * Math.sin(beat * 0.37)),
+        pad: 0.16 + 0.34 * (0.5 + 0.5 * Math.sin(t * 0.29))
+                  + 0.30 * (0.5 + 0.5 * Math.sin(t * 0.107 + 1.3)),
+        note: OLD_NOTES[bar % 4],
+      };
+    };
+
+    await test('the default masks reproduce the built-in tune exactly', () => {
+      for (let i = 0; i < 4000; i++) {
+        const t = i * 0.0137;                    // 55 s, not a multiple of the bar
+        const a = oldSequence(t);
+        const b = sequence(t, t / OLD_BEAT, DEFAULT);
+        for (const k of ['kick', 'bass', 'hat', 'pad', 'note']) {
+          assert.ok(Math.abs(a[k] - b[k]) < 1e-9,
+            `${k} diverged at t=${t.toFixed(3)}: ${a[k]} vs ${b[k]}`);
+        }
+      }
+    });
+
+    await test('an empty lane is silent, and an empty pattern is silence', () => {
+      const noKick = { ...DEFAULT, kick: 0 };
+      const hats = [];
+      for (let i = 0; i < 400; i++) {
+        const t = i * 0.0137;
+        const s = sequence(t, t / OLD_BEAT, noKick);
+        assert.equal(s.kick, 0);
+        hats.push(s.hat);
+      }
+      assert.ok(Math.max(...hats) > 0.4, 'clearing the kick silenced the hat too');
+
+      const empty = { ...DEFAULT, kick: 0, bass: 0, hat: 0 };
+      for (let i = 0; i < 400; i++) {
+        const t = i * 0.0137;
+        const s = sequence(t, t / OLD_BEAT, empty);
+        assert.equal(s.kick, 0);
+        assert.equal(s.bass, 0);
+        assert.equal(s.hat, 0);
+      }
+    });
+
+    await test('swing delays the offbeats and leaves the downbeats alone', () => {
+      // A hat on step 1 with swing 0.5 fires half a sixteenth later, so at the
+      // unswung moment of step 1 it has not happened yet.
+      const p = { ...DEFAULT, kick: 0, bass: 0, hat: 0b10 };
+      const at = (steps) => sequence(0, steps / 4, p).hat;
+      assert.ok(at(1.0) > 0.5, `unswung hat did not fire on its own step: ${at(1.0)}`);
+      const sw = { ...p, swing: 0.5 };
+      const atSw = (steps) => sequence(0, steps / 4, sw).hat;
+      assert.ok(atSw(1.0) < 0.05, `swung hat fired early: ${atSw(1.0)}`);
+      assert.ok(atSw(1.5) > 0.5, `swung hat never fired: ${atSw(1.5)}`);
+    });
+
+    await test('tempo moves the envelopes, not the pad', () => {
+      // The two arguments do different jobs, and this is what proves it. At the
+      // same phase, doubling the tempo halves the wall time since the hit, so
+      // the pluck has decayed *less* and reads higher. The pad is driven by
+      // seconds, not beats, so the same tempo change must not touch it at all.
+      const fast = { ...DEFAULT, bpm: 192 };
+      const a = sequence(3.0, 1.3, DEFAULT);
+      const b = sequence(3.0, 1.3, fast);
+      assert.equal(a.pad, b.pad, 'the tempo reached the pad, which is in seconds');
+      assert.ok(b.kick > a.kick, `a faster tempo did not shorten the elapsed decay: ${a.kick} -> ${b.kick}`);
+    });
+
+    await test('the note row walks the pool one note a bar', () => {
+      const p = { ...DEFAULT, notes: [3, 5, 0, 6] };
+      const noteAt = (bar) => sequence(0, bar * 4 + 0.5, p).note;
+      assert.equal(noteAt(0), NOTES[3].hz);
+      assert.equal(noteAt(1), NOTES[5].hz);
+      assert.equal(noteAt(2), NOTES[0].hz);
+      assert.equal(noteAt(3), NOTES[6].hz);
+      assert.equal(noteAt(4), NOTES[3].hz, 'the note cycle did not wrap after four bars');
+      assert.equal(NOTES.length, 7);
+    });
+
+    await test('same() and changes() measure the distance from the built-in tune', () => {
+      assert.ok(same(DEFAULT, { ...DEFAULT, notes: [...DEFAULT.notes] }));
+      assert.equal(changes(DEFAULT), 0);
+      assert.ok(!same(DEFAULT, { ...DEFAULT, kick: 0x0103 }));
+      assert.equal(changes({ ...DEFAULT, kick: 0x0103 }), 1);   // one bit added
+      assert.equal(changes({ ...DEFAULT, kick: 0 }), 2);        // two bits removed
+      assert.equal(changes({ ...DEFAULT, bpm: 120 }), 1);
+      assert.equal(changes({ ...DEFAULT, notes: [2, 1, 4, 1] }), 1);
+    });
   }
 
   // --------------------------------------------------------------------- lab
