@@ -37,10 +37,66 @@
     .band .bar { height: 4px; margin-top: 2px; background: #26262e; border-radius: 2px; overflow: hidden; }
     .band .bar span { display: block; height: 100%; width: 0%; background: #7fb3a3; }
 
-    #veil { position: fixed; inset: 0; z-index: 4; display: grid; place-items: center; background: #0e0e11;
+    /* The editor sits where the key hints do, and hides them while it is open:
+       nobody reads a legend and edits at the same time, and the corner is the
+       only place wide enough for sixteen columns that is not already taken. */
+    #beat { position: fixed; top: 1rem; right: 1rem; z-index: 4; width: 20rem;
+            background: #17171cf2; border: 1px solid #2c2c34; border-radius: 8px;
+            padding: 0.55rem 0.7rem 0.6rem; display: flex; flex-direction: column; gap: 0.4rem; }
+    #beat[hidden] { display: none; }
+    #beat .bhead { display: flex; justify-content: space-between; align-items: center;
+                   color: #8a877e; font-size: 11px; letter-spacing: 0.08em; }
+    #beat .bhead button { padding: 0 0.35rem; line-height: 1.2; font-size: 13px; }
+
+    #beat-grid { display: grid; grid-template-columns: 2.2rem repeat(16, 1fr); gap: 2px; align-items: center; }
+    #beat-grid .lab, #beat-notes .lab { font-size: 10px; color: #8a877e; }
+    /* The ruler has to be readable at a glance or the playhead is just a light
+       moving over nothing — the first pass sat at #2c2c34 on #17171c and the
+       beats could not be counted. */
+    #beat-grid .tick { height: 5px; border-radius: 1px; background: #2a2a33; }
+    #beat-grid .tick.beat { background: #55535e; }
+    #beat-grid .tick.now { background: #e0a316; }
+    /* Four states, and the two that matter are the diff: a cell you added
+       carries an accent, a built-in hit you removed stays on screen as an
+       outline. The original is never more than a glance away. */
+    #beat-grid .cell { height: 15px; padding: 0; border-radius: 2px; cursor: pointer;
+                       background: #1e1e25; border: 1px solid transparent; }
+    #beat-grid .cell.q { background: #23232b; }
+    #beat-grid .cell.on { background: #7fb3a3; }
+    #beat-grid .cell.added { background: #7fb3a3; border-color: #e0a316; }
+    #beat-grid .cell.ghost { background: transparent; border: 1px dashed #4a4a55; }
+    #beat-grid .cell:hover { border-color: #7fb3a3; }
+
+    #beat-notes { display: grid; grid-template-columns: 2.2rem repeat(4, 1fr); gap: 2px; align-items: center; }
+    #beat-notes .note { font-size: 11px; padding: 0.15rem 0; }
+    #beat-notes .note.moved { border-color: #e0a316; }
+
+    #beat .brow { display: flex; gap: 0.4rem; align-items: center; }
+    #beat .blab { font-size: 10px; color: #8a877e; width: 2.2rem; flex: none; }
+    #beat .bval { font-size: 10px; color: #e8e6e0; min-width: 2.4rem; text-align: right; }
+    #beat .brow input[type=range] { flex: 1; width: auto; }
+    #beat .padbar { flex: 1; height: 4px; background: #26262e; border-radius: 2px; overflow: hidden; }
+    #beat .padbar i { display: block; height: 100%; width: 0%; background: #7fb3a3; }
+    #beat-pad-on { font-size: 10px; padding: 0.1rem 0.35rem; }
+    #beat .bbtns button { flex: 1; font-size: 11px; padding: 0.25rem 0; }
+    #beat .blegend { font-size: 10px; color: #8a877e; display: flex; gap: 0.3rem; align-items: center; }
+    #beat .blegend .k { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+    #beat .blegend .k.on { background: #7fb3a3; }
+    #beat .blegend .k.ghost { border: 1px dashed #4a4a55; }
+
+    /* In mic mode the pattern is still there, it is just not what the bands
+       are listening to. Saying so beats letting the grid look broken. */
+    #beat-mic { display: none; font-size: 10px; color: #e0a316; }
+    #beat.inert #beat-mic { display: block; }
+    #beat.inert #beat-grid, #beat.inert #beat-notes { opacity: 0.35; }
+
+    #veil { position: fixed; inset: 0; z-index: 5; display: grid; place-items: center; background: #0e0e11;
             color: #8a877e; font-size: 12px; transition: opacity .5s; }
     #veil.gone { opacity: 0; pointer-events: none; }
-    @media (max-width: 720px) { #meta, #hint { display: none; } }
+    @media (max-width: 720px) {
+      #meta, #hint { display: none; }
+      #beat { top: 0; right: 0; left: 0; width: auto; border-radius: 0; border-width: 0 0 1px; }
+    }
   </style>
 </head>
 <body>
@@ -56,13 +112,38 @@
 
   <div id="hint">
     drag = orbit · wheel = dolly<br />
-    a = audio source · c = colour · o = ortho<br />
+    a = audio source · b = beat editor · c = colour · o = ortho<br />
     space = freeze · s = png ×3 · h = hide
+  </div>
+
+  <div id="beat" hidden>
+    <div class="bhead"><span>beat</span><button id="beat-close" title="close">×</button></div>
+    <div id="beat-grid"></div>
+    <div id="beat-notes"></div>
+    <div class="brow">
+      <span class="blab">pad</span>
+      <span class="padbar"><i id="beat-pad"></i></span>
+      <button id="beat-pad-on" title="the pad is a drone, not a lane">on</button>
+    </div>
+    <label class="brow"><span class="blab">bpm</span>
+      <input id="beat-bpm" type="range" min="40" max="200" step="1" value="96" />
+      <span class="bval" id="beat-bpm-v">96</span></label>
+    <label class="brow"><span class="blab">swing</span>
+      <input id="beat-swing" type="range" min="0" max="75" step="1" value="0" />
+      <span class="bval" id="beat-swing-v">0%</span></label>
+    <div class="blegend"><b class="k on"></b> yours <b class="k ghost"></b> built-in · <span id="beat-diff">unchanged</span></div>
+    <div class="brow bbtns">
+      <button id="beat-clear">clear</button>
+      <button id="beat-reset">reset</button>
+      <button id="beat-link">link</button>
+    </div>
+    <div id="beat-mic">the room is driving the bands</div>
   </div>
 
   <div id="ui">
     <div class="row">
       <button id="audio">listen: field</button>
+      <button id="beat-open">beat</button>
       <button id="colour">colour: height</button>
       <button id="ortho">persp</button>
       <button id="spin">spin</button>

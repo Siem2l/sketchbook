@@ -7,6 +7,7 @@
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 const PORT = 5178;
 const BASE = `http://localhost:${PORT}`;
@@ -51,6 +52,54 @@ const browser = await chromium.launch();
 
 try {
   await waitForServer(BASE);
+
+  // ------------------------------------------------------------------ geotiff
+  // Node-side and browser-free: the decoder is pure and the fixtures are on
+  // disk, so this needs neither the server nor a page.
+  {
+    const { decodeFloatTiff } = await import('./sketches/2026-08-elsewhere/geotiff.js');
+    const load = (p) => {
+      const b = readFileSync(p);
+      return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+    };
+    // Math.min(...arr) overflows the stack past ~100k elements and these
+    // rasters are 230,400.
+    const span = (arr) => {
+      let lo = Infinity, hi = -Infinity, n = 0;
+      for (const v of arr) if (v < 1e30) { if (v < lo) lo = v; if (v > hi) hi = v; n++; }
+      return { lo, hi, n };
+    };
+
+    await test('the geotiff decoder reads AHN float32 with the floating-point predictor', async () => {
+      const g = await decodeFloatTiff(load('public/data/elsewhere/_fixture/dsm.tif'));
+      assert.equal(g.width, 64);
+      assert.equal(g.height, 64);
+      assert.equal(g.data.length, 64 * 64);
+      assert.equal(g.nodata, 3.4028234663852886e+38);
+      const s = span(g.data);
+      assert.ok(s.n > 64 * 64 * 0.5, `only ${s.n} cells carried a return`);
+      // Utrecht. Nothing here is below sea level and nothing is a tower block.
+      assert.ok(s.lo > -10 && s.hi < 80, `${s.lo}..${s.hi} is not a Dutch street`);
+    });
+
+    await test('the decoder agrees with what PDAL read off the point cloud', async () => {
+      const g = await decodeFloatTiff(load('public/data/elsewhere/prins-hendriklaan/dsm.tif'));
+      const s = span(g.data);
+      // PDAL measured the 240 m window inside this one at 0.36..28.64 m NAP.
+      assert.ok(s.lo < 1.0, `min ${s.lo} is too high for this street`);
+      assert.ok(s.hi > 25 && s.hi < 60, `max ${s.hi}`);
+      assert.ok(Math.abs(g.data[240 * g.width + 240] - 12.56) < 0.01,
+        `centre cell ${g.data[240 * g.width + 240]}, expected 12.56`);
+      // A wrong predictor stride or plane order still yields finite numbers. It
+      // does not yield a field whose neighbours agree with each other.
+      let jumps = 0;
+      for (let i = 1; i < g.width; i++) {
+        const a = g.data[240 * g.width + i - 1], b = g.data[240 * g.width + i];
+        if (a < 1e30 && b < 1e30 && Math.abs(a - b) > 25) jumps++;
+      }
+      assert.ok(jumps < 12, `${jumps} implausible height jumps across one row`);
+    });
+  }
 
   // ------------------------------------------------------------------ helpers
   const state = (p, fn) => p.evaluate(fn);
@@ -1182,9 +1231,15 @@ try {
     // canvas and keep moving by design even when the cloud is at rest — which
     // is enough to fail a byte comparison on its own.
     const shot = async () => {
-      await p.evaluate(() => { document.getElementById('ui').style.visibility = 'hidden'; });
+      await p.evaluate(() => {
+        document.getElementById('ui').style.visibility = 'hidden';
+        document.getElementById('beat').style.visibility = 'hidden';
+      });
       const png = await p.locator('canvas').screenshot();
-      await p.evaluate(() => { document.getElementById('ui').style.visibility = ''; });
+      await p.evaluate(() => {
+        document.getElementById('ui').style.visibility = '';
+        document.getElementById('beat').style.visibility = '';
+      });
       return png;
     };
 
@@ -1298,6 +1353,105 @@ try {
       assert.ok((await hl(() => window.__hendriklaan.state().beats)) > b,
         'the phase stopped advancing after a tempo change');
       await hl(() => window.__hendriklaan.resetPattern());
+    });
+
+    await test('the grid opens closed, and opening it turns the sound on', async () => {
+      assert.equal(await hl(() => window.__hendriklaan.editorOpen()), false);
+      assert.equal(await p.locator('#beat').isVisible(), false);
+      await p.click('#beat-open');
+      assert.equal(await hl(() => window.__hendriklaan.editorOpen()), true);
+      await p.locator('#beat').waitFor({ state: 'visible' });
+      // Opening is a gesture, so it is allowed to start the AudioContext. If a
+      // headless Chromium ever refuses to resume, this is the assertion that
+      // says so rather than something downstream failing obscurely.
+      await p.waitForFunction(() => window.__hendriklaan.audioMode() === 'tone',
+        null, { timeout: 8000 });
+      await p.click('#beat-close');
+      assert.equal(await hl(() => window.__hendriklaan.editorOpen()), false);
+      // Closing the panel leaves the source where it is.
+      assert.equal(await hl(() => window.__hendriklaan.audioMode()), 'tone');
+    });
+
+    await test('the grid draws the built-in pattern as ghosts under the edited one', async () => {
+      await hl(() => window.__hendriklaan.resetPattern());
+      await p.click('#beat-open');
+      const cls = (lane, step) =>
+        p.locator(`#beat-grid .cell[data-lane="${lane}"][data-step="${step}"]`).getAttribute('class');
+
+      // Untouched: the built-in hits are solid, everything else is empty.
+      assert.match(await cls('kick', 0), /\bon\b/);
+      assert.match(await cls('kick', 8), /\bon\b/);
+      assert.doesNotMatch(await cls('kick', 3), /\bon\b|\bghost\b/);
+      assert.equal(await p.locator('#beat-diff').textContent(), 'unchanged');
+
+      // Add a hit and remove one: added gets its own mark, removed leaves a ghost.
+      await p.locator('#beat-grid .cell[data-lane="kick"][data-step="3"]').click();
+      await p.locator('#beat-grid .cell[data-lane="kick"][data-step="8"]').click();
+      assert.match(await cls('kick', 3), /\badded\b/);
+      assert.match(await cls('kick', 8), /\bghost\b/);
+      assert.doesNotMatch(await cls('kick', 8), /\bon\b/);
+      assert.match(await p.locator('#beat-diff').textContent(), /2 changes/);
+      assert.equal(await hl(() => window.__hendriklaan.pattern().kick), 0x0009);
+
+      await p.click('#beat-reset');
+      assert.equal(await hl(() => window.__hendriklaan.pattern().kick), 0x0101);
+      assert.equal(await p.locator('#beat-diff').textContent(), 'unchanged');
+    });
+
+    await test('the note row cycles the pool in both directions', async () => {
+      const cell = p.locator('#beat-notes .note[data-bar="0"]');
+      assert.equal((await cell.textContent()).trim(), 'E3');
+      await cell.click();
+      assert.equal((await cell.textContent()).trim(), 'F3');
+      await cell.click({ modifiers: ['Shift'] });
+      await cell.click({ modifiers: ['Shift'] });
+      assert.equal((await cell.textContent()).trim(), 'D3');
+      assert.equal(await hl(() => window.__hendriklaan.pattern().notes[0]), 1);
+      await p.click('#beat-reset');
+    });
+
+    await test('clear empties the grid and the drone with it', async () => {
+      await p.click('#beat-clear');
+      const p1 = await hl(() => window.__hendriklaan.pattern());
+      assert.deepEqual([p1.kick, p1.bass, p1.hat, p1.pad], [0, 0, 0, 0]);
+      assert.equal(p1.bpm, 96, 'clear should empty the pattern, not reset the tempo');
+      assert.equal(await p.locator('#beat-pad-on').textContent(), 'off');
+      await p.click('#beat-reset');
+      const p2 = await hl(() => window.__hendriklaan.pattern());
+      assert.deepEqual([p2.kick, p2.bass, p2.hat, p2.pad], [0x0101, 0x1111, 0x5555, 1]);
+    });
+
+    await test('the tempo and swing sliders reach the pattern', async () => {
+      await p.fill('#beat-bpm', '140');
+      await p.dispatchEvent('#beat-bpm', 'input');
+      assert.equal(await hl(() => window.__hendriklaan.pattern().bpm), 140);
+      assert.equal(await p.locator('#beat-bpm-v').textContent(), '140');
+      await p.fill('#beat-swing', '50');
+      await p.dispatchEvent('#beat-swing', 'input');
+      assert.equal(await hl(() => window.__hendriklaan.pattern().swing), 0.5);
+      assert.equal(await p.locator('#beat-swing-v').textContent(), '50%');
+      await p.click('#beat-reset');
+    });
+
+    await test('the playhead follows the phase and freeze stops it', async () => {
+      const at = () => p.locator('#beat-grid .tick.now').getAttribute('data-step');
+      const a = await at();
+      await p.waitForFunction((was) =>
+        document.querySelector('#beat-grid .tick.now')?.dataset.step !== was, a, { timeout: 8000 });
+      await hl(() => window.__hendriklaan.setFrozen(true));
+      const b = await at();
+      await p.waitForTimeout(900);
+      assert.equal(await at(), b, 'the playhead kept moving while frozen');
+      await hl(() => window.__hendriklaan.setFrozen(false));
+      await p.click('#beat-close');
+    });
+
+    await test('b toggles the grid from the keyboard', async () => {
+      await p.locator('canvas').click({ position: { x: 40, y: 700 } });
+      await p.keyboard.press('b');
+      assert.equal(await hl(() => window.__hendriklaan.editorOpen()), true);
+      await p.keyboard.press('b');
+      assert.equal(await hl(() => window.__hendriklaan.editorOpen()), false);
     });
 
     await test('freeze holds the frame, and releasing it starts the motion again', async () => {

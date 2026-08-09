@@ -38,7 +38,7 @@
 // 1.08 m across 240 m against a 32 m vertical range, so a per-cell ground grid
 // moves the ramp by 3% and costs a load-time pass. Utrecht is flat. NAP it is.
 
-import { DEFAULT, clone, sequence } from './beat.js';
+import { DEFAULT, clone, mountEditor, sequence } from './beat.js';
 
 const DATA = '/data/hendriklaan.json';
 const BIN = '/data/hendriklaan.bin';
@@ -646,6 +646,7 @@ async function main() {
     if (e.target.tagName === 'INPUT') return;
     const k = e.key.toLowerCase();
     if (k === 'a') cycleAudio();
+    else if (k === 'b') editor.toggle();
     else if (k === 'c') setColour((view.colour + 1) % COLOURS.length);
     else if (k === 'o') setOrtho(!view.ortho);
     else if (k === ' ') { e.preventDefault(); setFrozen(!view.frozen); }
@@ -668,8 +669,7 @@ async function main() {
     $('audio').classList.toggle('on', audio.mode !== 'field');
   }
 
-  async function cycleAudio() {
-    const next = SOURCES[(SOURCES.indexOf(audio.mode) + 1) % SOURCES.length];
+  async function cycleAudioTo(next) {
     note(next === 'mic' ? 'asking for the microphone…' : '');
     await audio.setMode(next);
     $('audio').textContent = 'listen: ' + audio.mode;
@@ -677,6 +677,9 @@ async function main() {
       audio.mode === 'mic' ? 'listening to the room' : ''));
     syncButtons();
   }
+
+  const cycleAudio = () =>
+    cycleAudioTo(SOURCES[(SOURCES.indexOf(audio.mode) + 1) % SOURCES.length]);
 
   $('audio').onclick = cycleAudio;
   $('colour').onclick = () => setColour((view.colour + 1) % COLOURS.length);
@@ -687,6 +690,27 @@ async function main() {
   $('gain').oninput = (e) => { view.gain = +e.target.value; $('gain-v').textContent = view.gain.toFixed(2); };
   $('size').oninput = (e) => { view.pointScale = +e.target.value; $('size-v').textContent = view.pointScale.toFixed(1); };
   syncButtons();
+
+  const editor = mountEditor($('beat'), {
+    pattern,
+    onChange: () => {},                 // the hash is wired in the next commit
+    // Opening the panel is a gesture, so it is allowed to start the audio.
+    // Editing a beat you cannot hear is a worse default than a page that
+    // starts making noise when you ask it for a beat editor.
+    onOpen: () => { if (audio.mode === 'field') cycleAudioTo('tone'); },
+  });
+  $('beat-open').onclick = () => editor.toggle();
+  $('beat-close').onclick = () => editor.close();
+  $('beat-clear').onclick = () => {
+    // The pad goes with the lanes. Leaving it droning would make "clear" mean
+    // "clear the rhythm", and the street would keep moving with an empty grid.
+    pattern.kick = pattern.bass = pattern.hat = pattern.pad = 0;
+    editor.repaint();
+  };
+  $('beat-reset').onclick = () => {
+    Object.assign(pattern, clone(DEFAULT));
+    editor.repaint();
+  };
 
   // ------------------------------------------------------------ draw
   function matrices(w, h) {
@@ -750,6 +774,7 @@ async function main() {
     }
     if (view.spin && !view.frozen) cam.yaw += dt * 0.055;
     for (let i = 0; i < 4; i++) $('b' + i).style.width = (audio.bands[i] * 100).toFixed(0) + '%';
+    editor.draw(view.beats, audio.bands[2], audio.mode === 'mic');
 
     // Reveal: the file is shuffled, so the first N points are an even sparse
     // survey of the whole block rather than one corner of it, and the street
@@ -811,7 +836,9 @@ async function main() {
       Object.assign(pattern, partial);
       if (partial.notes) pattern.notes = [...partial.notes];
     },
-    resetPattern: () => { Object.assign(pattern, clone(DEFAULT)); },
+    resetPattern: () => { Object.assign(pattern, clone(DEFAULT)); editor.repaint(); },
+    editorOpen: () => editor.isOpen(),
+    toggleEditor: () => editor.toggle(),
     setColour, setOrtho, setFrozen,
     audioMode: () => audio.mode,
   };
