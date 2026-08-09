@@ -1292,7 +1292,7 @@ try {
   // browser. The equivalence test is the important one: the masks in DEFAULT
   // are only correct if they reproduce the arithmetic they replaced.
   {
-    const { DEFAULT, NOTES, sequence, same, changes } =
+    const { DEFAULT, NOTES, sequence, same, changes, encode, decode } =
       await import('./sketches/2026-08-hendriklaan/beat.js');
 
     // Verbatim copy of the sequencer as it stood before the editor existed.
@@ -1391,6 +1391,53 @@ try {
       assert.equal(changes({ ...DEFAULT, kick: 0 }), 2);        // two bits removed
       assert.equal(changes({ ...DEFAULT, bpm: 120 }), 1);
       assert.equal(changes({ ...DEFAULT, notes: [2, 1, 4, 1] }), 1);
+    });
+
+    await test('the built-in pattern encodes to the documented hash', () => {
+      assert.equal(encode(DEFAULT), 'b=010111115555&n=2140&t=96&s=0');
+    });
+
+    await test('any pattern survives a round trip through the hash', () => {
+      const cases = [
+        DEFAULT,
+        { ...DEFAULT, kick: 0xffff, bass: 0, hat: 0x8001, notes: [0, 6, 3, 3], bpm: 174, swing: 0.5 },
+        { ...DEFAULT, kick: 0, bass: 0, hat: 0, bpm: 40, swing: 0 },
+        { ...DEFAULT, bpm: 200, swing: 0.75 },
+      ];
+      for (const p of cases) {
+        const back = decode(encode(p));
+        assert.ok(back, `decode refused its own output for ${encode(p)}`);
+        assert.ok(same(p, back), `round trip changed ${encode(p)} into ${encode(back)}`);
+      }
+    });
+
+    await test('a leading hash is optional', () => {
+      assert.ok(same(DEFAULT, decode('#' + encode(DEFAULT))));
+      assert.ok(same(DEFAULT, decode(encode(DEFAULT))));
+    });
+
+    await test('a malformed hash is refused whole rather than half-read', () => {
+      const bad = [
+        '', '#', 'b=zzzz&n=2140&t=96&s=0',           // not hex
+        'b=010111115555&n=2140&t=96',                 // missing swing
+        'b=01011111555&n=2140&t=96&s=0',              // 11 hex chars
+        'b=010111115555&n=2740&t=96&s=0',             // note index out of pool
+        'b=010111115555&n=214&t=96&s=0',              // three notes
+        'b=010111115555&n=2140&t=39&s=0',             // tempo below the floor
+        'b=010111115555&n=2140&t=201&s=0',            // tempo above the ceiling
+        'b=010111115555&n=2140&t=96&s=76',            // swing past three quarters
+        'b=010111115555&n=2140&t=-96&s=0',            // negative tempo
+        'n=2140&t=96&s=0',                            // no lanes at all
+      ];
+      for (const s of bad) assert.equal(decode(s), null, `accepted ${JSON.stringify(s)}`);
+    });
+
+    await test('a decoded pattern is detached, so editing it cannot poison DEFAULT', () => {
+      const p = decode(encode(DEFAULT));
+      p.notes[0] = 6;
+      p.kick = 0;
+      assert.equal(DEFAULT.notes[0], 2);
+      assert.equal(DEFAULT.kick, 0x0101);
     });
   }
 

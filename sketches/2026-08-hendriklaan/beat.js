@@ -110,3 +110,42 @@ export const changes = (p) =>
   + p.notes.reduce((a, v, i) => a + (v === DEFAULT.notes[i] ? 0 : 1), 0)
   + (p.bpm === DEFAULT.bpm ? 0 : 1)
   + (p.swing === DEFAULT.swing ? 0 : 1);
+
+// ---------------------------------------------------------------- the hash
+// Fixed-width and regex-checkable, so a mangled link fails loudly at the field
+// level instead of decoding into a pattern that is half someone else's.
+//
+//   b=010111115555&n=2140&t=96&s=0
+//     └kick┘└bass┘└hat─┘   E D G C
+//
+// Rejection is all-or-nothing on purpose. Half-reading a broken link would
+// hand someone a tune that is neither the one they were sent nor the built-in
+// one, and they would have no way to tell which parts were which.
+
+const hex4 = (n) => (n & 0xffff).toString(16).padStart(4, '0');
+
+export const encode = (p) =>
+  `b=${hex4(p.kick)}${hex4(p.bass)}${hex4(p.hat)}`
+  + `&n=${p.notes.join('')}`
+  + `&t=${Math.round(p.bpm)}`
+  + `&s=${Math.round(p.swing * 100)}`;
+
+export function decode(str) {
+  const q = new URLSearchParams(String(str || '').replace(/^#/, ''));
+  const b = q.get('b') || '', n = q.get('n') || '';
+  const t = q.get('t') || '', s = q.get('s') || '';
+  if (!/^[0-9a-f]{12}$/.test(b)) return null;
+  if (!/^[0-6]{4}$/.test(n)) return null;
+  if (!/^\d{2,3}$/.test(t)) return null;
+  if (!/^\d{1,2}$/.test(s)) return null;
+  const bpm = +t, swing = +s;
+  if (bpm < 40 || bpm > 200 || swing > 75) return null;
+  return {
+    bpm,
+    swing: swing / 100,
+    kick: parseInt(b.slice(0, 4), 16),
+    bass: parseInt(b.slice(4, 8), 16),
+    hat: parseInt(b.slice(8, 12), 16),
+    notes: n.split('').map(Number),
+  };
+}
