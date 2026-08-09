@@ -65,13 +65,15 @@ async function main() {
   const slots = createSlots({ ring: 3 });
   // One layer per ring slot, and layer 0 reserved for the baked frame. With one
   // fewer than this, two slots shared a layer and overwrote each other.
-  const layerOf = (idx) => 1 + idx;
+  const layerOf = (idx) => idx;          // nine ring slots, nine layers
 
-  // Three whole-window coarse layers that rotate: one under the place you are
-  // on, one under the place you are flying to, one free so a second jump never
-  // waits for the first one's memory back.
-  const COARSE = [0, 10, 11];
-  let coarseAt = 0;
+  // Two pairs that alternate. A pair is a wide 480 m frame at one metre, which
+  // is what the edges of the square stand on, and a sharp 240 m centre at half
+  // a metre, which is what you actually look at. One pair holds the place you
+  // are on, the other the place you are flying to, and landing swaps them.
+  const PAIRS = [[9, 10], [11, 12]];
+  let pairAt = 0;
+  const wideOf = () => PAIRS[pairAt][0];
   let phase = 'roam';
   let flight = null;
   let held = false;
@@ -141,8 +143,8 @@ async function main() {
     const { surf, terr } = levelled(dsm.data, dtm.data, place.datum);
     field.uploadHeight(0, surf, terr);
     field.uploadPhoto(0, rgba);
-    setLayer(tilesA, 0, meta.bbox[0], meta.bbox[1], meta.bbox[2] - meta.bbox[0]);
-    bornA[0] = -1e4;                                // no changeover on first paint
+    setLayer(tilesA, PAIRS[0][0], meta.bbox[0], meta.bbox[1], meta.bbox[2] - meta.bbox[0]);
+    bornA[PAIRS[0][0]] = -1e4;                      // no changeover on first paint
   }
 
   let inflight = 0;
@@ -175,8 +177,9 @@ async function main() {
         // without ceremony. Firing the fall-and-pop for those meant every
         // landing was followed by the whole square sinking and popping back,
         // which read as the transition happening twice.
-        const cx = tilesA[coarseAt * 4], cz = tilesA[coarseAt * 4 + 1];
-        const cs = tilesA[coarseAt * 4 + 2];
+        const wide = wideOf();
+        const cx = tilesA[wide * 4], cz = tilesA[wide * 4 + 1];
+        const cs = tilesA[wide * 4 + 2];
         // Overlap, not containment: a 240 m tile on a fixed grid rarely sits
         // wholly inside a 480 m window, and the straddling ones were still
         // firing, so a corner of the square kept sinking after every landing.
@@ -273,11 +276,11 @@ async function main() {
     // framed from 300 m cannot show a 105 m lift, which is what a 49 km flight
     // used to ask for. Distance still shades the motion, between a hop and a
     // proper heave, but everything stays in the picture.
-    const km = flight ? flight.j.km : 0;
-    const far = Math.min(1, Math.log10(1 + km * 10) / 2.7);
-    gl.uniform1f(u.uArc, phase === 'flying' ? 1 : 0);
-    gl.uniform1f(u.uLift, flight ? 6 + 13 * far : 0);
-    gl.uniform1f(u.uSwing, flight ? 5 + 14 * far : 0);
+    // Lift and swing belong to the local changeover only — a jump is a morph in
+    // place, with nothing thrown into the air.
+    gl.uniform1f(u.uArc, 1);
+    gl.uniform1f(u.uLift, 9);
+    gl.uniform1f(u.uSwing, 4);
     gl.uniform1f(u.uColour, view.colour);
     gl.uniform1f(u.uPointK, m.pointK);
     gl.uniform1f(u.uSpan, 0.55);
@@ -308,13 +311,24 @@ async function main() {
     // particle cannot walk to a position that has not been fetched. Gathering
     // happens behind the place still on screen, and nothing changes until it
     // is all here.
+    // Every particle has to know where it is going before any of them moves,
+    // and at the resolution it is going to be seen at. Gathering only a wide
+    // frame meant morphing from a half-metre city into a one-metre one, so the
+    // destination arrives as both: the sharp centre you look at, and the wide
+    // frame the edges stand on once the ring reloads. Six requests, both in
+    // hand before the first particle stirs.
     phase = 'gathering';
     $('go').disabled = true;
     note(`gathering ${dest.name} — nothing has moved yet`);
-    const layer = COARSE[(COARSE.indexOf(coarseAt) + 1) % COARSE.length];
-    let meta;
+    // Only the sharp centre is gathered before the flight. It is the only thing
+    // the transition can actually show — it covers the drawn square exactly —
+    // and the wide frame the edges will need once you start sliding again can
+    // load after you have landed, while you are looking at the new place. Three
+    // requests rather than six, which halves the wait for nothing lost.
+    const [wide, sharp] = PAIRS[1 - pairAt];
+    let sharpMeta;
     try {
-      meta = await loadCoarse([dest.x, dest.y], layer);
+      sharpMeta = await loadCoarse([dest.x, dest.y], sharp, SPAN + 32);
     } catch (e) {
       phase = 'roam';
       $('go').disabled = false;
@@ -325,10 +339,11 @@ async function main() {
     // The destination is framed where the camera already is, because a particle
     // keeps its ground and changes what it stands on. Offsetting it by the true
     // 49 km would put every particle off screen by mid-flight.
+    const dx = cam.x - dest.x, dz = cam.z - dest.y;
     tilesB.fill(0);
-    setLayer(tilesB, layer, meta.bbox[0] + (cam.x - dest.x), meta.bbox[1] + (cam.z - dest.y), meta.span);
+    setLayer(tilesB, sharp, sharpMeta.bbox[0] + dx, sharpMeta.bbox[1] + dz, sharpMeta.span);
 
-    flight = { j, dest, layer, meta, mix: 0, started: view.clock };
+    flight = { j, dest, wide, sharp, meta: sharpMeta, mix: 0, started: view.clock };
     phase = 'flying';
     held = false;
     $('hold').classList.remove('on');
@@ -343,14 +358,14 @@ async function main() {
     // in a layer, so this is a relabel and a re-anchor.
     cam.x = f.dest.x;
     cam.z = f.dest.y;
-    coarseAt = f.layer;
+    pairAt = 1 - pairAt;
     place.datum = f.meta.datum;
     place.tone = f.meta.tone;
     place.name = f.dest.name;
     place.centre = [f.dest.x, f.dest.y];
     tilesA.fill(0);
     bornA.fill(-1e4);
-    setLayer(tilesA, f.layer, f.meta.bbox[0], f.meta.bbox[1], f.meta.span);
+    setLayer(tilesA, f.sharp, f.meta.bbox[0], f.meta.bbox[1], f.meta.span);
     tilesB.fill(0);
     flight = null;
     phase = 'roam';
@@ -362,6 +377,16 @@ async function main() {
     $('mixv').textContent = '—';
     $('flight').innerHTML = '&nbsp;';
     note('landed — WASD slides the window from here');
+
+    // The wide frame catches up now, in the background, so the edges of the
+    // square have something to stand on the moment you start sliding.
+    loadCoarse([f.dest.x, f.dest.y], f.wide, 480)
+      .then((m) => {
+        if (place.centre[0] !== f.dest.x) return;   // already gone somewhere else
+        setLayer(tilesA, f.wide, m.bbox[0], m.bbox[1], m.span);
+        bornA[f.wide] = -1e4;
+      })
+      .catch(() => { /* the sharp ring covers the square on its own */ });
   }
 
   // --------------------------------------------------------------- controls
@@ -482,7 +507,9 @@ async function main() {
   $('veil').classList.add('gone');
 
   window.__elsewhere = {
-    ready: () => tilesA[3] > 0.5,
+    // the wide frame of whichever pair is current, not layer 0 — the pairs
+    // alternate, and layer 0 is a ring slot now
+    ready: () => tilesA[wideOf() * 4 + 3] > 0.5 || tilesA[PAIRS[pairAt][1] * 4 + 3] > 0.5,
     count: () => field.count,
     place: () => ({ ...place }),
     state: () => ({ ...view }),

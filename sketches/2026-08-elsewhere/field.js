@@ -19,11 +19,13 @@ export const GRID = Math.round(SPAN / CELL); // 480 cells across = 230,400 parti
 export const TILE_SPAN = 240;                // a fetch tile, on a global grid
 export const TILE_H = 480;                   // height texels a tile edge — 0.5 m
 export const TILE_P = 960;                   // photo texels a tile edge — 25 cm
-// A 3x3 ring of sharp tiles (1..9), plus three coarse whole-window layers
-// (0, 10, 11) that rotate: one holds the place you are on, one the place you
-// are flying to, and the third is free so a second jump never has to wait for
-// the first one's memory back.
-export const LAYERS = 12;
+// Nine layers for the sharp ring (0..8), then two pairs that alternate: 9,10
+// for the place you are standing on and 11,12 for the place you are flying to,
+// each pair being a wide 480 m frame at one metre and a sharp 240 m centre at
+// half a metre. The sharp centre exists so a jump morphs between two places at
+// the same resolution rather than dissolving into a blurred one; the wide frame
+// is what the edges of the square stand on until the ring reloads.
+export const LAYERS = 13;
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);

@@ -20,9 +20,9 @@ uniform sampler2DArray uPhoto;    // RGBA8: the orthophoto
 uniform mat4 uView, uProj;
 uniform vec2 uCentre;             // world xz the square is framing
 uniform vec2 uDir;                // unit travel direction, scene space
-uniform vec4 uTilesA[12];          // per layer: origin x, origin z, span, resident
-uniform vec4 uTilesB[12];
-uniform float uBornA[12];          // when each layer landed, for the changeover
+uniform vec4 uTilesA[13];          // per layer: origin x, origin z, span, resident
+uniform vec4 uTilesB[13];
+uniform float uBornA[13];          // when each layer landed, for the changeover
 uniform int uGrid;                // cells across the drawn square
 uniform float uCell, uHalf;
 uniform float uToneLo, uToneGain;      // the place you are on
@@ -35,13 +35,13 @@ out float vAlive;
 
 float hash1(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
 
-// Which resident tile holds this ground, and where in it. Twelve candidates is a
+// Which resident tile holds this ground, and where in it. Thirteen candidates is a
 // loop the vertex unit does not notice, and it saves carrying a layer index per
 // particle — which would mean writing to a buffer every time a tile moved.
-int findLayer(vec4 tiles[12], vec2 w, out vec2 uv, out float span) {
+int findLayer(vec4 tiles[13], vec2 w, out vec2 uv, out float span) {
   int best = -1;
   float finest = 1e9;
-  for (int i = 0; i < 12; i++) {
+  for (int i = 0; i < 13; i++) {
     if (tiles[i].w < 0.5) continue;
     vec2 rel = w - tiles[i].xy;
     float sp = tiles[i].z;
@@ -61,7 +61,7 @@ int findLayer(vec4 tiles[12], vec2 w, out vec2 uv, out float span) {
 
 struct Sample { float y; float hag; vec3 rgb; vec3 n; float born; float found; };
 
-Sample lookup(vec4 tiles[12], vec2 w, bool useBorn, float toneLo, float toneGain) {
+Sample lookup(vec4 tiles[13], vec2 w, bool useBorn, float toneLo, float toneGain) {
   Sample s;
   vec2 uv; float span;
   int layer = findLayer(tiles, w, uv, span);
@@ -131,16 +131,12 @@ void main() {
   // arriving tile is a scatter of pixels dropping out and popping back rather
   // than a block appearing at once. Jumping: one clock for everybody, staggered
   // along the bearing, so the departure edge leaves first.
-  // The spread is what makes a jump read as particles rather than as a slab.
-  // Biasing it only along the bearing moved everything in lockstep: the whole
-  // field rose together, left the frame, and came back, which looks like the
-  // picture being swapped rather than like anything travelling. Two thirds of
-  // the lead is now per particle, so at any instant some are still standing in
-  // the old place, some are in the air, and some have already arrived.
-  float bias = dot(normalize(w - uCentre + 1e-4), uDir) * 0.5 + 0.5;
+  // One transition, and every particle in it at once. Spreading the start times
+  // per particle made the field churn — two hundred thousand things each doing
+  // their own errand reads as noise, not as a place becoming another place.
+  // Eased rather than linear, so the city gathers itself, moves, and settles.
   float r = hash1(w * 0.37 + 2.9);
-  float lead = 0.30 * bias + 0.50 * r;
-  float tJump = clamp(uMix * 1.8 - lead, 0.0, 1.0);
+  float tJump = smoothstep(0.0, 1.0, uMix);
   float jitter = hash1(w + 7.1) * 0.65;
   float tLocal = clamp((uTime - A.born - jitter) / uSpan, 0.0, 1.0);
   float t = mix(tLocal, tJump, uJump);
@@ -158,8 +154,10 @@ void main() {
   // up and bringing the new one down is the thing worth watching. The spread
   // above means the population converts gradually even though each particle
   // flips at once.
+  // Height and colour move on the same eased curve, so a roof travels to its
+  // replacement carrying its own colour the whole way.
   float pick = uJump > 0.5 ? t : 0.0;
-  float flip = uJump > 0.5 ? smoothstep(0.42, 0.58, t) : 0.0;
+  float flip = pick;
 
   // A particle keeps its ground and changes what it is standing on. Displacing
   // it by the true offset between two places is the obvious reading and it is
@@ -168,13 +166,13 @@ void main() {
   vec3 rgb = mix(A.rgb, B.rgb, flip);
   vec3 n = normalize(mix(A.n, B.n, flip));
 
-  // Scaled to the square, not to the journey. A 49 km flight was lifting every
-  // particle 105 m and sliding it 141 m across a 240 m window seen from 300 m,
-  // so the field simply left the picture. Distance still colours the motion,
-  // but only within what stays in frame.
-  vec2 stream = -uDir * uSwing * arc * (0.5 + 1.0 * r)
-              + vec2(hash1(w + 11.3) - 0.5, hash1(w + 19.7) - 0.5) * uSwing * arc * 0.7;
-  float lift = uLift * arc * (0.35 + 1.1 * r);
+  // Nothing is thrown into the air on a jump. A lift reads as the picture being
+  // swapped while you are not looking at it, and a lateral slide takes the
+  // field out of a bounded square altogether. What moves is the ground itself:
+  // roofs rise and fall into the roofs that replace them. Swing and lift are
+  // kept only for the local changeover, where a tile arrives over new ground.
+  vec2 stream = -uDir * uSwing * arc * (1.0 - uJump) * (0.5 + r);
+  float lift = uLift * arc * (1.0 - uJump) * (0.35 + 1.1 * r);
 
   vec3 p = vec3(w.x + stream.x - uCentre.x, y + lift, w.y + stream.y - uCentre.y);
   vec4 eye = uView * vec4(p, 1.0);
