@@ -1,0 +1,19 @@
+{
+  "name": "Prins Hendriklaan 17, 3583EB Utrecht",
+  "address": "Prins Hendriklaan 17, Utrecht",
+  "centre": [
+    138275.467,
+    455380.628
+  ],
+  "bbox": [
+    138035.467,
+    455140.628,
+    138515.467,
+    455620.628
+  ],
+  "width": 64,
+  "height": 64,
+  "cell": 7.5,
+  "source": "PDOK AHN dsm_05m/dtm_05m + Actueel_orthoHR",
+  "licence": "AHN CC BY 4.0 · orthophoto Beeldmateriaal.nl"
+}
