@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>elsewhere — interaction mock</title>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: #0e0e11; color: #e8e6e0; font: 13px ui-monospace, monospace; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: grab; touch-action: none; }
+  canvas.dragging { cursor: grabbing; }
+
+  #warn { position: fixed; top: 0; left: 0; right: 0; z-index: 5; background: #e0a31622; border-bottom: 1px solid #e0a31655;
+          color: #e0a316; padding: 0.4rem 0.8rem; font-size: 11px; text-align: center; }
+  #hud { position: fixed; top: 2.4rem; left: 1rem; z-index: 3; color: #8a877e; font-size: 11px; line-height: 1.7; }
+  #hud b { color: #e8e6e0; font-weight: normal; }
+  #hud .go { color: #e0a316; }
+  #keys { position: fixed; top: 2.4rem; right: 1rem; z-index: 3; color: #8a877e; font-size: 11px; line-height: 1.7; text-align: right; }
+  #keys kbd { color: #e8e6e0; font: inherit; }
+
+  #ui { position: fixed; bottom: 0.75rem; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 2rem); z-index: 3;
+        display: flex; flex-direction: column; gap: 0.45rem; background: #17171cee; padding: 0.55rem 0.75rem; border-radius: 8px; }
+  .row { display: flex; gap: 0.4rem; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .row .lab { color: #8a877e; font-size: 11px; }
+  button { background: #26262e; color: #e8e6e0; border: 1px solid #444; border-radius: 4px; padding: 0.3rem 0.55rem; font: inherit; font-size: 12px; cursor: pointer; }
+  button:hover { border-color: #7fb3a3; }
+  button.on { border-color: #7fb3a3; color: #7fb3a3; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  input[type=range] { width: 12rem; accent-color: #7fb3a3; }
+  input[type=range]:disabled { opacity: 0.4; }
+  #mixv { color: #e8e6e0; min-width: 2.6rem; }
+  #note { color: #e0a316; font-size: 11px; min-height: 1em; text-align: center; }
+  .pill { border-color: #3a3a44; }
+</style>
+</head>
+<body>
+<div id="warn">
+  interaction mock — the terrain is procedural, not AHN. Fake 120–320 ms load delays and a 6-request cap stand in for the real PDOK tiles.
+</div>
+
+<div id="hud">
+  <div><b id="place">Prins Hendriklaan, Utrecht</b></div>
+  <div>RD <b id="px">0</b> <b id="pz">0</b> &nbsp; window <b id="span">160</b> m</div>
+  <div><b id="np">0</b> particles · never created, never destroyed</div>
+  <div>tiles <b id="tl">0</b>/49 &nbsp; loading <b id="tq">0</b></div>
+  <div class="go" id="flight">&nbsp;</div>
+</div>
+
+<div id="keys">
+  <kbd>W A S D</kbd> slide the window<br />
+  <kbd>shift</kbd> faster &nbsp; drag to orbit<br />
+  wheel = dolly
+</div>
+
+<div id="ui">
+  <div class="row">
+    <span class="lab">jump to</span>
+    <button class="pill" data-go="0">Prins Hendriklaan</button>
+    <button class="pill" data-go="1">Coolsingel</button>
+    <button class="pill" data-go="2">Kinderdijk</button>
+    <button class="pill" data-go="3">Maasvlakte</button>
+  </div>
+  <div class="row">
+    <span class="lab">scrub</span>
+    <input id="mix" type="range" min="0" max="1" step="0.001" value="0" disabled />
+    <span id="mixv">—</span>
+    <button id="hold">hold</button>
+    <span class="lab">grain</span>
+    <input id="size" type="range" min="0.25" max="1.3" step="0.05" value="0.55" style="width:6rem" />
+    <button id="colour">lit photo</button>
+  </div>
+  <div id="note">WASD slides the window across the country — the frame stays put</div>
+</div>
+
+<script type="module">
+// elsewhere — interaction mock.
+//
+// Everything here is fake except the shape of the interaction. Terrain comes
+// from a hash instead of PDOK, the loader sleeps 120–320 ms instead of doing a
+// round trip, and the four "addresses" are hard-coded. What is real is the
+// architecture the sketch will use.
+//
+// The rule the whole thing is built around: there are N particles, they are
+// allocated once, and nothing ever creates or destroys one. Flying somewhere
+// re-points them at new ground. Jumping to another address tells all of them
+// where to stand next and lets them travel there. That is why the destination
+// has to be fully in hand *before* the flight starts — a particle cannot move
+// to a position that has not been fetched yet, and the first version of this
+// mock proved the point by going completely black mid-jump: it was throwing
+// the tiles away and reloading, which is a dissolve, not a journey.
+
+const K = 64;                 // cells a tile edge
+const CELL = 0.5;             // metres a cell, matching AHN's native grid
+const TILE = K * CELL;        // 32 m
+const R = 7;                  // ring is R x R tiles — 224 m across
+// The ring caches 7 tiles across; the square shows the middle 5. That one-tile
+// margin is where new ground lands before it slides into frame, and it is the
+// difference between a leading edge that fills in gracefully and a black hole
+// that follows you around.
+const SHOWN = 5;
+const SPAN = SHOWN * TILE;        // 160 m — the square's edge
+const HALF = SPAN / 2;
+const TILES = R * R;
+const PER_TILE = K * K;
+const N = TILES * PER_TILE;   // 200,704 particles, for the whole session
+const STRIDE = 32;
+const CONCURRENCY = 6;        // the real loader will be equally polite
+
+const PLACES = [
+  { name: 'Prins Hendriklaan, Utrecht', x: 138275, z: 455381, seed: 11 },
+  { name: 'Coolsingel, Rotterdam',      x:  92500, z: 437300, seed: 29 },
+  { name: 'Kinderdijk',                 x: 103300, z: 431500, seed: 47 },
+  { name: 'Maasvlakte',                 x:  60200, z: 442800, seed: 63 },
+];
+
+// ------------------------------------------------------------------ terrain
+// A hash-driven Dutch block: streets on a jittered grid, terraced houses with
+// pitched roofs fronting them, gardens and trees behind, water and parks in
+// some super-blocks. Deterministic in world coordinates, so a tile generates
+// the same thing however you approach it — the property the real tile cache
+// depends on too.
+const hash = (x, y, s) => {
+  let h = (x * 374761393 + y * 668265263 + s * 2147483647) | 0;
+  h = (h ^ (h >>> 13)) * 1274126177;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+};
+const smooth = (x, z, f, s) => {
+  const X = Math.floor(x * f), Z = Math.floor(z * f);
+  const fx = x * f - X, fz = z * f - Z;
+  const u = fx * fx * (3 - 2 * fx), v = fz * fz * (3 - 2 * fz);
+  const a = hash(X, Z, s), b = hash(X + 1, Z, s), c = hash(X, Z + 1, s), d = hash(X + 1, Z + 1, s);
+  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+};
+
+function sample(wx, wz, seed) {
+  const SB = 180;
+  const sbx = Math.floor(wx / SB), sbz = Math.floor(wz / SB);
+  const kind = hash(sbx, sbz, seed + 1);
+
+  if (kind < 0.10) {
+    return [-0.4 + smooth(wx, wz, 0.22, seed) * 0.15, 34, 58, 66];
+  }
+  if (kind < 0.18) {
+    const t = smooth(wx, wz, 0.11, seed + 5);
+    const tree = t > 0.62 ? (t - 0.62) * 34 : 0;
+    return [0.2 + tree, 34 + t * 20, 58 + t * 46, 32 + t * 18];
+  }
+
+  const jx = hash(sbx, sbz, seed + 2) * 12, jz = hash(sbx, sbz, seed + 3) * 12;
+  const BLOCK = 56, ROAD = 11;
+  const bx = ((wx + jx) % BLOCK + BLOCK) % BLOCK;
+  const bz = ((wz + jz) % BLOCK + BLOCK) % BLOCK;
+  if (bx < ROAD || bz < ROAD) {
+    const edge = Math.min(bx, bz, ROAD - bx, ROAD - bz);
+    const lane = (edge > 4.6 && edge < 5.4 && hash(Math.floor(wx / 3), Math.floor(wz / 3), seed) > 0.55) ? 40 : 0;
+    const g = 44 + lane + smooth(wx, wz, 1.6, seed) * 10;
+    const bay = Math.floor((bx < ROAD ? wz : wx) / 4.6);
+    if (edge > 0.7 && edge < 2.3 && hash(bay, bx < ROAD ? sbx : sbz, seed + 9) > 0.55) {
+      const c = hash(bay, 7, seed + 10);
+      return [1.4, 60 + c * 150, 62 + c * 120, 68 + c * 110];
+    }
+    return [0.05, g, g + 2, g + 6];
+  }
+
+  const inx = bx - ROAD, inz = bz - ROAD;
+  const depth = Math.min(inx, inz, BLOCK - ROAD - inx, BLOCK - ROAD - inz);
+  const tall = kind > 0.93;
+
+  if (depth < 13 || tall) {
+    const along = inx < inz ? wz : wx;
+    const plot = Math.floor(along / 6.2);
+    const p = hash(plot, tall ? 0 : Math.floor((inx < inz ? wx : wz) / 56), seed + 4);
+    const ridge = tall ? 0 : Math.abs(depth - 6.5);
+    const h = tall ? 22 + p * 34 : 8.5 + p * 3.4 - ridge * 0.62;
+    if (!tall && hash(plot, 3, seed + 6) > 0.78 && ridge < 3.4) return [h, 26, 30, 42];  // solar
+    const brick = p > 0.45;
+    return tall
+      ? [h, 96 + p * 40, 98 + p * 40, 104 + p * 40]
+      : [h, brick ? 128 + p * 60 : 70 + p * 30, brick ? 64 + p * 30 : 72 + p * 26, brick ? 48 + p * 20 : 76 + p * 24];
+  }
+
+  const t = smooth(wx, wz, 0.16, seed + 7);
+  if (t > 0.70) return [3 + (t - 0.70) * 40, 40 + t * 22, 74 + t * 40, 38 + t * 20];
+  if (hash(Math.floor(wx / 5), Math.floor(wz / 5), seed + 8) > 0.94) return [2.4, 96, 88, 74];
+  return [0.15, 52 + t * 26, 74 + t * 30, 44 + t * 20];
+}
+
+// ------------------------------------------------------------------- webgl
+const canvas = document.createElement('canvas');
+document.body.insertBefore(canvas, document.body.firstChild);
+const gl = canvas.getContext('webgl2', { antialias: true });
+if (!gl) { document.getElementById('note').textContent = 'this mock needs WebGL2'; throw new Error('no webgl2'); }
+
+const VS = `#version 300 es
+precision highp float;
+in vec2 aWorld;       // world x,z of this particle's A position
+in vec2 aY;           // height at A, height at B
+in float aBorn;       // when this tile's data arrived, for the rise-in
+in vec4 aCA;
+in vec4 aCB;
+in vec4 aN;           // nx,nz at A and at B
+
+uniform mat4 uView, uProj;
+uniform vec3 uCentre;  // the world xz the square is currently framing
+uniform vec2 uDir;     // unit travel direction in world xz
+uniform float uMix, uTime, uArc, uLift, uSwing, uColour, uPointK, uSpan, uDrop, uJump, uSize, uHalf;
+
+out vec3 vCol;
+out float vAlive;
+
+float hash1(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+
+void main() {
+  // Two ways a particle changes what it is standing on.
+  //
+  // Sliding the window: each particle keeps its own clock. aBorn is jittered
+  // per particle rather than per tile, so a tile arriving is a scatter of
+  // pixels dropping out and popping back, not a 64x64 block appearing at once.
+  // Tile-level timing was visible as chunks and it looked like a loading bar.
+  //
+  // Jumping: one clock for everybody, staggered along the bearing, so the
+  // departure edge leaves first and the far edge lands last.
+  float u = dot(normalize(aWorld - uCentre.xz + 1e-4), uDir) * 0.5 + 0.5;
+  float tJump = clamp(uMix * 1.55 - 0.55 * u, 0.0, 1.0);
+  float tLocal = clamp((uTime - aBorn) / uSpan, 0.0, 1.0);
+  float t = mix(tLocal, tJump, uJump);
+  float arc = sin(t * 3.14159265) * uArc;
+
+  // Through a local changeover the pixel falls away, vanishes, and the new one
+  // pops back up in its place. Nothing cross-fades: at any instant a particle
+  // is showing one place or the other, never an average of the two.
+  float cross = 1.0 - abs(t * 2.0 - 1.0);          // 0 at the ends, 1 mid-swap
+  float side = step(0.5, t);                        // 0 = old value, 1 = new
+  float pick = mix(side, t, uJump);                 // a jump lerps instead
+
+  // The particle keeps its ground position and changes what it is standing on.
+  // Displacing it by the real offset between the two places was the obvious
+  // reading of "move to the new position" and it is wrong: 49 km puts every
+  // particle off screen by mid-flight and the picture goes black. Two places
+  // that far apart can only be shown one at a time, so the journey lives in
+  // the streaming below, and the rearrangement is what you actually watch.
+  vec2 w = aWorld;
+  float y = mix(aY.x, aY.y, pick) - (1.0 - uJump) * uDrop * cross;
+
+  // Flight streams along the reverse bearing, the way ground streams past a
+  // window when you are the one moving. Zero at both ends by construction.
+  vec2 stream = -uDir * uSwing * arc * (0.6 + 0.8 * hash1(aWorld));
+  float lift = uLift * arc * (0.5 + hash1(aWorld + 3.7));
+
+  vec3 p = vec3(w.x + stream.x - uCentre.x, y + lift, w.y + stream.y - uCentre.z);
+  vec4 eye = uView * vec4(p, 1.0);
+  gl_Position = uProj * eye;
+
+  // Clip to the square. Tiles in the margin are loaded and resident but not
+  // shown; they are what the leading edge slides into.
+  vec2 rel = w - uCentre.xz;
+  float inside = step(abs(rel.x), uHalf) * step(abs(rel.y), uHalf);
+
+  vec3 n = mix(vec3(aN.x, 0.0, aN.y), vec3(aN.z, 0.0, aN.w), pick);
+  n.y = sqrt(max(0.02, 1.0 - dot(n.xz, n.xz)));
+  float diff = 0.34 + 0.78 * max(0.0, dot(normalize(n), normalize(vec3(-0.42, 0.80, 0.42))));
+
+  vec3 photo = mix(aCA.rgb, aCB.rgb, pick);
+  float ht = clamp(y / 18.0, 0.0, 1.0);
+  vec3 ramp = ht < 0.38 ? mix(vec3(0.09,0.10,0.19), vec3(0.20,0.44,0.47), ht/0.38)
+            : ht < 0.76 ? mix(vec3(0.20,0.44,0.47), vec3(0.85,0.72,0.42), (ht-0.38)/0.38)
+                        : mix(vec3(0.85,0.72,0.42), vec3(1.0,0.98,0.94), (ht-0.76)/0.24);
+
+  vCol = mix(photo, ramp, uColour) * diff + arc * 0.06;
+  vAlive = (1.0 - (1.0 - uJump) * cross) * inside;   // shrinks to nothing at the swap
+
+  float d = max(-eye.z, 1.0);
+  gl_PointSize = clamp(uPointK * uSize / d * (1.0 + arc * 0.45) * vAlive, 0.6, 26.0);
+}`;
+
+const FS = `#version 300 es
+precision highp float;
+in vec3 vCol;
+in float vAlive;
+out vec4 frag;
+void main() {
+  vec2 d = gl_PointCoord - 0.5;
+  if (dot(d, d) > 0.25) discard;
+  if (vAlive < 0.06) discard;
+  float edge = 1.0 - smoothstep(0.13, 0.25, dot(d, d));
+  frag = vec4(vCol * (0.68 + 0.32 * edge), 1.0);
+}`;
+
+function sh(type, src) {
+  const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+
+const U = Object.fromEntries(['uView','uProj','uCentre','uMix','uTime','uArc','uLift','uSwing','uColour','uDir','uPointK','uSpan','uDrop','uJump','uSize','uHalf']
+  .map((n) => [n, gl.getUniformLocation(prog, n)]));
+
+const buf = new ArrayBuffer(N * STRIDE);
+const f32 = new Float32Array(buf);
+const u8 = new Uint8Array(buf);
+const i8 = new Int8Array(buf);
+
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, buf.byteLength, gl.DYNAMIC_DRAW);
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+const attr = (name, size, type, norm, off) => {
+  const l = gl.getAttribLocation(prog, name);
+  gl.enableVertexAttribArray(l);
+  gl.vertexAttribPointer(l, size, type, norm, STRIDE, off);
+};
+attr('aWorld', 2, gl.FLOAT, false, 0);
+attr('aY', 2, gl.FLOAT, false, 8);
+attr('aBorn', 1, gl.FLOAT, false, 16);
+attr('aCA', 4, gl.UNSIGNED_BYTE, true, 20);
+attr('aCB', 4, gl.UNSIGNED_BYTE, true, 24);
+attr('aN', 4, gl.BYTE, true, 28);
+gl.bindVertexArray(null);
+gl.enable(gl.DEPTH_TEST);
+
+// The square's edge, drawn rather than faded. Fog was hiding the fact that the
+// world stops; a frame says so, and says how big the sample is.
+const frameProg = (() => {
+  const p2 = gl.createProgram();
+  gl.attachShader(p2, sh(gl.VERTEX_SHADER, `#version 300 es
+precision highp float;
+in vec3 aPos; in vec3 aCol;
+uniform mat4 uView, uProj;
+out vec3 vC;
+void main() { vC = aCol; gl_Position = uProj * uView * vec4(aPos, 1.0); }`));
+  gl.attachShader(p2, sh(gl.FRAGMENT_SHADER, `#version 300 es
+precision highp float;
+in vec3 vC; out vec4 f;
+void main() { f = vec4(vC, 1.0); }`));
+  gl.linkProgram(p2);
+  return p2;
+})();
+const fu = { uView: gl.getUniformLocation(frameProg, 'uView'), uProj: gl.getUniformLocation(frameProg, 'uProj') };
+const frameVao = gl.createVertexArray();
+let frameVerts = 0;
+{
+  const L = [];
+  const seg = (a, b, c) => L.push(a[0], a[1], a[2], ...c, b[0], b[1], b[2], ...c);
+  const dim = [0.22, 0.22, 0.27], amber = [0.88, 0.64, 0.09];
+  const H = HALF, gy = -0.5;
+  seg([-H, gy, -H], [H, gy, -H], dim); seg([H, gy, -H], [H, gy, H], dim);
+  seg([H, gy, H], [-H, gy, H], dim);   seg([-H, gy, H], [-H, gy, -H], dim);
+  // corner ticks, so the frame reads as a measured sample and not a stage
+  const t = 18;
+  for (const [sx, sz] of [[-1,-1],[1,-1],[1,1],[-1,1]]) {
+    seg([sx*H, gy, sz*H], [sx*(H-t), gy, sz*H], amber);
+    seg([sx*H, gy, sz*H], [sx*H, gy, sz*(H-t)], amber);
+    seg([sx*H, gy, sz*H], [sx*H, gy + 10, sz*H], amber);
+  }
+  gl.bindVertexArray(frameVao);
+  const fb = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, fb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(L), gl.STATIC_DRAW);
+  const lp = gl.getAttribLocation(frameProg, 'aPos'), lc = gl.getAttribLocation(frameProg, 'aCol');
+  gl.enableVertexAttribArray(lp); gl.vertexAttribPointer(lp, 3, gl.FLOAT, false, 24, 0);
+  gl.enableVertexAttribArray(lc); gl.vertexAttribPointer(lc, 3, gl.FLOAT, false, 24, 12);
+  gl.bindVertexArray(null);
+  frameVerts = L.length / 6;
+}
+
+// ------------------------------------------------------------------- tiles
+// Slots are assigned through a map from tile coordinate to slot, with a free
+// list — not by the tile's position in the ring. Indexing by ring position
+// looked fine and was wrong: step one tile forward and every slot's target
+// changes, so all 49 reload for a move that should cost 7. The queue backed up
+// to 107 and the world went black while flying.
+const slots = [];
+for (let i = 0; i < TILES; i++) slots.push({ tx: null, tz: null, a: null, b: null, ready: false });
+const byTile = new Map();
+const free = [];
+for (let i = TILES - 1; i >= 0; i--) free.push(i);
+let inflight = 0;
+let queue = [];
+
+function tileData(tx, tz, seed) {
+  const out = { y: new Float32Array(PER_TILE), c: new Uint8Array(PER_TILE * 3), n: new Int8Array(PER_TILE * 2) };
+  const h = new Float32Array((K + 2) * (K + 2));
+  const ox = tx * TILE, oz = tz * TILE;
+  for (let j = -1; j <= K; j++) {
+    for (let i = -1; i <= K; i++) {
+      const s = sample(ox + i * CELL, oz + j * CELL, seed);
+      h[(j + 1) * (K + 2) + (i + 1)] = s[0];
+      if (i >= 0 && j >= 0 && i < K && j < K) {
+        const p = j * K + i;
+        out.y[p] = s[0];
+        out.c[p * 3] = s[1]; out.c[p * 3 + 1] = s[2]; out.c[p * 3 + 2] = s[3];
+      }
+    }
+  }
+  // Normals by central difference on the height grid — the same thing the real
+  // sketch will do to the DSM, which is where all of its shading comes from.
+  for (let j = 0; j < K; j++) {
+    for (let i = 0; i < K; i++) {
+      const at = (a, b) => h[(b + 1) * (K + 2) + (a + 1)];
+      const dx = (at(i + 1, j) - at(i - 1, j)) / (2 * CELL);
+      const dz = (at(i, j + 1) - at(i, j - 1)) / (2 * CELL);
+      const l = Math.hypot(dx, dz, 1);
+      const p = j * K + i;
+      out.n[p * 2] = Math.max(-127, Math.min(127, Math.round(-dx / l * 127)));
+      out.n[p * 2 + 1] = Math.max(-127, Math.min(127, Math.round(-dz / l * 127)));
+    }
+  }
+  return out;
+}
+
+const EMPTY = { y: new Float32Array(PER_TILE), c: new Uint8Array(PER_TILE * 3), n: new Int8Array(PER_TILE * 2) };
+
+function flush(idx, born) {
+  const slot = slots[idx];
+  const base = idx * PER_TILE;
+  const ox = slot.tx * TILE, oz = slot.tz * TILE;
+  const A = slot.a || EMPTY, B = slot.b || slot.a || EMPTY;
+  for (let p = 0; p < PER_TILE; p++) {
+    const o = (base + p) * STRIDE, w = o >> 2;
+    f32[w] = ox + (p % K) * CELL;
+    f32[w + 1] = oz + ((p / K) | 0) * CELL;
+    f32[w + 2] = A.y[p];
+    f32[w + 3] = B.y[p];
+    // Jittered per particle, not per tile. This one line is the difference
+    // between a tile arriving as a block and a tile arriving as a scatter.
+    if (born !== undefined) f32[w + 4] = born + ((p * 2654435761) % 1013) / 1013 * 0.65;
+    u8[o + 20] = A.c[p * 3]; u8[o + 21] = A.c[p * 3 + 1]; u8[o + 22] = A.c[p * 3 + 2]; u8[o + 23] = 255;
+    u8[o + 24] = B.c[p * 3]; u8[o + 25] = B.c[p * 3 + 1]; u8[o + 26] = B.c[p * 3 + 2]; u8[o + 27] = 255;
+    i8[o + 28] = A.n[p * 2]; i8[o + 29] = A.n[p * 2 + 1];
+    i8[o + 30] = B.n[p * 2]; i8[o + 31] = B.n[p * 2 + 1];
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+  gl.bufferSubData(gl.ARRAY_BUFFER, base * STRIDE, u8, base * STRIDE, PER_TILE * STRIDE);
+}
+
+function pump() {
+  while (inflight < CONCURRENCY && queue.length) {
+    const job = queue.shift();
+    const slot = slots[job.idx];
+    if (slot.tx !== job.tx || slot.tz !== job.tz) continue;    // the camera moved on
+    inflight++;
+    // Four PDOK requests go here in the real thing. The sleep stands in.
+    setTimeout(() => {
+      inflight--;
+      if (slot.tx === job.tx && slot.tz === job.tz) {
+        if (job.which === 'a') {
+          // b is what is on screen; the arriving tile becomes the new b and
+          // what was there slides into a, so every particle has something to
+          // fall away from.
+          slot.a = slot.b || EMPTY;
+          slot.b = tileData(job.tx, job.tz, job.seed);
+          slot.ready = true;
+          flush(job.idx, clock);
+        } else {
+          slot.b = tileData(job.tx + dTx, job.tz + dTz, job.seed);
+          flush(job.idx);
+          if (slots.every((s) => s.b)) beginFlight();
+        }
+      }
+      pump();
+    }, 120 + Math.random() * 200);
+  }
+}
+
+function reshelve() {
+  const ctx = Math.floor(cam.x / TILE), ctz = Math.floor(cam.z / TILE);
+  const half = (R - 1) / 2;
+  const want = new Map();
+  for (let j = -half; j <= half; j++) {
+    for (let i = -half; i <= half; i++) want.set((ctx + i) + ':' + (ctz + j), [ctx + i, ctz + j]);
+  }
+  for (const [key, idx] of [...byTile]) {
+    if (!want.has(key)) {
+      // Deliberately keeps a and b. Blanking an evicted slot punched a black
+      // square in the leading edge for as long as the fetch took; leaving the
+      // old ground in the buffer means the worst case is stale terrain sitting
+      // outside the frame, where the clip hides it anyway.
+      byTile.delete(key); free.push(idx); slots[idx].ready = false;
+    }
+  }
+  for (const [key, [tx, tz]] of want) {
+    if (byTile.has(key)) continue;
+    const idx = free.pop();
+    if (idx === undefined) break;
+    byTile.set(key, idx);
+    const s = slots[idx];
+    s.tx = tx; s.tz = tz; s.ready = false;
+    queue.push({ idx, tx, tz, which: 'a', seed: here.seed });
+  }
+  queue.sort((a, b) => (Math.abs(a.tx - ctx) + Math.abs(a.tz - ctz)) - (Math.abs(b.tx - ctx) + Math.abs(b.tz - ctz)));
+  pump();
+}
+
+// ------------------------------------------------------------------ camera
+// cam.x / cam.z are the world coordinates the square is framing, not a flying
+// eye. WASD slides them; the camera orbits the square, which never moves on
+// screen. That is the whole idea: a fixed window, a country scrolling under it.
+const cam = { x: PLACES[0].x, z: PLACES[0].z, yaw: 0.72, pitch: 0.40, dist: 215 };
+let here = PLACES[0], going = null;
+let dTx = 0, dTz = 0;
+let phase = 'roam';            // roam | gathering | flying | parked
+let held = false;
+let mixT = 0, mixDur = 1, mixStart = 0;
+let dirX = 0, dirZ = 1, swing = 0, lift = 0;
+let colourMode = 0, clock = 0, pointSize = 0.55;
+
+const $ = (id) => document.getElementById(id);
+const note = (m) => { $('note').textContent = m; };
+
+function jump(place) {
+  if (place === here || phase === 'gathering' || phase === 'flying') return;
+  if (!slots.every((s) => s.ready)) { note('still streaming this place — one moment'); return; }
+  going = place;
+  const dx = place.x - cam.x, dz = place.z - cam.z;
+  const dist = Math.hypot(dx, dz) || 1;
+  dirX = dx / dist; dirZ = dz / dist;
+  // Whole tiles, so a particle's A and B cells stay on the same half-metre grid.
+  dTx = Math.round(dx / TILE); dTz = Math.round(dz / TILE);
+  const km = dist / 1000;
+  mixDur = Math.min(3.5, 0.9 + 0.55 * Math.log10(1 + km * 10));
+  swing = Math.min(210, 34 + 40 * Math.log10(1 + km * 10));
+  lift = Math.min(120, 24 + 30 * Math.log10(1 + km * 10));
+
+  // Fetch the destination behind the place you are still standing in. Nothing
+  // on screen changes until it is all here.
+  phase = 'gathering';
+  queue = [];
+  for (const [, idx] of byTile) {
+    const s = slots[idx];
+    s.a = s.b || EMPTY;      // what you are looking at right now
+    s.b = null;              // the destination, still in the post
+    flush(idx);
+    queue.push({ idx, tx: s.tx, tz: s.tz, which: 'b', seed: place.seed });
+  }
+  pump();
+
+  const bearing = (Math.atan2(dx, dz) * 180 / Math.PI + 360) % 360;
+  const rose = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(bearing / 22.5) % 16];
+  $('flight').textContent = `${km.toFixed(1)} km · ${bearing.toFixed(0)}° ${rose}`;
+  note(`gathering ${place.name} — the particles have not moved yet`);
+}
+
+function beginFlight() {
+  phase = 'flying';
+  mixT = 0; mixStart = clock;
+  $('mix').disabled = false;
+  note(`flying — every particle is walking to its new position, none are replaced`);
+}
+
+function land() {
+  // A becomes B with no fetch and no reallocation: the destination is already
+  // in every slot, so this is a relabel plus a re-anchor of the tile map.
+  phase = 'roam';
+  here = going; going = null;
+  cam.x += dTx * TILE; cam.z += dTz * TILE;
+  byTile.clear();
+  for (let i = 0; i < TILES; i++) {
+    const s = slots[i];
+    if (s.tx === null) continue;
+    s.tx += dTx; s.tz += dTz;
+    s.a = s.b;               // A and B now agree, so the local clock is moot
+    byTile.set(s.tx + ':' + s.tz, i);
+    flush(i);
+  }
+  dTx = 0; dTz = 0; swing = 0; lift = 0; mixT = 0;
+  $('place').textContent = here.name;
+  $('mix').disabled = true; $('mixv').textContent = '—';
+  $('flight').innerHTML = '&nbsp;';
+  note('landed — WASD to slide the window from here');
+  reshelve();
+}
+
+// ------------------------------------------------------------------- input
+const keys = new Set();
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  keys.add(e.key.toLowerCase());
+  if (['w','a','s','d','q','e',' '].includes(e.key.toLowerCase())) e.preventDefault();
+});
+addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  cam.yaw -= (e.clientX - drag.x) * 0.004;
+  cam.pitch = Math.max(0.06, Math.min(1.45, cam.pitch + (e.clientY - drag.y) * 0.003));
+  drag = { x: e.clientX, y: e.clientY };
+});
+const endDrag = () => { drag = null; canvas.classList.remove('dragging'); };
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('wheel', (e) => { e.preventDefault(); cam.dist = Math.max(90, Math.min(1800, cam.dist * Math.exp(e.deltaY * 0.0011))); }, { passive: false });
+
+document.querySelectorAll('[data-go]').forEach((b) => { b.onclick = () => jump(PLACES[+b.dataset.go]); });
+$('mix').oninput = () => { held = true; $('hold').classList.add('on'); mixT = +$('mix').value; };
+$('hold').onclick = (e) => {
+  held = !held; e.target.classList.toggle('on', held);
+  if (!held && phase === 'flying') mixStart = clock - mixT * mixDur;
+};
+$('size').oninput = (e) => { pointSize = +e.target.value; };
+$('colour').onclick = (e) => {
+  colourMode = 1 - colourMode;
+  e.target.textContent = colourMode ? 'height ramp' : 'lit photo';
+  e.target.classList.toggle('on', !!colourMode);
+};
+
+// -------------------------------------------------------------------- draw
+const perspective = (fovy, aspect, near, far) => {
+  const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+  return new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0]);
+};
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const norm3 = (a) => { const l = Math.hypot(a[0],a[1],a[2]) || 1; return [a[0]/l, a[1]/l, a[2]/l]; };
+
+function viewMatrix() {
+  const target = [0, 22, 0];
+  const eye = [
+    Math.sin(cam.yaw) * Math.cos(cam.pitch) * cam.dist,
+    target[1] + Math.sin(cam.pitch) * cam.dist,
+    Math.cos(cam.yaw) * Math.cos(cam.pitch) * cam.dist,
+  ];
+  const z = norm3([eye[0]-target[0], eye[1]-target[1], eye[2]-target[2]]);
+  const x = norm3(cross3([0,1,0], z));
+  const y = cross3(z, x);
+  const m = new Float32Array([
+    x[0], y[0], z[0], 0,
+    x[1], y[1], z[1], 0,
+    x[2], y[2], z[2], 0,
+    -dot3(x, eye), -dot3(y, eye), -dot3(z, eye), 1,
+  ]);
+  // Panning basis, flat on the ground, so W always slides the square away from
+  // you on screen however the camera is turned.
+  return { m, fwd: [-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw)], right: [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)] };
+}
+
+$('np').textContent = N.toLocaleString('en-US');
+reshelve();
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  clock += dt;
+
+  const { m: view, fwd, right } = viewMatrix();
+
+  // Movement is locked while a jump is in the air. Reshelving mid-flight would
+  // evict the very slots that are carrying particles across the country.
+  if (phase === 'roam') {
+    const speed = 34 * (keys.has('shift') ? 4 : 1) * dt;
+    let moved = false;
+    const go = (v, s) => { cam.x += v[0] * s; cam.z += v[2] * s; moved = true; };
+    if (keys.has('w')) go(fwd, speed);
+    if (keys.has('s')) go(fwd, -speed);
+    if (keys.has('d')) go(right, speed);
+    if (keys.has('a')) go(right, -speed);
+    if (moved) reshelve();
+  }
+
+  if (phase === 'flying' && !held) {
+    mixT = Math.min(1, (clock - mixStart) / mixDur);
+    $('mix').value = String(mixT);
+    if (mixT >= 1) land();
+  }
+  if (phase === 'flying') $('mixv').textContent = mixT.toFixed(3);
+
+  const w = Math.round(innerWidth * Math.min(2, devicePixelRatio || 1));
+  const h = Math.round(innerHeight * Math.min(2, devicePixelRatio || 1));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  gl.viewport(0, 0, w, h);
+  gl.clearColor(0.055, 0.055, 0.067, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  const FOV = 0.82;
+  const proj = perspective(FOV, w / h, 1, 6000);
+  // one cell, projected: half the framebuffer height over tan(half fov)
+  const pointK = CELL * (h * 0.5) / Math.tan(FOV / 2) * 1.15;
+
+  gl.useProgram(frameProg);
+  gl.uniformMatrix4fv(fu.uView, false, view);
+  gl.uniformMatrix4fv(fu.uProj, false, proj);
+  gl.bindVertexArray(frameVao);
+  gl.drawArrays(gl.LINES, 0, frameVerts);
+
+  gl.useProgram(prog);
+  gl.uniformMatrix4fv(U.uView, false, view);
+  gl.uniformMatrix4fv(U.uProj, false, proj);
+  gl.uniform3f(U.uCentre, cam.x, 0, cam.z);
+  gl.uniform2f(U.uDir, dirX, dirZ);
+  gl.uniform1f(U.uMix, phase === 'flying' ? mixT : 0);
+  gl.uniform1f(U.uTime, clock);
+  gl.uniform1f(U.uArc, phase === 'flying' ? 1 : 0);
+  gl.uniform1f(U.uLift, lift);
+  gl.uniform1f(U.uSwing, swing);
+  gl.uniform1f(U.uColour, colourMode);
+  gl.uniform1f(U.uPointK, pointK);
+  gl.uniform1f(U.uSpan, 0.55);
+  gl.uniform1f(U.uDrop, 11);
+  gl.uniform1f(U.uJump, phase === 'gathering' || phase === 'flying' ? 1 : 0);
+  gl.uniform1f(U.uSize, pointSize);
+  gl.uniform1f(U.uHalf, HALF);
+  gl.bindVertexArray(vao);
+  gl.drawArrays(gl.POINTS, 0, N);
+
+  $('px').textContent = cam.x.toFixed(0);
+  $('pz').textContent = cam.z.toFixed(0);
+
+  $('tl').textContent = String(slots.filter((s) => s.ready).length);
+  $('tq').textContent = String(queue.length + inflight);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+window.__mock = {
+  cam, slots, N,
+  ready: () => slots.filter((s) => s.ready).length,
+  phase: () => phase,
+  jump: (i) => jump(PLACES[i]),
+  mix: () => mixT,
+};
+</script>
+</body>
+</html>
