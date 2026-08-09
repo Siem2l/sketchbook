@@ -1,0 +1,13 @@
+{
+  "title": "elsewhere",
+  "date": "2026-08-09",
+  "tags": [
+    "lidar",
+    "point-cloud",
+    "webgl",
+    "maps",
+    "transitions"
+  ],
+  "description": "A 160 m square of the Netherlands, built live from national LiDAR and aerial photography, that you slide across the country with WASD. Type any Dutch address and the same particles rearrange into that place — and a slider parks the journey anywhere in between.",
+  "thumbnail": "thumb.png"
+}

@@ -1939,6 +1939,46 @@ try {
     });
   }
 
+  // ---------------------------------------------------------------- elsewhere
+  {
+    const errors = [];
+    const p = await browser.newPage({ viewport: { width: 1200, height: 900 } });
+    p.on('pageerror', (e) => errors.push(e.message));
+    p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+    await p.goto(`${BASE}/sketches/2026-08-elsewhere/`, { waitUntil: 'networkidle' });
+    await p.waitForFunction(() => window.__elsewhere?.ready(), null, { timeout: 30000 });
+    const el = (fn, arg) => p.evaluate(fn, arg);
+
+    await test('the opening place loads from disk and draws', async () => {
+      const place = await el(() => window.__elsewhere.place());
+      assert.match(place.address, /Prins Hendriklaan/);
+      assert.equal(place.width, 480);
+      // A shader that failed to link still leaves a canvas, just a black one.
+      assert.ok((await el(() => window.__elsewhere.coverage())) > 0.08, 'nothing was drawn');
+      assert.deepEqual(errors, []);
+    });
+
+    await test('the square is drawn from one buffer that is never resized', async () => {
+      // 12x12 tiles of 32x32 cells. The ring caches more than the frame shows;
+      // the difference is the margin new ground lands in.
+      assert.equal(await el(() => window.__elsewhere.count()), 147456);
+      assert.equal(await p.textContent('#m-n'), '147,456');
+    });
+
+    await test('every colour mode draws the whole square', async () => {
+      for (let i = 0; i < 3; i++) {
+        await el((n) => window.__elsewhere.setColour(n), i);
+        await p.waitForTimeout(120);
+        const c = await el(() => window.__elsewhere.coverage());
+        assert.ok(c > 0.06, `colour mode ${i} drew almost nothing (coverage ${c})`);
+      }
+      await el(() => window.__elsewhere.setColour(0));
+      assert.deepEqual(errors, []);
+    });
+
+    await p.close();
+  }
+
   // --------------------------------------------------------------------- lab
   {
     const { sampleVariants, MODES: LAB_MODES, PALETTES: LAB_PALS } =

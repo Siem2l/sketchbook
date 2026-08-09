@@ -17,13 +17,36 @@ function median(data) {
   return real[real.length >> 1];
 }
 
-export function assemble({ dsm, dtm, rgb, width, height }) {
+// An orthophoto off the wire spends its range in a narrow, low slice — this
+// window measures 56 at the 2nd percentile and 196 at the 98th, out of 255 —
+// and once multiplied by the shading the whole street sinks into the
+// background. Stretching it between its own percentiles is what makes the red
+// pantiles red. Measured once per place and passed to every tile after it: per
+// tile, adjacent tiles would disagree about what grey is and the seams would
+// show. Same reasoning as the datum.
+function toneOf(rgb, n) {
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < n; i++) {
+    hist[(0.299 * rgb[i*4] + 0.587 * rgb[i*4+1] + 0.114 * rgb[i*4+2]) | 0]++;
+  }
+  const at = (frac) => {
+    let acc = 0, target = n * frac;
+    for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= target) return v; }
+    return 255;
+  };
+  const lo = at(0.02), hi = at(0.98);
+  return { lo, hi: Math.max(lo + 16, hi) };
+}
+
+export function assemble({ dsm, dtm, rgb, width, height, tone }) {
   const n = width * height;
   const datum = median(dtm.data);
   const y = new Float32Array(n);
   const hag = new Float32Array(n);
   const water = new Uint8Array(n);
   const colour = new Uint8Array(n * 3);
+  const t = tone ?? toneOf(rgb, n);
+  const gain = 255 / (t.hi - t.lo);
 
   for (let i = 0; i < n; i++) {
     const s = dsm.data[i], g = dtm.data[i];
@@ -36,9 +59,17 @@ export function assemble({ dsm, dtm, rgb, width, height }) {
     const ground = g < NODATA_FLOOR ? g : datum;
     y[i] = surface - datum;
     hag[i] = Math.max(0, surface - ground);
-    colour[i * 3] = rgb[i * 4];
-    colour[i * 3 + 1] = rgb[i * 4 + 1];
-    colour[i * 3 + 2] = rgb[i * 4 + 2];
+    // Stretch the luminance and carry the chroma along, rather than stretching
+    // each channel on its own. Per channel, a shadow at (60,70,85) comes out
+    // (7,27,55) and the whole square goes blue — the stretch invents a colour
+    // cast that is not in the photograph. Scaling by the luminance ratio keeps
+    // the hue the survey actually recorded.
+    const R = rgb[i * 4], G = rgb[i * 4 + 1], B = rgb[i * 4 + 2];
+    const l = 0.299 * R + 0.587 * G + 0.114 * B;
+    const k = l > 1 ? Math.max(0, (l - t.lo) * gain) / l : 0;
+    colour[i * 3] = Math.min(255, R * k);
+    colour[i * 3 + 1] = Math.min(255, G * k);
+    colour[i * 3 + 2] = Math.min(255, B * k);
   }
 
   // Normals by central difference over the height grid. This is where all the
@@ -59,5 +90,5 @@ export function assemble({ dsm, dtm, rgb, width, height }) {
     }
   }
 
-  return { width, height, y, hag, colour, normal, datum, water };
+  return { width, height, y, hag, colour, normal, datum, water, tone: t };
 }
