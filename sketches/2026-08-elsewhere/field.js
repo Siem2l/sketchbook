@@ -19,7 +19,11 @@ export const GRID = Math.round(SPAN / CELL); // 480 cells across = 230,400 parti
 export const TILE_SPAN = 240;                // a fetch tile, on a global grid
 export const TILE_H = 480;                   // height texels a tile edge — 0.5 m
 export const TILE_P = 960;                   // photo texels a tile edge — 25 cm
-export const LAYERS = 10;                    // a 3x3 ring of fetch tiles, plus the baked frame
+// A 3x3 ring of sharp tiles (1..9), plus three coarse whole-window layers
+// (0, 10, 11) that rotate: one holds the place you are on, one the place you
+// are flying to, and the third is free so a second jump never has to wait for
+// the first one's memory back.
+export const LAYERS = 12;
 
 function compile(gl, type, src) {
   const s = gl.createShader(type);
@@ -58,7 +62,7 @@ export function createField(gl) {
 
   const program = link(gl, POINT_VS, POINT_FS);
   const names = ['uHeight','uPhoto','uView','uProj','uCentre','uDir','uGrid','uCell','uHalf',
-    'uToneLo','uToneGain','uMix','uTime','uArc','uLift','uSwing','uColour','uPointK','uSpan','uDrop',
+    'uToneLo','uToneGain','uToneLoB','uToneGainB','uMix','uTime','uArc','uLift','uSwing','uColour','uPointK','uSpan','uDrop',
     'uJump','uSize','uTop'];
   const u = Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(program, n)]));
   u.uTilesA = gl.getUniformLocation(program, 'uTilesA');

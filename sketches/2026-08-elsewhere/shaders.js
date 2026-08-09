@@ -20,12 +20,13 @@ uniform sampler2DArray uPhoto;    // RGBA8: the orthophoto
 uniform mat4 uView, uProj;
 uniform vec2 uCentre;             // world xz the square is framing
 uniform vec2 uDir;                // unit travel direction, scene space
-uniform vec4 uTilesA[10];          // per layer: origin x, origin z, span, resident
-uniform vec4 uTilesB[10];
-uniform float uBornA[10];          // when each layer landed, for the changeover
+uniform vec4 uTilesA[12];          // per layer: origin x, origin z, span, resident
+uniform vec4 uTilesB[12];
+uniform float uBornA[12];          // when each layer landed, for the changeover
 uniform int uGrid;                // cells across the drawn square
 uniform float uCell, uHalf;
-uniform float uToneLo, uToneGain;
+uniform float uToneLo, uToneGain;      // the place you are on
+uniform float uToneLoB, uToneGainB;    // the place you are flying to
 uniform float uMix, uTime, uArc, uLift, uSwing;
 uniform float uColour, uPointK, uSpan, uDrop, uJump, uSize, uTop;
 
@@ -34,13 +35,13 @@ out float vAlive;
 
 float hash1(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
 
-// Which resident tile holds this ground, and where in it. Ten candidates is a
+// Which resident tile holds this ground, and where in it. Twelve candidates is a
 // loop the vertex unit does not notice, and it saves carrying a layer index per
 // particle — which would mean writing to a buffer every time a tile moved.
-int findLayer(vec4 tiles[10], vec2 w, out vec2 uv, out float span) {
+int findLayer(vec4 tiles[12], vec2 w, out vec2 uv, out float span) {
   int best = -1;
   float finest = 1e9;
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < 12; i++) {
     if (tiles[i].w < 0.5) continue;
     vec2 rel = w - tiles[i].xy;
     float sp = tiles[i].z;
@@ -60,7 +61,7 @@ int findLayer(vec4 tiles[10], vec2 w, out vec2 uv, out float span) {
 
 struct Sample { float y; float hag; vec3 rgb; vec3 n; float born; float found; };
 
-Sample lookup(vec4 tiles[10], vec2 w, bool useBorn) {
+Sample lookup(vec4 tiles[12], vec2 w, bool useBorn, float toneLo, float toneGain) {
   Sample s;
   vec2 uv; float span;
   int layer = findLayer(tiles, w, uv, span);
@@ -79,7 +80,7 @@ Sample lookup(vec4 tiles[10], vec2 w, bool useBorn) {
   // a shadow at (60,70,85) comes out (7,27,55) and the square goes blue.
   vec3 raw = texture(uPhoto, vec3(uv, float(layer))).rgb;
   float lum = dot(raw, vec3(0.299, 0.587, 0.114));
-  s.rgb = lum > 0.004 ? raw * (max(0.0, lum - uToneLo) * uToneGain / lum) : vec3(0.0);
+  s.rgb = lum > 0.004 ? raw * (max(0.0, lum - toneLo) * toneGain / lum) : vec3(0.0);
 
   // Normals from the height field itself. An orthophoto is flat light with the
   // sun already in it; the gradient is the only thing that can make a roof face
@@ -122,8 +123,8 @@ void main() {
   int gx = id % uGrid, gz = id / uGrid;
   vec2 w = uCentre - vec2(uHalf) + (vec2(float(gx), float(gz)) + 0.5) * uCell;
 
-  Sample A = lookup(uTilesA, w, true);
-  Sample B = lookup(uTilesB, w, false);
+  Sample A = lookup(uTilesA, w, true, uToneLo, uToneGain);
+  Sample B = lookup(uTilesB, w, false, uToneLoB, uToneGainB);
 
   // Two ways a particle changes what it stands on. Sliding the window: its own
   // clock, keyed off when its tile landed and jittered per particle, so an

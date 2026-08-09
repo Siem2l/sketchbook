@@ -16,7 +16,7 @@ import { decodeFloatTiff } from './geotiff.js';
 import { median, toneOf } from './place.js';
 import { createSlots } from './slots.js';
 import { createField, CELL, SPAN, HALF, GRID, TILE_SPAN, TILE_H, TILE_P, LAYERS } from './field.js';
-import { cachedFetch, coverageUrl, orthoUrl, fetchTileKey, fetchTileBbox } from './pdok.js';
+import { cachedFetch, coverageUrl, orthoUrl, fetchTileKey, fetchTileBbox, geocode, journey } from './pdok.js';
 
 const BAKED = '/data/elsewhere/prins-hendriklaan';
 const NODATA_FLOOR = 1e30;
@@ -67,6 +67,16 @@ async function main() {
   // fewer than this, two slots shared a layer and overwrote each other.
   const layerOf = (idx) => 1 + idx;
 
+  // Three whole-window coarse layers that rotate: one under the place you are
+  // on, one under the place you are flying to, one free so a second jump never
+  // waits for the first one's memory back.
+  const COARSE = [0, 10, 11];
+  let coarseAt = 0;
+  let phase = 'roam';
+  let flight = null;
+  let held = false;
+
+  let lastTile = '';
   const place = { datum: 0, tone: { lo: 0, hi: 255 }, centre: [0, 0], name: '—' };
   const view = { colour: 1, grain: 0.9, clock: 0 };
   const cam = { x: 0, z: 0, yaw: 0.72, pitch: 0.40, dist: 300 };
@@ -90,6 +100,29 @@ async function main() {
       terr[i] = g - datum;
     }
     return { surf, terr };
+  }
+
+  // A whole window in three requests, at half the detail of a fetch tile. This
+  // is what a jump gathers: 144 sharp tiles would be 432 requests and ten
+  // seconds of waiting, where one coarse window is three and under a second.
+  // You arrive at a soft version of the place and the sharp tiles refine over
+  // it once you have landed.
+  async function loadCoarse(centre, layer, span = 480) {
+    const half = span / 2;
+    const bbox = [centre[0] - half, centre[1] - half, centre[0] + half, centre[1] + half];
+    const [dsmBuf, dtmBuf, photoBuf] = await Promise.all([
+      cachedFetch(coverageUrl('dsm_05m', bbox, TILE_H), cache),
+      cachedFetch(coverageUrl('dtm_05m', bbox, TILE_H), cache),
+      cachedFetch(orthoUrl(bbox, TILE_P), cache),
+    ]);
+    const [dsm, dtm] = await Promise.all([decodeFloatTiff(dsmBuf), decodeFloatTiff(dtmBuf)]);
+    const rgba = await decodePhoto(photoBuf, TILE_P);
+    const datum = median(dtm.data);
+    const tone = toneOf(rgba, TILE_P * TILE_P);
+    const { surf, terr } = levelled(dsm.data, dtm.data, datum);
+    field.uploadHeight(layer, surf, terr);
+    field.uploadPhoto(layer, rgba);
+    return { bbox, span, datum, tone };
   }
 
   async function loadOpening() {
@@ -210,7 +243,7 @@ async function main() {
     gl.uniformMatrix4fv(u.uView, false, m.view);
     gl.uniformMatrix4fv(u.uProj, false, m.proj);
     gl.uniform2f(u.uCentre, cam.x, cam.z);
-    gl.uniform2f(u.uDir, 0, 1);
+    gl.uniform2f(u.uDir, flight ? flight.j.dirX : 0, flight ? flight.j.dirZ : 1);
     gl.uniform4fv(u.uTilesA, tilesA);
     gl.uniform4fv(u.uTilesB, tilesB);
     gl.uniform1fv(u.uBornA, bornA);
@@ -219,19 +252,99 @@ async function main() {
     gl.uniform1f(u.uHalf, HALF);
     gl.uniform1f(u.uToneLo, place.tone.lo / 255);
     gl.uniform1f(u.uToneGain, 255 / Math.max(1, place.tone.hi - place.tone.lo));
-    gl.uniform1f(u.uMix, 0);
+    const tb = flight ? flight.meta.tone : place.tone;
+    gl.uniform1f(u.uToneLoB, tb.lo / 255);
+    gl.uniform1f(u.uToneGainB, 255 / Math.max(1, tb.hi - tb.lo));
+    gl.uniform1f(u.uMix, flight ? flight.mix : 0);
     gl.uniform1f(u.uTime, view.clock);
-    gl.uniform1f(u.uArc, 0);
-    gl.uniform1f(u.uLift, 0);
-    gl.uniform1f(u.uSwing, 0);
+    const km = flight ? flight.j.km : 0;
+    gl.uniform1f(u.uArc, phase === 'flying' ? 1 : 0);
+    gl.uniform1f(u.uLift, flight ? Math.min(120, 24 + 30 * Math.log10(1 + km * 10)) : 0);
+    gl.uniform1f(u.uSwing, flight ? Math.min(210, 34 + 40 * Math.log10(1 + km * 10)) : 0);
     gl.uniform1f(u.uColour, view.colour);
     gl.uniform1f(u.uPointK, m.pointK);
     gl.uniform1f(u.uSpan, 0.55);
     gl.uniform1f(u.uDrop, 11);
-    gl.uniform1f(u.uJump, 0);
+    gl.uniform1f(u.uJump, phase === 'flying' || phase === 'gathering' ? 1 : 0);
     gl.uniform1f(u.uSize, view.grain);
     gl.uniform1f(u.uTop, 18);
     field.drawPoints();
+  }
+
+  // ------------------------------------------------------------------- jump
+  async function jumpTo(query) {
+    if (phase !== 'roam') return;
+    if (!query || !query.trim()) { note('type a Dutch address first'); return; }
+    note('looking that up…');
+    let dest;
+    try {
+      dest = await geocode(query);
+    } catch (e) {
+      note(e.message);
+      return;
+    }
+
+    const j = journey([cam.x, cam.z], [dest.x, dest.y]);
+    if (j.km < 0.02) { note('you are already there'); return; }
+
+    // The destination has to be in hand before a single particle moves: a
+    // particle cannot walk to a position that has not been fetched. Gathering
+    // happens behind the place still on screen, and nothing changes until it
+    // is all here.
+    phase = 'gathering';
+    $('go').disabled = true;
+    note(`gathering ${dest.name} — nothing has moved yet`);
+    const layer = COARSE[(COARSE.indexOf(coarseAt) + 1) % COARSE.length];
+    let meta;
+    try {
+      meta = await loadCoarse([dest.x, dest.y], layer);
+    } catch (e) {
+      phase = 'roam';
+      $('go').disabled = false;
+      note('could not reach that place: ' + e.message);
+      return;
+    }
+
+    // The destination is framed where the camera already is, because a particle
+    // keeps its ground and changes what it stands on. Offsetting it by the true
+    // 49 km would put every particle off screen by mid-flight.
+    tilesB.fill(0);
+    setLayer(tilesB, layer, meta.bbox[0] + (cam.x - dest.x), meta.bbox[1] + (cam.z - dest.y), meta.span);
+
+    flight = { j, dest, layer, meta, mix: 0, started: view.clock };
+    phase = 'flying';
+    held = false;
+    $('hold').classList.remove('on');
+    $('mix').disabled = false;
+    $('flight').textContent = `${j.km.toFixed(1)} km · ${j.bearing.toFixed(0)}° ${j.rose}`;
+    note(`flying ${j.rose} — every particle is walking to its new position`);
+  }
+
+  function land() {
+    const f = flight;
+    // A becomes B with no fetch and no reallocation: the destination is already
+    // in a layer, so this is a relabel and a re-anchor.
+    cam.x = f.dest.x;
+    cam.z = f.dest.y;
+    coarseAt = f.layer;
+    place.datum = f.meta.datum;
+    place.tone = f.meta.tone;
+    place.name = f.dest.name;
+    place.centre = [f.dest.x, f.dest.y];
+    tilesA.fill(0);
+    bornA.fill(-1e4);
+    setLayer(tilesA, f.layer, f.meta.bbox[0], f.meta.bbox[1], f.meta.span);
+    tilesB.fill(0);
+    flight = null;
+    phase = 'roam';
+    lastTile = '';                       // force the sharp ring to reload here
+    $('m-place').textContent = place.name;
+    $('m-datum').textContent = place.datum.toFixed(2);
+    $('go').disabled = false;
+    $('mix').disabled = true;
+    $('mixv').textContent = '—';
+    $('flight').innerHTML = '&nbsp;';
+    note('landed — WASD slides the window from here');
   }
 
   // --------------------------------------------------------------- controls
@@ -240,6 +353,23 @@ async function main() {
   setColour(view.colour);
   $('colour').onclick = () => setColour((view.colour + 1) % COLOURS.length);
   $('grain').oninput = (e) => { view.grain = +e.target.value; };
+  $('go').onclick = () => jumpTo($('address').value);
+  $('address').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); jumpTo($('address').value); }
+  });
+  $('mix').oninput = (e) => {
+    if (!flight) return;
+    held = true;
+    $('hold').classList.add('on');
+    flight.mix = +e.target.value;
+    $('mixv').textContent = flight.mix.toFixed(3);
+  };
+  $('hold').onclick = (e) => {
+    held = !held;
+    e.target.classList.toggle('on', held);
+    // resume where the scrub left it, or releasing hold snaps the journey
+    if (!held && flight) flight.started = view.clock - flight.mix * flight.j.seconds;
+  };
 
   function savePNG() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -265,8 +395,10 @@ async function main() {
     const k = e.key.toLowerCase();
     keys.add(k);
     if (['w','a','s','d'].includes(k)) e.preventDefault();
+    // p, not s: s is backward. Binding both to one key meant every step back
+    // also downloaded a PNG.
     if (k === 'c') setColour((view.colour + 1) % COLOURS.length);
-    else if (k === 's') savePNG();
+    else if (k === 'p') savePNG();
     else if (k === 'h') document.querySelectorAll('#ui, #meta, #hint').forEach((n) => {
       n.style.display = n.style.display === 'none' ? '' : 'none';
     });
@@ -294,13 +426,21 @@ async function main() {
   }, { passive: false });
 
   let last = performance.now();
-  let lastTile = '';
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     view.clock += dt;
     last = now;
 
-    const speed = 34 * (keys.has('shift') ? 4 : 1) * dt;
+    if (phase === 'flying' && !held) {
+      flight.mix = Math.min(1, (view.clock - flight.started) / flight.j.seconds);
+      $('mix').value = String(flight.mix);
+      $('mixv').textContent = flight.mix.toFixed(3);
+      if (flight.mix >= 1) land();
+    }
+
+    // Movement is locked while a jump is in the air: reshelving mid-flight
+    // would evict the very layers carrying particles across the country.
+    const speed = phase === 'roam' ? 34 * (keys.has('shift') ? 4 : 1) * dt : 0;
     const fwd = [-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw)];
     const right = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
     const go = (v, k) => { cam.x += v[0] * k; cam.z += v[2] * k; };
@@ -311,7 +451,7 @@ async function main() {
     // Reshelve only when the window crosses into a new fetch tile. Sliding
     // inside one costs nothing at all, because the window is a uniform.
     const here = fetchTileKey(cam.x, cam.z);
-    if (here !== lastTile) { lastTile = here; reshelve(); }
+    if (phase === 'roam' && here !== lastTile) { lastTile = here; reshelve(); }
 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
@@ -334,6 +474,9 @@ async function main() {
     layers: () => Array.from({ length: LAYERS }, (_, i) => tilesA[i * 4 + 3] > 0.5),
     setColour,
     setCam: (o) => Object.assign(cam, o),
+    phase: () => phase,
+    mix: () => (flight ? flight.mix : 0),
+    jumpTo,
     // A shader that failed to link still leaves a canvas; it just leaves a
     // black one, so coverage is the only assertion that catches it.
     coverage: () => {
