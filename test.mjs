@@ -14,6 +14,8 @@ const SKETCH = `${BASE}/sketches/2026-07-inconstructions/`;
 const SPLINTER = `${BASE}/sketches/2026-07-splinter/`;
 const FLASH = `${BASE}/sketches/2026-08-flash/`;
 const NOISE = `${BASE}/sketches/2026-07-message-noise/`;
+const EDGE = `${BASE}/sketches/2026-08-edge/`;
+const HYDRA = `${BASE}/sketches/2026-08-hydra-edge/`;
 
 let passed = 0;
 const failures = [];
@@ -938,6 +940,224 @@ try {
     });
 
     await p.close();
+  }
+
+  // -------------------------------------------------------------------- edge
+  {
+    async function openGl(url, { width = 1200, height = 980 } = {}) {
+      const page = await browser.newPage({ viewport: { width, height } });
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+      await page.goto(url, { waitUntil: 'networkidle' });
+      page.errors = errors;
+      return page;
+    }
+    const ed = (p, fn) => p.evaluate(fn);
+    const setParam = async (p, id, v) => {
+      await p.fill(`#${id}`, String(v));
+      await p.dispatchEvent(`#${id}`, 'input');
+      await p.waitForTimeout(220);
+    };
+
+    const p = await openGl(EDGE);
+    await p.waitForTimeout(1800);
+
+    await test('the rig compiles its shaders and renders without errors', async () => {
+      assert.deepEqual(p.errors, []);
+      // Non-zero coverage is the real assertion: a shader that failed to
+      // compile still leaves a canvas, it just leaves a black one.
+      const c = await ed(p, () => window.__edge.coverage());
+      assert.ok(c > 0.005, `nothing was drawn (coverage ${c})`);
+    });
+
+    await test('every operator renders, and the cycle wraps', async () => {
+      const ops = await ed(p, () => window.__edge.ops());
+      const seen = [];
+      for (let i = 0; i < ops.length; i++) {
+        const name = await ed(p, () => window.__edge.op());
+        await p.waitForTimeout(250);
+        const c = await ed(p, () => window.__edge.coverage());
+        assert.ok(c > 0.002, `${name} drew nothing (coverage ${c})`);
+        seen.push(name);
+        await p.click('#op');
+        await p.waitForTimeout(250);
+      }
+      assert.deepEqual(seen.sort(), [...ops].sort());
+      assert.deepEqual(p.errors, []);
+    });
+
+    await test('gain opens the operator up and threshold shuts it down', async () => {
+      await setParam(p, 'gain', 1);
+      const low = await ed(p, () => window.__edge.coverage());
+      await setParam(p, 'gain', 6);
+      const high = await ed(p, () => window.__edge.coverage());
+      assert.ok(high > low, `gain did not raise coverage (${low} -> ${high})`);
+      await setParam(p, 'threshold', 0.55);
+      const cut = await ed(p, () => window.__edge.coverage());
+      assert.ok(cut < high, `threshold did not lower coverage (${high} -> ${cut})`);
+      await setParam(p, 'threshold', 0.08);
+      await setParam(p, 'gain', 2);
+    });
+
+    // The card exists to be failed on in specific ways; this pins the one
+    // finding the sketch is built around, so a change to the kernels or to the
+    // card that quietly erases it gets caught.
+    await test('only sobel clears the soft edge at default gain', async () => {
+      const read = async (want) => {
+        await p.evaluate(() => document.activeElement.blur());
+        for (let i = 0; i < 6; i++) {
+          if (await ed(p, () => window.__edge.op()) === want) break;
+          await p.keyboard.press('o');
+          await p.waitForTimeout(200);
+        }
+        await p.waitForTimeout(250);
+        // A column through the clear corridor, away from every card region.
+        return p.evaluate(() => {
+          const c = document.querySelector('canvas');
+          const s = document.createElement('canvas');
+          s.width = c.width; s.height = c.height;
+          s.getContext('2d').drawImage(c, 0, 0);
+          const d = s.getContext('2d').getImageData(c.width / 2 - 12, Math.round(c.height * 0.55), 24, 1).data;
+          let max = 0;
+          for (let i = 0; i < d.length; i += 4) max = Math.max(max, d[i]);
+          return max;
+        });
+      };
+      const sob = await read('sobel');
+      const lap = await read('laplacian');
+      assert.ok(sob > 120, `sobel missed the soft edge (peak ${sob})`);
+      assert.ok(lap < 60, `laplacian answered the soft edge (peak ${lap}), which it should not`);
+    });
+
+    await test('show source puts the untouched card up', async () => {
+      await p.evaluate(() => document.activeElement.blur());
+      await p.keyboard.press('r');
+      await p.waitForTimeout(300);
+      assert.equal((await ed(p, () => window.__edge.flags())).raw, true);
+      // The card is mid-grey overall; an operator's output is mostly black.
+      const c = await ed(p, () => window.__edge.coverage());
+      assert.ok(c > 0.25, `the source does not look like the card (coverage ${c})`);
+      await p.keyboard.press('r');
+      await p.waitForTimeout(250);
+    });
+
+    // Both non-default sources are opt-in and neither is available in a
+    // headless run: what is being tested is that they say so instead of
+    // silently leaving a black frame behind.
+    await test('an unavailable source explains itself and changes nothing', async () => {
+      const before = await ed(p, () => window.__edge.source());
+      await p.click('#source');            // -> webcam, absent in a headless run
+      await p.waitForTimeout(900);
+      const camNote = await ed(p, () => window.__edge.note());
+      assert.ok(camNote.length > 0, 'an unavailable camera left no explanation');
+      assert.equal(await ed(p, () => window.__edge.source()), before,
+        'the sketch switched to a source it could not load');
+
+      await p.click('#source');            // -> td frame, absent until one is exported
+      await p.waitForTimeout(1500);
+      const tdNote = await ed(p, () => window.__edge.note());
+      assert.ok(/td-frame\.png/.test(tdNote), `the missing frame said "${tdNote}"`);
+      assert.equal(await ed(p, () => window.__edge.source()), before);
+      // The cycle has to keep moving through sources it cannot load, or a
+      // machine with no camera could never reach the frame sitting past it.
+      assert.equal(await ed(p, () => window.__edge.requested()), 'td frame',
+        'a dead source trapped the cycle');
+      assert.ok((await ed(p, () => window.__edge.coverage())) > 0.005, 'the canvas went black');
+
+      await p.click('#source');            // -> back round to the card
+      await p.waitForTimeout(400);
+      assert.equal(await ed(p, () => window.__edge.source()), 'card');
+      assert.equal(await ed(p, () => window.__edge.note()), '');
+    });
+
+    await test('export produces a png named for the operator', async () => {
+      await p.evaluate(() => document.activeElement.blur());
+      // p5 appends every createGraphics canvas to the document, and this
+      // sketch keeps two of them alive for the source and operator passes —
+      // so the count to hold steady is the one before the export, not one.
+      const before = await ed(p, () => document.querySelectorAll('canvas').length);
+      const dl = p.waitForEvent('download', { timeout: 60000 });
+      await p.click('#save');
+      const name = (await dl).suggestedFilename();
+      const { op, source } = await ed(p, () => ({ op: window.__edge.op(), source: window.__edge.source() }));
+      assert.equal(name, `edge-${source.replace(/ /g, '-')}-${op}.png`);
+      await p.waitForTimeout(300);
+      assert.equal(await ed(p, () => document.querySelectorAll('canvas').length), before,
+        'an export buffer was left behind in the dom');
+      assert.deepEqual(p.errors, []);
+    });
+
+    await p.close();
+
+    // ------------------------------------------------------------ hydra edge
+    const h = await openGl(HYDRA, { height: 1050 });
+    await h.waitForTimeout(2500);
+    const hy = (fn) => h.evaluate(fn);
+    const hcov = () => h.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(window.__hydraEdge.coverage()))));
+
+    await test('hydra boots and the first patch is running', async () => {
+      assert.equal(await hy(() => window.__hydraEdge.running()), true);
+      assert.equal(await hy(() => window.__hydraEdge.error()), '');
+      assert.deepEqual(h.errors, []);
+    });
+
+    // The point of the pair: the operators are not reimplemented for hydra,
+    // they are the same GLSL. If the injection into hydra's shader ever breaks
+    // — a bundler change, a hydra upgrade — every one of these compiles to an
+    // undefined function and the canvas goes black while the JS still "runs".
+    await test('every preset compiles the shared kernels and draws', async () => {
+      const presets = await hy(() => window.__hydraEdge.presets());
+      for (let i = 0; i < presets.length; i++) {
+        const name = await hy(() => window.__hydraEdge.preset());
+        await h.waitForTimeout(1400);
+        const c = await hcov();
+        assert.equal(await hy(() => window.__hydraEdge.error()), '', `${name} failed to run`);
+        assert.ok(c > 0.002, `${name} drew a black frame (coverage ${c}) — kernels likely missing`);
+        await h.click('#preset');
+        await h.waitForTimeout(600);
+      }
+      assert.deepEqual(h.errors, []);
+    });
+
+    await test('every operator is reachable by name from the editor', async () => {
+      const ops = await hy(() => window.__hydraEdge.ops());
+      for (const op of ops) {
+        const args = op === 'dogEdge' ? 'o1, 1, 3, 720, 2.2' : 'o1, 1, 3';
+        await h.fill('#code', `card().out(o1)\n${op}(${args}).out(o0)`);
+        await h.click('#run');
+        await h.waitForTimeout(1200);
+        assert.equal(await hy(() => window.__hydraEdge.error()), '', `${op} threw`);
+        const c = await hcov();
+        assert.ok(c > 0.002, `${op} drew nothing (coverage ${c})`);
+      }
+    });
+
+    await test('a broken patch reports the error instead of dying', async () => {
+      await h.fill('#code', 'thisIsNotAHydraFunction().out(o0)');
+      await h.click('#run');
+      await h.waitForTimeout(500);
+      assert.equal(await hy(() => window.__hydraEdge.running()), false);
+      assert.ok((await hy(() => window.__hydraEdge.error())).length > 0, 'no error surfaced');
+      assert.equal(await h.evaluate(() => getComputedStyle(document.getElementById('error')).display), 'block');
+      // and it recovers
+      await h.click('#preset');
+      await h.waitForTimeout(1400);
+      assert.equal(await hy(() => window.__hydraEdge.error()), '');
+      assert.equal(await hy(() => window.__hydraEdge.running()), true);
+    });
+
+    await test('typing in the editor does not re-evaluate on every keystroke', async () => {
+      await h.fill('#code', 'card().out(o1)\nsobelEdge(o1, 1, 2).out(o0)');
+      await h.click('#run');
+      await h.waitForTimeout(900);
+      await h.focus('#code');
+      await h.keyboard.type('\n// half a th');   // would throw if evaluated
+      await h.waitForTimeout(400);
+      assert.equal(await hy(() => window.__hydraEdge.error()), '', 'a keystroke re-ran the patch');
+    });
+
+    await h.close();
   }
 
 } finally {

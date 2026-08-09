@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>edge</title>
+  <style>
+    body { margin: 0; padding-bottom: 7rem; box-sizing: border-box; background: #0e0e11; color: #e8e6e0; font: 14px ui-monospace, monospace; display: grid; place-items: center; min-height: 100vh; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #8a877e; text-decoration: none; }
+    /* left/right + auto margins rather than left:50% + translate: a fixed box
+       anchored at 50% may only shrink-to-fit within the half-width left of it. */
+    #ui { position: fixed; bottom: 0.75rem; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0.4rem; background: #17171cdd; padding: 0.5rem 0.7rem; border-radius: 8px; }
+    .row { display: flex; gap: 0.4rem; align-items: center; justify-content: center; flex-wrap: wrap; }
+    button { background: #26262e; color: #e8e6e0; border: 1px solid #444; border-radius: 4px; padding: 0.3rem 0.55rem; font: inherit; font-size: 13px; cursor: pointer; }
+    button:hover { border-color: #7fb3a3; }
+    label { display: flex; gap: 0.3rem; align-items: center; color: #8a877e; font-size: 11px; }
+    label .val { color: #e8e6e0; min-width: 2rem; }
+    input[type=range] { width: 5rem; accent-color: #7fb3a3; }
+    #note { color: #e0a316; font-size: 11px; min-height: 1em; text-align: center; }
+    #hint { position: fixed; top: 1rem; right: 1rem; color: #8a877e; text-align: right; line-height: 1.5; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← sketchbook</a>
+  <div id="hint">
+    space = freeze · o = operator · s = source<br />
+    i = invert · r = show the source<br />
+    kernels are shared/kernels.glsl
+  </div>
+  <div id="ui">
+    <div class="row">
+      <button id="op">op</button>
+      <button id="source">src</button>
+      <button id="raw">show source</button>
+      <button id="invert">on white</button>
+      <button id="angle">angle off</button>
+      <button id="freeze">freeze</button>
+      <button id="save">png ×2</button>
+    </div>
+    <div class="row">
+      <label>spread <input id="spread" type="range" min="0.25" max="4" step="0.05" /><span class="val" id="spread-val"></span></label>
+      <label>thresh <input id="threshold" type="range" min="0" max="0.6" step="0.01" /><span class="val" id="threshold-val"></span></label>
+      <label>gain <input id="gain" type="range" min="0.5" max="6" step="0.1" /><span class="val" id="gain-val"></span></label>
+      <label>dog ratio <input id="ratio" type="range" min="1.1" max="4" step="0.05" /><span class="val" id="ratio-val"></span></label>
+    </div>
+    <div id="note"></div>
+  </div>
+  <script type="module" src="./sketch.js"></script>
+</body>
+</html>

@@ -22,6 +22,12 @@ Each sketch folder needs `index.html`, `sketch.js`, and `meta.json`
 (`title` and `date` required — the build fails otherwise). The gallery
 index is generated from these at build time.
 
+`shared/` holds code used by more than one sketch — currently
+`kernels.glsl`, imported with Vite's `?raw`. It sits outside `sketches/`
+deliberately: the three scanners (vite's page list, `build-index.js`,
+`gen-thumbnails.js`) all treat every directory under `sketches/` as a
+sketch and `build-index.js` fails the build on one without a `meta.json`.
+
 ## Serving
 
 The site is served by the `sketchbook` module in apis-mellifera
@@ -32,6 +38,40 @@ publishing never touches nix — `/var/lib/sketchbook` is group-writable
 for the `sketchbook` group.
 
 ## Sketches
+
+- **edge** (`2026-08-edge`) — four edge-detection operators on one source, side
+  by side, because the differences between Sobel, Roberts, the Laplacian and a
+  difference-of-gaussians are otherwise folklore. The operators live in
+  `shared/kernels.glsl` and are not written in the sketch; the source is always
+  rendered to a texture first, even when it is procedural and could have been
+  evaluated inline, because sampling a `sampler2D` is the contract every host
+  shares and an inlined function does not survive the move to TouchDesigner.
+  The procedural test card is built to be failed on in specific ways — a
+  rotating hard-edged square, a circle, a frequency sweep, a smooth-noise
+  patch, a gradient that should stay dark, and a soft vertical edge that at
+  default gain only Sobel answers. That last one is the sharpest result the rig
+  produces, and it is pinned by a test. A second finding contradicts the
+  textbook: against *smooth* grain the Laplacian is the quiet operator, not the
+  noisy one, because it responds to curvature rather than slope. Webcam and a
+  bundled TouchDesigner frame are opt-in sources; neither can be the default or
+  `npm run thumbs` and the tests would both capture a black frame.
+
+- **hydra edge** (`2026-08-hydra-edge`) — the same four operators registered as
+  Hydra sources, so they compose with feedback, modulation and live
+  re-evaluation. `shared/kernels.glsl` is imported verbatim; nothing is
+  reimplemented, which is the only version of "portable kernel" that holds up.
+  Two things had to be worked out for that. A neighbourhood operator cannot be
+  a Hydra `color` transform at all — those receive one `vec4` — so each is a
+  `src` taking a `sampler2D`. And `setFunction` wraps whatever GLSL you give it
+  in a function signature, so the shared file pasted there is a syntax error at
+  the first `float luma(vec3 c) {`; GLSL has no nested functions. The kernels
+  go in through `_addMethod`, which takes already-complete GLSL that Hydra
+  emits at top level, with an include guard so whichever operator a patch uses
+  first defines them. Mutating Hydra's utility-function map is tidier and does
+  not survive the bundler: Vite pre-bundles hydra-synth, so the sketch and
+  Hydra end up holding different copies of that module and the injection lands
+  nowhere. The `disagree` preset subtracts two operators so only what they
+  disagree about survives — the clearest picture of the difference on the site.
 
 - **flash** (`2026-08-flash`) — a tattoo brief generator built so that nothing
   chooses the idea. Asked for "a tattoo idea", a language model collapses onto

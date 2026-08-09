@@ -1,0 +1,12 @@
+{
+  "title": "edge",
+  "date": "2026-08-09",
+  "tags": [
+    "glsl",
+    "shader",
+    "edge-detection",
+    "touchdesigner"
+  ],
+  "description": "Four edge operators on one source, side by side, so the differences between them stop being folklore. The kernels are a shared GLSL file that also runs in Hydra and in a TouchDesigner GLSL TOP.",
+  "thumbnail": "thumb.png"
+}

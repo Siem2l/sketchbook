@@ -1,0 +1,12 @@
+{
+  "title": "hydra edge",
+  "date": "2026-08-09",
+  "tags": [
+    "hydra",
+    "glsl",
+    "live-coding",
+    "edge-detection"
+  ],
+  "description": "The edge operators from the rig next door, registered as Hydra sources so they can be fed back, modulated and composed. Same shared GLSL file, no reimplementation.",
+  "thumbnail": "thumb.png"
+}
