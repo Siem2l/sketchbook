@@ -183,9 +183,52 @@ try {
       const dtm = grid(8, 8, () => 12);
       const p = assemble({ dsm, dtm, rgb: blank(64), width: 8, height: 8 });
       assert.equal(p.datum, 12);
-      assert.equal(p.y[4 * 8 + 4], 6);
+      // surface is what was measured; y is where the particle is drawn
+      assert.equal(p.surface[4 * 8 + 4], 6);
+      assert.equal(p.surface[0], 0);
       assert.equal(p.y[0], 0);
       assert.equal(p.hag[4 * 8 + 4], 6);
+    });
+
+    await test('a facade gets particles, because a surface model has no walls', async () => {
+      // A block with a 9 m drop all round. Seen from above that drop is a
+      // discontinuity between two cells, not a surface, so nothing lands on it
+      // unless the edge cells are spent down the face.
+      const dsm = grid(16, 16, (i, j) => (i >= 5 && i <= 10 && j >= 5 && j <= 10 ? 9 : 0));
+      const dtm = grid(16, 16, () => 0);
+      const p = assemble({ dsm, dtm, rgb: blank(256), width: 16, height: 16 });
+      let onFace = 0, onRoof = 0;
+      for (let j = 5; j <= 10; j++) {
+        for (let i = 5; i <= 10; i++) {
+          const edge = i === 5 || i === 10 || j === 5 || j === 10;
+          if (!edge) continue;
+          const v = p.y[j * 16 + i];
+          if (v < 8.5 && v >= 0) onFace++; else onRoof++;
+          assert.ok(v >= 0 && v <= 9, `particle left the building at ${v}`);
+        }
+      }
+      assert.ok(onFace > 0, 'the walls got nothing');
+      assert.ok(onRoof > 0, 'the roofline dissolved — every edge cell fell off');
+      // the middle of the roof is untouched
+      assert.equal(p.y[8 * 16 + 8], 9);
+    });
+
+    await test('a canopy is spread through its own column, a smooth roof is not', async () => {
+      // rough and tall: vegetation. every cell alternates, so curvature is high
+      const tree = grid(12, 12, (i, j) => 10 + ((i + j) % 2) * 1.2);
+      const flat = grid(12, 12, () => 0);
+      const veg = assemble({ dsm: tree, dtm: flat, rgb: blank(144), width: 12, height: 12 });
+      let spread = 0;
+      for (let k = 0; k < veg.y.length; k++) if (veg.y[k] < 9) spread++;
+      assert.ok(spread > veg.y.length * 0.3, `only ${spread} of ${veg.y.length} particles left the canopy top`);
+      for (const v of veg.y) assert.ok(v >= 0, `a particle went below the ground at ${v}`);
+
+      // tall but smooth: a flat roof, and it must stay a flat roof
+      const roof = grid(12, 12, () => 10);
+      const solid = assemble({ dsm: roof, dtm: flat, rgb: blank(144), width: 12, height: 12 });
+      for (let j = 2; j < 10; j++) {
+        for (let i = 2; i < 10; i++) assert.equal(solid.y[j * 12 + i], 10, 'a flat roof was scattered');
+      }
     });
 
     await test('nodata becomes flat ground rather than a hole or a NaN', async () => {
@@ -203,9 +246,35 @@ try {
       const rgb = new Uint8ClampedArray(2 * 2 * 4);
       rgb.set([10, 20, 30, 255, 40, 50, 60, 255, 70, 80, 90, 255, 100, 110, 120, 255]);
       const flat = grid(2, 2, () => 1);
-      const p = assemble({ dsm: flat, dtm: flat, rgb, width: 2, height: 2 });
+      // an identity tone, so this is testing the channel handling and not the
+      // percentile stretch that normally sits on top of it
+      const p = assemble({ dsm: flat, dtm: flat, rgb, width: 2, height: 2, tone: { lo: 0, hi: 255 } });
       assert.deepEqual([...p.colour.slice(0, 6)], [10, 20, 30, 40, 50, 60]);
       assert.equal(p.colour.length, 2 * 2 * 3);
+    });
+
+    await test('the stretch opens the photograph up without tinting it', async () => {
+      // a photo living in 60..150, the narrow low slice an orthophoto actually
+      // occupies, with one strongly warm pixel to watch the hue of
+      const n = 64 * 64;
+      const rgb = new Uint8ClampedArray(n * 4);
+      for (let i = 0; i < n; i++) {
+        const v = 60 + (i % 90);
+        rgb[i*4] = v; rgb[i*4+1] = v; rgb[i*4+2] = v; rgb[i*4+3] = 255;
+      }
+      rgb[0] = 150; rgb[1] = 90; rgb[2] = 60;      // a pantile
+      const flat = grid(64, 64, () => 1);
+      const p = assemble({ dsm: flat, dtm: flat, rgb, width: 64, height: 64 });
+      let lo = 255, hi = 0;
+      for (const v of p.colour) { if (v < lo) lo = v; if (v > hi) hi = v; }
+      assert.ok(hi > 230, `the stretch left the top at ${hi}`);
+      assert.ok(lo < 20, `the stretch left the bottom at ${lo}`);
+      // Stretching each channel on its own drags shadows blue. Scaling by the
+      // luminance ratio keeps the hue that was photographed: red stays the
+      // largest channel, and by roughly the same margin.
+      const [R, G, B] = [p.colour[0], p.colour[1], p.colour[2]];
+      assert.ok(R > G && G > B, `hue inverted: ${R},${G},${B}`);
+      assert.ok(Math.abs((R / B) - (150 / 60)) < 0.25, `saturation drifted: ${R}/${B}`);
     });
 
     await test('normals lean away from a slope and are flat on the level', async () => {

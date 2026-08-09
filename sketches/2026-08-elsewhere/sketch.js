@@ -98,7 +98,7 @@ async function main() {
   const field = createField(gl);
   const slots = createSlots({ ring: RING });
   const cam = { x: baked.meta.centre[0], z: baked.meta.centre[1], yaw: 0.72, pitch: 0.40, dist: 215 };
-  const view = { colour: 0, grain: 0.9, clock: 0 };
+  const view = { colour: 1, grain: 0.9, clock: 0 };   // the ramp opens; c reaches the photograph
 
   function fill() {
     const ctx = Math.floor(cam.x / TILE_SPAN), ctz = Math.floor(cam.z / TILE_SPAN);

@@ -90,5 +90,50 @@ export function assemble({ dsm, dtm, rgb, width, height, tone }) {
     }
   }
 
-  return { width, height, y, hag, colour, normal, datum, water, tone: t };
+  // Give the surface back its third dimension, after the normals are taken so
+  // the shading still describes the real surface.
+  //
+  // A DSM is one height per cell, which means two things a point cloud does not
+  // suffer from. Seen from above a facade is a discontinuity between two cells
+  // rather than a surface, so walls receive no samples at all and buildings
+  // read as floating plates. And a tree is a single opaque number, where a
+  // laser pulse would have returned from leaves, a branch and the ground in the
+  // same column — in the hendriklaan window that multi-return population was
+  // 62% of every point in the cloud.
+  //
+  // So: cells on a sharp drop are spent partway down the face they are standing
+  // on, and cells that look like vegetation are spread through the crown they
+  // are sitting on top of. The heights remain measured; where a particle sits
+  // between two measured heights is inferred, and the page says so.
+  const rendered = new Float32Array(y);
+  const hash = (i, j) => {
+    let h = (i * 374761393 + j * 668265263) | 0;
+    h = (h ^ (h >>> 13)) * 1274126177;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  for (let j = 0; j < height; j++) {
+    for (let i = 0; i < width; i++) {
+      const q = j * width + i;
+      const c = at(i, j);
+      const l = at(i - 1, j), r = at(i + 1, j), u = at(i, j - 1), d = at(i, j + 1);
+      const drop = Math.max(c - l, c - r, c - u, c - d);
+      // Curvature, not slope: a pitched roof is a plane and reads flat here,
+      // while a crown is rough in every direction at once.
+      const rough = Math.abs(4 * c - (l + r + u + d)) / 4;
+      const k = hash(i, j);
+
+      if (hag[q] > 2.5 && rough > 0.35) {
+        // vegetation: spread down the column, thinning towards the ground the
+        // way a canopy does, with the top of the crown kept intact
+        const ground = c - hag[q];
+        rendered[q] = ground + hag[q] * (0.42 + 0.58 * Math.sqrt(k));
+      } else if (drop > 1.2) {
+        // a facade. Seven cells in ten go down it; the rest hold the roof edge,
+        // without which the roofline dissolves.
+        if (k < 0.7) rendered[q] = c - drop * (k / 0.7);
+      }
+    }
+  }
+
+  return { width, height, y: rendered, surface: y, hag, colour, normal, datum, water, tone: t };
 }
