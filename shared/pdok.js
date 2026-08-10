@@ -27,10 +27,14 @@ export function fetchTileBbox(key) {
 // DecompressionStream, and each of those yields to the event loop. Against a
 // render loop drawing 296k points those yields never come back. Bandwidth is
 // cheap and the main thread is not.
-export const coverageUrl = (id, bbox, size) =>
+//
+// The bake script passes compressed:true for one small fixture, so the
+// decoder's predictor branch stays under test.
+export const coverageUrl = (id, bbox, size, { compressed = false } = {}) =>
   `${WCS}?service=WCS&version=2.0.1&request=GetCoverage&coverageId=${id}`
   + `&subset=x(${bbox[0]},${bbox[2]})&subset=y(${bbox[1]},${bbox[3]})`
-  + `&scalesize=x(${size}),y(${size})&format=image/tiff&geotiff:compression=None`;
+  + `&scalesize=x(${size}),y(${size})&format=image/tiff`
+  + (compressed ? '' : '&geotiff:compression=None');
 
 // WMS 1.3.0 with EPSG:28992 is easting-first. Northing-first returns HTTP 200
 // and a valid 1.6 KB blank JPEG, so nothing reports this as a mistake.

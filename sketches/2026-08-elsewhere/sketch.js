@@ -16,7 +16,7 @@ import { decodeFloatTiff } from './geotiff.js';
 import { median, toneOf } from './place.js';
 import { createSlots } from './slots.js';
 import { createField, CELL, SPAN, HALF, GRID, TILE_SPAN, TILE_H, TILE_P, LAYERS } from './field.js';
-import { cachedFetch, coverageUrl, orthoUrl, fetchTileKey, fetchTileBbox, geocode, journey } from './pdok.js';
+import { cachedFetch, coverageUrl, orthoUrl, fetchTileKey, fetchTileBbox, geocode, journey } from '../../shared/pdok.js';
 
 const BAKED = '/data/elsewhere/prins-hendriklaan';
 const NODATA_FLOOR = 1e30;

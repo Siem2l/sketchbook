@@ -12,11 +12,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { coverageUrl, orthoUrl, geocode } from '../shared/pdok.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const GEOCODE = 'https://api.pdok.nl/bzk/locatieserver/search/v3_1/free';
-const WCS = 'https://service.pdok.nl/rws/ahn/wcs/v1_0';
-const WMS = 'https://service.pdok.nl/hwh/luchtfotorgb/wms/v1_0';
 const LICENCE = 'AHN CC BY 4.0 · orthophoto Beeldmateriaal.nl';
 
 const args = process.argv.slice(2);
@@ -40,19 +38,6 @@ const compress = args.includes('--compress');
 const slugify = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
 
-async function geocode(q) {
-  const url = `${GEOCODE}?q=${encodeURIComponent(q)}&rows=5&fl=weergavenaam,centroide_rd,type`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`geocode HTTP ${r.status}`);
-  const docs = (await r.json()).response.docs;
-  // Prefer a house number over the street it is on: "Prins Hendriklaan 17"
-  // otherwise resolves to the middle of the whole street, 300 m away.
-  const doc = docs.find((d) => d.type === 'adres') ?? docs[0];
-  if (!doc) throw new Error(`no match for "${q}"`);
-  const [x, y] = doc.centroide_rd.match(/POINT\(([-\d.]+) ([-\d.]+)\)/).slice(1).map(Number);
-  return { name: doc.weergavenaam, x, y };
-}
-
 async function grab(url, path) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
@@ -67,15 +52,8 @@ const bbox = [place.x - half, place.y - half, place.x + half, place.y + half];
 const dir = resolve(ROOT, 'public/data/elsewhere', slugArg ?? slugify(place.name));
 mkdirSync(dir, { recursive: true });
 
-const cov = (id) => `${WCS}?service=WCS&version=2.0.1&request=GetCoverage&coverageId=${id}`
-  + `&subset=x(${bbox[0]},${bbox[2]})&subset=y(${bbox[1]},${bbox[3]})`
-  + `&scalesize=x(${size}),y(${size})&format=image/tiff`
-  + (compress ? '' : '&geotiff:compression=None');
-// WMS 1.3.0 with EPSG:28992 is easting-first. Northing-first returns HTTP 200
-// and a valid 1.6 KB blank JPEG, which is a silent hour of debugging.
-const ortho = `${WMS}?service=WMS&version=1.3.0&request=GetMap&layers=Actueel_orthoHR`
-  + `&crs=EPSG:28992&bbox=${bbox.join(',')}&width=${size}&height=${size}`
-  + `&format=image/jpeg&styles=`;
+const cov = (id) => coverageUrl(id, bbox, size, { compressed: compress });
+const ortho = orthoUrl(bbox, size);
 
 const sizes = {
   dsm: await grab(cov('dsm_05m'), resolve(dir, 'dsm.tif')),

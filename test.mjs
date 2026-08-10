@@ -105,7 +105,7 @@ try {
   // Also Node-side. The URL builders and the RD arithmetic are pure; geocode
   // takes its fetch as an argument so it can be exercised without the network.
   {
-    const P = await import('./sketches/2026-08-elsewhere/pdok.js');
+    const P = await import('./shared/pdok.js');
 
     await test('fetch tiles land on a 240 m grid', async () => {
       assert.equal(P.fetchTileKey(138275, 455381), '576:1897');
@@ -127,6 +127,18 @@ try {
       assert.match(url, /subset=x\(138240,138480\)/);
       assert.match(url, /subset=y\(455280,455520\)/);
       assert.match(url, /scalesize=x\(480\),y\(480\)/);
+    });
+
+    await test('coverage urls are uncompressed unless the caller asks otherwise', async () => {
+      // A striped deflate tiff takes 55 seconds to decode in a browser against
+      // 14 ms uncompressed — 120 strips, each yielding to the event loop. The
+      // bake script is the only caller allowed to ask for the slow one, and
+      // only so the decoder's predictor branch stays under test.
+      const fast = P.coverageUrl('dsm_05m', [138240, 455280, 138480, 455520], 480);
+      assert.match(fast, /geotiff:compression=None/,
+        'the browser path must not be handed a striped deflate tiff');
+      const baked = P.coverageUrl('dsm_05m', [138240, 455280, 138480, 455520], 64, { compressed: true });
+      assert.ok(!baked.includes('compression=None'), 'the fixture must stay on the predictor path');
     });
 
     await test('a journey knows its bearing, its distance and how long it takes', async () => {
