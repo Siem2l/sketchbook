@@ -31,6 +31,10 @@ uniform float uMix, uTime, uArc, uLift, uSwing;
 uniform float uColour, uPointK, uSpan, uDrop, uJump, uSize, uTop;
 uniform vec4 uBands;                   // sub, low, mid, high, each 0..1
 uniform float uAudio;                  // 0 closes the whole channel
+// Everything this sketch adds on top of what was measured, each switchable, so
+// the inference can be seen rather than taken on trust. All four at zero is the
+// raster as PDOK sent it.
+uniform float uWalls, uCanopy, uTone, uShade;
 
 out vec3 vCol;
 out float vAlive;
@@ -82,7 +86,8 @@ Sample lookup(vec4 tiles[13], vec2 w, bool useBorn, float toneLo, float toneGain
   // a shadow at (60,70,85) comes out (7,27,55) and the square goes blue.
   vec3 raw = texture(uPhoto, vec3(uv, float(layer))).rgb;
   float lum = dot(raw, vec3(0.299, 0.587, 0.114));
-  s.rgb = lum > 0.004 ? raw * (max(0.0, lum - toneLo) * toneGain / lum) : vec3(0.0);
+  vec3 stretched = lum > 0.004 ? raw * (max(0.0, lum - toneLo) * toneGain / lum) : vec3(0.0);
+  s.rgb = mix(raw, stretched, uTone);
 
   // Normals from the height field itself. An orthophoto is flat light with the
   // sun already in it; the gradient is the only thing that can make a roof face
@@ -124,9 +129,15 @@ Sample lookup(vec4 tiles[13], vec2 w, bool useBorn, float toneLo, float toneGain
   float built = smoothstep(1.0, 1.6, drop);
   s.y += uAudio * 1.6 * (0.4 + hash1(w * 0.61))
        * (uBands.x * ground + uBands.y * 0.35 + uBands.z * canopy + uBands.w * built);
-  if (s.hag > 2.5 && rough > 0.35) {
+  //
+  // What a cell is and whether to act on it are separate questions. Gating the
+  // branches directly would let a switched-off canopy fall through into the
+  // facade case and grow walls out of a tree.
+  bool isCanopy = s.hag > 2.5 && rough > 0.35;
+  bool isFacade = !isCanopy && drop > 1.2 && k < 0.7;
+  if (isCanopy && uCanopy > 0.5) {
     s.y = (s.y - s.hag) + s.hag * (0.42 + 0.58 * sqrt(k));
-  } else if (drop > 1.2 && k < 0.7) {
+  } else if (isFacade && uWalls > 0.5) {
     s.y -= drop * (k / 0.7);
   }
 
@@ -195,9 +206,10 @@ void main() {
   vec4 eye = uView * vec4(p, 1.0);
   gl_Position = uProj * eye;
 
-  float diff = 0.34 + 0.78 * max(0.0, dot(n, normalize(vec3(-0.42, 0.80, 0.42))));
+  // Flat light when the sun is off: the orthophoto already has a sun in it.
+  float diff = mix(1.0, 0.34 + 0.78 * max(0.0, dot(n, normalize(vec3(-0.42, 0.80, 0.42)))), uShade);
   // An orthophoto's midtone is a wet road; left linear the street disappears.
-  vec3 photo = pow(rgb, vec3(0.72));
+  vec3 photo = uTone > 0.5 ? pow(rgb, vec3(0.72)) : rgb;
   float ht = clamp(y / uTop, 0.0, 1.0);
   vec3 ramp = ht < 0.38 ? mix(vec3(0.09,0.10,0.19), vec3(0.20,0.44,0.47), ht/0.38)
             : ht < 0.76 ? mix(vec3(0.20,0.44,0.47), vec3(0.85,0.72,0.42), (ht-0.38)/0.38)

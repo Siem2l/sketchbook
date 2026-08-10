@@ -2019,6 +2019,47 @@ try {
       assert.deepEqual(errors, []);
     });
 
+    await test('no key is bound twice, and the legend is written from the bindings', async () => {
+      // The system, rather than the fix. `s` once meant walk-backwards and
+      // save-a-PNG; `a` meant strafe-left and listen. Both shipped. Movement and
+      // actions now share one table, binding a key twice throws on load, and
+      // the legend is generated from the same table so it cannot drift.
+      const km = await el(() => window.__elsewhere.keymap());
+      const keys = km.map((b) => b.key);
+      assert.equal(new Set(keys).size, keys.length, `a key is bound twice: ${keys.join(' ')}`);
+      for (const k of ['w', 'a', 's', 'd']) {
+        const b = km.find((x) => x.key === k);
+        assert.ok(b && b.held, `${k} is not in the table, so nothing would catch a collision with it`);
+      }
+      const hint = await p.textContent('#keyhint');
+      for (const b of km.filter((x) => x.label)) {
+        assert.ok(hint.includes(b.label), `the legend never mentions ${b.label}`);
+      }
+    });
+
+    await test('the inferred layer switches off, leaving the survey', async () => {
+      // Walls down facades, canopy through crowns, the percentile stretch and
+      // the sun are all things this sketch adds to what was measured. Being
+      // able to remove them is what makes the claim checkable.
+      assert.deepEqual(await el(() => window.__elsewhere.inferred()),
+        { walls: true, canopy: true, tone: true, shade: true });
+      const before = await el(() => window.__elsewhere.coverage());
+
+      await el(() => window.__elsewhere.measuredOnly());
+      await p.waitForTimeout(250);
+      assert.deepEqual(await el(() => window.__elsewhere.inferred()),
+        { walls: false, canopy: false, tone: false, shade: false });
+      const bare = await el(() => window.__elsewhere.coverage());
+      assert.ok(Math.abs(bare - before) > 0.02,
+        `switching the inference off changed nothing (${before.toFixed(3)} -> ${bare.toFixed(3)})`);
+
+      await el(() => window.__elsewhere.measuredOnly());
+      await p.waitForTimeout(250);
+      assert.deepEqual(await el(() => window.__elsewhere.inferred()),
+        { walls: true, canopy: true, tone: true, shade: true });
+      assert.deepEqual(errors, []);
+    });
+
     await test('at rest the square is the survey, not an animation of it', async () => {
       // The claim the sketch makes about itself, and the reason audio defaults
       // to off. Every displacement is a pure function of something that is zero
@@ -2051,7 +2092,7 @@ try {
       assert.equal(await el(() => window.__elsewhere.audioMode()), 'off');
       const still = await el(() => window.__elsewhere.coverage());
 
-      await p.click('#audio');            // -> field: no gesture, no permission, no AudioContext
+      await p.selectOption('#audio', 'field');   // no gesture, no permission, no AudioContext
       assert.equal(await el(() => window.__elsewhere.audioMode()), 'field');
       const seen = [];
       for (let i = 0; i < 14; i++) {

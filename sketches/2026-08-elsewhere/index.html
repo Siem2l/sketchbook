@@ -29,6 +29,9 @@
     input[type=text] { background: #0e0e11; color: #e8e6e0; border: 1px solid #444; border-radius: 4px; padding: 0.3rem 0.5rem; font: inherit; font-size: 13px; width: 17rem; }
     input[type=text]:focus { outline: none; border-color: #7fb3a3; }
     input[type=range] { accent-color: #7fb3a3; }
+    select { background: #26262e; color: #e8e6e0; border: 1px solid #444; border-radius: 4px;
+             padding: 0.28rem 0.4rem; font: inherit; font-size: 12px; }
+    select:focus { outline: none; border-color: #7fb3a3; }
     input[type=range]:disabled { opacity: 0.4; }
     #note { color: #e0a316; font-size: 11px; min-height: 1em; text-align: center; }
 
@@ -53,9 +56,8 @@
   </div>
 
   <div id="hint">
-    <kbd>W A S D</kbd> slide the window · <kbd>shift</kbd> faster<br />
     drag to orbit · wheel to dolly<br />
-    <kbd>a</kbd> listen · <kbd>c</kbd> colour · <kbd>p</kbd> png ×3 · <kbd>h</kbd> hide
+    <span id="keyhint"></span>
   </div>
 
   <div id="ui">
@@ -70,9 +72,23 @@
       <button id="hold">hold</button>
       <span class="lab">grain</span>
       <input id="grain" type="range" min="0.25" max="1.6" step="0.05" value="0.9" style="width:6rem" />
-      <button id="audio">listen: off</button>
+      <span class="lab">listen</span>
+      <select id="audio">
+        <option value="off">off</option>
+        <option value="field">field</option>
+        <option value="tone">tone</option>
+        <option value="mic">mic</option>
+      </select>
       <button id="colour">height ramp</button>
       <button id="save">png ×3</button>
+    </div>
+    <div class="row">
+      <span class="lab">inferred</span>
+      <button id="t-walls" class="on" title="cells on a sharp drop spent down the face">walls</button>
+      <button id="t-canopy" class="on" title="tall rough cells spread through the crown">canopy</button>
+      <button id="t-tone" class="on" title="the photograph stretched between its own percentiles">tone</button>
+      <button id="t-shade" class="on" title="a sun, from the height field's own gradient">sun</button>
+      <button id="measured">measured only</button>
     </div>
     <div id="note"></div>
   </div>

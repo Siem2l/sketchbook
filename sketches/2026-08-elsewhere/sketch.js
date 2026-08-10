@@ -82,7 +82,10 @@ async function main() {
 
   let lastTile = '';
   const place = { datum: 0, tone: { lo: 0, hi: 255 }, centre: [0, 0], name: '—' };
-  const view = { colour: 1, grain: 0.9, clock: 0 };
+  // Each of these is something the sketch adds on top of what was measured.
+  // They are switchable so the inference can be seen rather than taken on
+  // trust; with all four off, what is drawn is the raster as PDOK sent it.
+  const view = { colour: 1, grain: 0.9, clock: 0, walls: 1, canopy: 1, tone: 1, shade: 1 };
 
   // Off by default. What this square shows is the survey as measured, and a
   // test pins two frames a second apart as byte-identical; an always-on source
@@ -299,6 +302,10 @@ async function main() {
     gl.uniform1f(u.uTop, 18);
     gl.uniform4fv(u.uBands, audio.bands);
     gl.uniform1f(u.uAudio, audioOn ? 1 : 0);
+    gl.uniform1f(u.uWalls, view.walls);
+    gl.uniform1f(u.uCanopy, view.canopy);
+    gl.uniform1f(u.uTone, view.tone);
+    gl.uniform1f(u.uShade, view.shade);
     field.drawPoints();
   }
 
@@ -406,22 +413,34 @@ async function main() {
     if (mode === 'off') {
       audioOn = false;
       audio.bands.fill(0);          // exact, not merely still
-      $('audio').textContent = 'listen: off';
-      $('audio').classList.remove('on');
+      $('audio').value = 'off';
       note('');
       return;
     }
     await audio.setMode(mode);      // falls back to field if the mic is refused
     audioOn = true;
-    $('audio').textContent = 'listen: ' + audio.mode;
-    $('audio').classList.add('on');
+    $('audio').value = audio.mode;   // may not be what was asked for
     note(audio.error || (audio.mode === 'mic' ? 'listening to the room'
       : audio.mode === 'tone' ? 'the built-in pattern, now audible' : ''));
   }
-  $('audio').onclick = () => {
-    const now = audioOn ? audio.mode : 'off';
-    setAudio(SOURCES[(SOURCES.indexOf(now) + 1) % SOURCES.length]);
-  };
+  // A menu, not a cycling button: four sources hidden behind one label meant
+  // you could not see that `tone` existed without clicking past it.
+  $('audio').onchange = (e) => setAudio(e.target.value);
+
+  // --------------------------------------------------------- inferred layer
+  const INFERRED = ['walls', 'canopy', 'tone', 'shade'];
+  function setInferred(name, on) {
+    view[name] = on ? 1 : 0;
+    $('t-' + name).classList.toggle('on', !!on);
+    $('measured').classList.toggle('on', INFERRED.every((n) => !view[n]));
+  }
+  for (const n of INFERRED) $('t-' + n).onclick = () => setInferred(n, !view[n]);
+  function measuredOnly() {
+    const anyOn = INFERRED.some((n) => view[n]);
+    for (const n of INFERRED) setInferred(n, !anyOn);
+    note(anyOn ? 'the raster as it was surveyed — nothing added' : '');
+  }
+  $('measured').onclick = measuredOnly;
 
   const COLOURS = ['lit photo', 'height ramp', 'photo texture'];
   const setColour = (i) => { view.colour = i; $('colour').textContent = COLOURS[i]; };
@@ -465,19 +484,49 @@ async function main() {
   $('save').onclick = savePNG;
 
   const keys = new Set();
+  // One table, and the only place in this sketch where a key is spelled.
+  // Dispatch reads it, the hint line is written from it, and binding the same
+  // key twice throws on load rather than shipping. That is deliberate: `s` once
+  // meant both walk-backwards and save-a-PNG, and `a` meant both strafe-left
+  // and listen, and both of those shipped. A held key collides with a tapped
+  // one just as badly as two tapped ones, so they share one table and one check.
+  const KEYMAP = [
+    { key: 'w', held: true },
+    { key: 'a', held: true },
+    { key: 's', held: true },
+    { key: 'd', held: true, group: 'W A S D', label: 'slide the window' },
+    { key: 'shift', held: true, group: 'shift', label: 'faster' },
+    { key: 'c', label: 'colour', run: () => setColour((view.colour + 1) % COLOURS.length) },
+    { key: 'm', label: 'measured only', run: () => measuredOnly() },
+    { key: 'p', label: 'png ×3', run: () => savePNG() },
+    { key: 'h', label: 'hide', run: () => {
+      document.querySelectorAll('#ui, #meta, #hint').forEach((n) => {
+        n.style.display = n.style.display === 'none' ? '' : 'none';
+      });
+    } },
+  ];
+
+  const bound = new Map();
+  for (const b of KEYMAP) {
+    const clash = bound.get(b.key);
+    if (clash) {
+      throw new Error(`the key "${b.key}" is bound twice: `
+        + `${clash.label ?? 'movement'} and ${b.label ?? 'movement'}`);
+    }
+    bound.set(b.key, b);
+  }
+
+  // Written from the same table, so the legend cannot drift from the bindings.
+  $('keyhint').innerHTML = KEYMAP.filter((b) => b.label)
+    .map((b) => `<kbd>${b.group ?? b.key}</kbd> ${b.label}`).join(' · ');
+
   addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT') return;
-    const k = e.key.toLowerCase();
-    keys.add(k);
-    if (['w','a','s','d'].includes(k)) e.preventDefault();
-    // p, not s: s is backward. Binding both to one key meant every step back
-    // also downloaded a PNG.
-    if (k === 'a') $('audio').onclick();
-    else if (k === 'c') setColour((view.colour + 1) % COLOURS.length);
-    else if (k === 'p') savePNG();
-    else if (k === 'h') document.querySelectorAll('#ui, #meta, #hint').forEach((n) => {
-      n.style.display = n.style.display === 'none' ? '' : 'none';
-    });
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    const b = bound.get(e.key.toLowerCase());
+    if (!b) return;
+    keys.add(e.key.toLowerCase());
+    if (b.held) e.preventDefault();
+    if (b.run) b.run();
   });
   addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
@@ -560,6 +609,10 @@ async function main() {
     setColour,
     setCam: (o) => Object.assign(cam, o),
     audioMode: () => (audioOn ? audio.mode : 'off'),
+    keymap: () => KEYMAP.map(({ key, held, label }) => ({ key, held: !!held, label: label ?? null })),
+    inferred: () => Object.fromEntries(INFERRED.map((n) => [n, !!view[n]])),
+    setInferred,
+    measuredOnly,
     bands: () => Array.from(audio.bands),
     setAudio,
     phase: () => phase,

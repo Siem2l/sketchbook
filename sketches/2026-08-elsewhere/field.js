@@ -65,7 +65,7 @@ export function createField(gl) {
   const program = link(gl, POINT_VS, POINT_FS);
   const names = ['uHeight','uPhoto','uView','uProj','uCentre','uDir','uGrid','uCell','uHalf',
     'uToneLo','uToneGain','uToneLoB','uToneGainB','uMix','uTime','uArc','uLift','uSwing','uColour','uPointK','uSpan','uDrop',
-    'uJump','uSize','uTop','uBands','uAudio'];
+    'uJump','uSize','uTop','uBands','uAudio','uWalls','uCanopy','uTone','uShade'];
   const u = Object.fromEntries(names.map((n) => [n, gl.getUniformLocation(program, n)]));
   u.uTilesA = gl.getUniformLocation(program, 'uTilesA');
   u.uTilesB = gl.getUniformLocation(program, 'uTilesB');
