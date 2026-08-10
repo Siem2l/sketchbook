@@ -29,6 +29,8 @@ uniform float uToneLo, uToneGain;      // the place you are on
 uniform float uToneLoB, uToneGainB;    // the place you are flying to
 uniform float uMix, uTime, uArc, uLift, uSwing;
 uniform float uColour, uPointK, uSpan, uDrop, uJump, uSize, uTop;
+uniform vec4 uBands;                   // sub, low, mid, high, each 0..1
+uniform float uAudio;                  // 0 closes the whole channel
 
 out vec3 vCol;
 out float vAlive;
@@ -107,6 +109,21 @@ Sample lookup(vec4 tiles[13], vec2 w, bool useBorn, float toneLo, float toneGain
   float k = hash1(floor(w / uCell));
   float drop = max(max(s.y - l, s.y - r), max(s.y - d, s.y - u));
   float rough = abs(4.0 * s.y - (l + r + d + u)) * 0.25;
+
+  // The same three-way split hendriklaan gets handed by the survey, reached
+  // here from the height field instead: how far off the deck a cell sits, how
+  // rough it is in every direction at once, and whether it stands on a drop.
+  // Ground answers the sub, the canopy answers the mids, roofs and facades
+  // answer the highs — the same mapping, arrived at from geometry rather than
+  // from a label.
+  //
+  // uAudio at zero makes this term exactly zero, not merely small, so silence
+  // returns the square to the survey bit for bit.
+  float ground = 1.0 - smoothstep(0.2, 0.8, s.hag);
+  float canopy = step(2.5, s.hag) * smoothstep(0.25, 0.5, rough);
+  float built = smoothstep(1.0, 1.6, drop);
+  s.y += uAudio * 1.6 * (0.4 + hash1(w * 0.61))
+       * (uBands.x * ground + uBands.y * 0.35 + uBands.z * canopy + uBands.w * built);
   if (s.hag > 2.5 && rough > 0.35) {
     s.y = (s.y - s.hag) + s.hag * (0.42 + 0.58 * sqrt(k));
   } else if (drop > 1.2 && k < 0.7) {

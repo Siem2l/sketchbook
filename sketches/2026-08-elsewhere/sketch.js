@@ -17,6 +17,8 @@ import { median, toneOf } from './place.js';
 import { createSlots } from './slots.js';
 import { createField, CELL, SPAN, HALF, GRID, TILE_SPAN, TILE_H, TILE_P, LAYERS } from './field.js';
 import { cachedFetch, coverageUrl, orthoUrl, fetchTileKey, fetchTileBbox, geocode, journey } from '../../shared/pdok.js';
+import { Listener } from '../../shared/audio.js';
+import { DEFAULT, clone } from '../../shared/beat.js';
 
 const BAKED = '/data/elsewhere/prins-hendriklaan';
 const NODATA_FLOOR = 1e30;
@@ -81,6 +83,13 @@ async function main() {
   let lastTile = '';
   const place = { datum: 0, tone: { lo: 0, hi: 255 }, centre: [0, 0], name: '—' };
   const view = { colour: 1, grain: 0.9, clock: 0 };
+
+  // Off by default. What this square shows is the survey as measured, and a
+  // test pins two frames a second apart as byte-identical; an always-on source
+  // would trade a property worth keeping for a livelier first impression.
+  const audio = new Listener(clone(DEFAULT));
+  let audioOn = false;
+  let beats = 0;
   const cam = { x: 0, z: 0, yaw: 0.72, pitch: 0.40, dist: 300 };
 
   function setLayer(arr, layer, ox, oz, span) {
@@ -288,6 +297,8 @@ async function main() {
     gl.uniform1f(u.uJump, phase === 'flying' || phase === 'gathering' ? 1 : 0);
     gl.uniform1f(u.uSize, view.grain);
     gl.uniform1f(u.uTop, 18);
+    gl.uniform4fv(u.uBands, audio.bands);
+    gl.uniform1f(u.uAudio, audioOn ? 1 : 0);
     field.drawPoints();
   }
 
@@ -390,6 +401,28 @@ async function main() {
   }
 
   // --------------------------------------------------------------- controls
+  const SOURCES = ['off', 'field', 'tone', 'mic'];
+  async function setAudio(mode) {
+    if (mode === 'off') {
+      audioOn = false;
+      audio.bands.fill(0);          // exact, not merely still
+      $('audio').textContent = 'listen: off';
+      $('audio').classList.remove('on');
+      note('');
+      return;
+    }
+    await audio.setMode(mode);      // falls back to field if the mic is refused
+    audioOn = true;
+    $('audio').textContent = 'listen: ' + audio.mode;
+    $('audio').classList.add('on');
+    note(audio.error || (audio.mode === 'mic' ? 'listening to the room'
+      : audio.mode === 'tone' ? 'the built-in pattern, now audible' : ''));
+  }
+  $('audio').onclick = () => {
+    const now = audioOn ? audio.mode : 'off';
+    setAudio(SOURCES[(SOURCES.indexOf(now) + 1) % SOURCES.length]);
+  };
+
   const COLOURS = ['lit photo', 'height ramp', 'photo texture'];
   const setColour = (i) => { view.colour = i; $('colour').textContent = COLOURS[i]; };
   setColour(view.colour);
@@ -439,7 +472,8 @@ async function main() {
     if (['w','a','s','d'].includes(k)) e.preventDefault();
     // p, not s: s is backward. Binding both to one key meant every step back
     // also downloaded a PNG.
-    if (k === 'c') setColour((view.colour + 1) % COLOURS.length);
+    if (k === 'a') $('audio').onclick();
+    else if (k === 'c') setColour((view.colour + 1) % COLOURS.length);
     else if (k === 'p') savePNG();
     else if (k === 'h') document.querySelectorAll('#ui, #meta, #hint').forEach((n) => {
       n.style.display = n.style.display === 'none' ? '' : 'none';
@@ -482,6 +516,13 @@ async function main() {
 
     // Movement is locked while a jump is in the air: reshelving mid-flight
     // would evict the very layers carrying particles across the country.
+    if (audioOn) {
+      // beats is tempo-relative and t is seconds; they are separate on purpose,
+      // so changing the tempo does not rescale all elapsed history at once.
+      beats += dt * (audio.pattern.bpm / 60);
+      audio.update(view.clock, beats);
+    }
+
     const speed = phase === 'roam' ? 34 * (keys.has('shift') ? 4 : 1) * dt : 0;
     const fwd = [-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw)];
     const right = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
@@ -518,6 +559,9 @@ async function main() {
     layers: () => Array.from({ length: LAYERS }, (_, i) => tilesA[i * 4 + 3] > 0.5),
     setColour,
     setCam: (o) => Object.assign(cam, o),
+    audioMode: () => (audioOn ? audio.mode : 'off'),
+    bands: () => Array.from(audio.bands),
+    setAudio,
     phase: () => phase,
     mix: () => (flight ? flight.mix : 0),
     jumpTo,

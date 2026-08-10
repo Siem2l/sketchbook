@@ -2019,6 +2019,58 @@ try {
       assert.deepEqual(errors, []);
     });
 
+    await test('at rest the square is the survey, not an animation of it', async () => {
+      // The claim the sketch makes about itself, and the reason audio defaults
+      // to off. Every displacement is a pure function of something that is zero
+      // when nothing is happening, so a settled square is not merely still — it
+      // is bit for bit the ground as it was measured. This was cited in a
+      // comment for a while before anything actually guarded it.
+      await p.waitForFunction(() => window.__elsewhere.loading() === 0, null, { timeout: 120000 });
+      await el(() => window.__elsewhere.setAudio('off'));
+      await p.waitForTimeout(1200);        // let any arrival changeover finish
+      // Canvas only, panel hidden: an element screenshot still captures whatever
+      // overlaps it, and the readout counts up.
+      const shot = async () => {
+        await el(() => { document.getElementById('ui').style.visibility = 'hidden'; });
+        const png = await p.locator('canvas').screenshot();
+        await el(() => { document.getElementById('ui').style.visibility = ''; });
+        return png;
+      };
+      const a = await shot();
+      await p.waitForTimeout(1000);
+      assert.ok(a.equals(await shot()), 'the square drifted while it was supposed to be at rest');
+    });
+
+    await test('sound moves the square, and silence puts it back', async () => {
+      // The second consumer of shared/audio.js. hendriklaan maps the four bands
+      // onto the survey's own classification; this sketch has no classification
+      // and derives the same three-way split from the height field instead.
+      await p.waitForFunction(() => window.__elsewhere.loading() === 0, null, { timeout: 120000 });
+      // Off by default: what this square shows is the survey as measured, and
+      // the rest-state test pins two frames a second apart as byte-identical.
+      assert.equal(await el(() => window.__elsewhere.audioMode()), 'off');
+      const still = await el(() => window.__elsewhere.coverage());
+
+      await p.click('#audio');            // -> field: no gesture, no permission, no AudioContext
+      assert.equal(await el(() => window.__elsewhere.audioMode()), 'field');
+      const seen = [];
+      for (let i = 0; i < 14; i++) {
+        seen.push(await el(() => window.__elsewhere.bands()));
+        await p.waitForTimeout(120);
+      }
+      for (const v of seen.flat()) assert.ok(v >= 0 && v <= 1, `band out of range: ${v}`);
+      const sub = seen.map((b) => b[0]);
+      assert.ok(Math.max(...sub) - Math.min(...sub) > 0.15,
+        `the sub band never moved (${Math.min(...sub)}..${Math.max(...sub)})`);
+
+      await el(() => window.__elsewhere.setAudio('off'));
+      await p.waitForTimeout(400);
+      const back = await el(() => window.__elsewhere.coverage());
+      assert.ok(Math.abs(back - still) < 0.03,
+        `silence did not put the square back (${still.toFixed(3)} -> ${back.toFixed(3)})`);
+      assert.deepEqual(errors, []);
+    });
+
     await test('every colour mode draws the whole square', async () => {
       for (let i = 0; i < 3; i++) {
         await el((n) => window.__elsewhere.setColour(n), i);
