@@ -47,7 +47,8 @@
 // 1.08 m across 240 m against a 32 m vertical range, so a per-cell ground grid
 // moves the ramp by 3% and costs a load-time pass. Utrecht is flat. NAP it is.
 
-import { DEFAULT, clone, decode, encode, mountEditor, same, sequence } from './beat.js';
+import { DEFAULT, clone, decode, encode, same, sequence } from '../../shared/beat.js';
+import { mountEditor } from './beat-editor.js';
 
 const DATA = '/data/hendriklaan.json';
 const BIN = '/data/hendriklaan.bin';

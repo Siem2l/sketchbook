@@ -1752,7 +1752,7 @@ try {
   // are only correct if they reproduce the arithmetic they replaced.
   {
     const { DEFAULT, NOTES, sequence, same, changes, encode, decode } =
-      await import('./sketches/2026-08-hendriklaan/beat.js');
+      await import('./shared/beat.js');
 
     // Verbatim copy of the sequencer as it stood before the editor existed.
     // Kept here, not imported, precisely so that changing beat.js cannot
