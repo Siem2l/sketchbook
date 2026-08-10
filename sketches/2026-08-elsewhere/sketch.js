@@ -12,7 +12,7 @@
 // about it — where it stands, how high, what colour, which way it faces — is a
 // texture lookup in the vertex shader. Nothing is written per particle, so
 // sliding the window is a uniform and a tile arriving is one upload.
-import { decodeFloatTiff } from './geotiff.js';
+import { decodeFloatTiff } from '../../shared/geotiff.js';
 import { median, toneOf } from './place.js';
 import { createSlots } from './slots.js';
 import { createField, CELL, SPAN, HALF, GRID, TILE_SPAN, TILE_H, TILE_P, LAYERS } from './field.js';

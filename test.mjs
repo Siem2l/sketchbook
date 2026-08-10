@@ -57,7 +57,7 @@ try {
   // Node-side and browser-free: the decoder is pure and the fixtures are on
   // disk, so this needs neither the server nor a page.
   {
-    const { decodeFloatTiff } = await import('./sketches/2026-08-elsewhere/geotiff.js');
+    const { decodeFloatTiff } = await import('./shared/geotiff.js');
     const load = (p) => {
       const b = readFileSync(p);
       return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
@@ -191,7 +191,7 @@ try {
       const d = new Float32Array([ND, 1, 2, 3, 4, 5, ND]);
       assert.equal(median(d), 3);
       // Utrecht really does sit at about two metres above Amsterdam Ordnance Datum
-      const { decodeFloatTiff } = await import('./sketches/2026-08-elsewhere/geotiff.js');
+      const { decodeFloatTiff } = await import('./shared/geotiff.js');
       const b = readFileSync('public/data/elsewhere/prins-hendriklaan/dtm.tif');
       const g = await decodeFloatTiff(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
       const datum = median(g.data);
