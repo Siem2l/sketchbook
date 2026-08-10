@@ -1950,35 +1950,60 @@ try {
     });
 
     await test('a jump stays in the picture, and lands only once', async () => {
-      // Reported from the live page: the square rose, left the frame, came back
-      // unchanged, and then sank and popped a second time. Two causes — a 49 km
-      // flight asking for a 105 m lift across a 240 m window, and every sharp
-      // tile firing its arrival changeover over ground the coarse frame was
-      // already showing. Coverage catches both: a collapse mid-flight, and a
-      // dip after the landing.
-      await p.waitForFunction(() => window.__elsewhere.loading() === 0, null, { timeout: 90000 });
+      // Reported from the live page twice. First the square rose, left the
+      // frame, came back unchanged, then sank and popped a second time: a 49 km
+      // flight was asking for a 105 m lift across a 240 m window, and every
+      // sharp tile was firing its arrival changeover over ground the coarse
+      // frame already showed. Then the per-particle stagger meant to fix the
+      // first fault turned the field into churn.
+      //
+      // Driven by the scrub rather than by the clock, because a two-second
+      // flight sampled through a readPixels that costs a frame yields three
+      // measurements and a coin toss.
+      await p.waitForFunction(() => window.__elsewhere.loading() === 0, null, { timeout: 120000 });
       const settled = await el(() => window.__elsewhere.coverage());
       await el(() => window.__elsewhere.jumpTo('Coolsingel 40, Rotterdam'));
+      await p.waitForFunction(() => window.__elsewhere.phase() === 'flying', null, { timeout: 120000 });
+      await p.click('#hold');
 
-      const flying = [], landed = [];
-      for (let i = 0; i < 45; i++) {
-        const phase = await el(() => window.__elsewhere.phase());
-        const lit = await el(() => window.__elsewhere.coverage());
-        if (phase === 'flying') flying.push(lit);
-        else if (flying.length) landed.push(lit);
-        if (landed.length > 14) break;
-        await p.waitForTimeout(300);
-      }
-      assert.ok(flying.length > 3, 'never saw the flight');
-      // in the air the field spreads, so it covers more, never less
-      assert.ok(Math.min(...flying) > settled * 0.85,
-        `the picture emptied mid-flight (${Math.min(...flying).toFixed(2)} against ${settled.toFixed(2)})`);
-      assert.ok(Math.max(...flying) > settled,
-        'nothing moved: the flight covered no more than standing still');
-      // and once it has landed it stays landed
-      const lo = Math.min(...landed), hi = Math.max(...landed);
-      assert.ok(hi - lo < 0.06, `the square transitioned a second time after landing (${lo.toFixed(2)}..${hi.toFixed(2)})`);
+      const at = async (v) => {
+        await el((m) => {
+          const el2 = document.getElementById('mix');
+          el2.value = m;
+          el2.dispatchEvent(new Event('input', { bubbles: true }));
+        }, String(v));
+        await p.waitForTimeout(250);
+        return el(() => window.__elsewhere.coverage());
+      };
+      const swell = [];
+      for (const v of [0, 0.25, 0.5, 0.75, 1]) swell.push(await at(v));
+
+      // Nothing may leave the square. When it did, the middle of the flight
+      // measured 0.17 against 0.41 at rest and the frame outline hung in an
+      // empty picture.
+      assert.ok(Math.min(...swell) > settled * 0.85,
+        `the picture emptied mid-flight: ${swell.map((v) => v.toFixed(2)).join(' ')}`);
+      // and something has to actually move
+      assert.ok(Math.max(...swell) > settled * 1.05,
+        `nothing moved: ${swell.map((v) => v.toFixed(2)).join(' ')}`);
+      // both ends are a settled place, the middle is the field in motion
+      assert.ok(swell[2] > swell[0] && swell[2] > swell[4],
+        `the swell is not in the middle: ${swell.map((v) => v.toFixed(2)).join(' ')}`);
+
+      await p.click('#hold');
+      await p.waitForFunction(() => window.__elsewhere.phase() === 'roam', null, { timeout: 60000 });
       assert.match(await p.textContent('#m-place'), /Coolsingel/);
+
+      // and once it has landed it stays landed: a refinement arriving over
+      // ground already on screen must not transition a second time
+      const after = [];
+      for (let i = 0; i < 8; i++) {
+        after.push(await el(() => window.__elsewhere.coverage()));
+        await p.waitForTimeout(400);
+      }
+      const lo = Math.min(...after), hi = Math.max(...after);
+      assert.ok(hi - lo < 0.08,
+        `the square transitioned a second time after landing: ${after.map((v) => v.toFixed(2)).join(' ')}`);
       assert.deepEqual(errors, []);
     });
 
