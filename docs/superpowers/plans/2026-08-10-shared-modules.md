@@ -277,7 +277,9 @@ The second consumer. Until this lands, `shared/audio.js` has one user and the in
 
 Same idea as hendriklaan, reached from derived geometry instead of a survey label. Worth saying in the sketch's header comment, because it is the finding that makes the shared module worth having.
 
-**Audio is off by default.** `elsewhere`'s whole claim is that what you see is the survey as measured, and there is a passing test — `at rest nothing moves at all` — that pins two frames a second apart as byte-identical. An always-on audio source breaks that and the property is worth more than the default. A button turns it on; `gain` at 0 is the rest state, exactly as in hendriklaan.
+**Audio is off by default.** `elsewhere`'s whole claim is that what you see is the survey as measured. An always-on source breaks that, and the property is worth more than a livelier default.
+
+Note, discovered while executing: the rest-state test this plan cited **did not exist**. It was written into the original task plan, lost when the texture rewrite forced that test block to be rewritten, and then cited in a source comment and in this document as though it were there. It was added as part of Task 5 — `at rest the square is the survey, not an animation of it`. Check that a guarantee is guarded before repeating it.
 
 - [ ] **Step 1: Write the failing test**
 
