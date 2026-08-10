@@ -210,21 +210,14 @@ GPU does. Measure on hardware before optimising against them.
 
 ## Test suite state
 
-Four `elsewhere` browser tests and fifteen Node-side tests, all passing at the
-time of writing, plus the jump regression test.
+**148 passed, 0 failed** on a quiet machine, at commit `44d1b8d`. Four
+`elsewhere` browser tests, fifteen Node-side ones, and the jump regression test.
 
-Three tests were failing that are **not** this sketch's and were not investigated
-here:
+Earlier runs showed up to six failures across `edge`, `hendriklaan` and
+`splinter` — none in this sketch, all in code untouched by this work. They were
+contention: several Playwright browsers running at once while those tests waited
+fixed timeouts for a webcam, a physics settle, or an audio graph. On a quiet
+machine they all pass. Worth knowing before you conclude anything from a red
+run: check whether another session is driving a browser first.
 
-- `an unavailable source explains itself and changes nothing` — the `edge`
-  sketch, untouched since before this work began, waits on a webcam that never
-  arrives in headless.
-- `the pattern reaches the geometry, not just the page` — `hendriklaan`, the
-  second session's beat editor.
-- splinter's physics tests appeared and disappeared across runs.
-
-All three look like contention — several Playwright browsers were running on
-this machine at once, and these tests wait fixed timeouts for things to settle.
-That is an inference, not a measurement. Confirm on a quiet machine before
-concluding anything, and in particular before refactoring hendriklaan's audio
-out from under a test that may genuinely be failing.
+`npm test` takes about four minutes alone and closer to ten under load.
