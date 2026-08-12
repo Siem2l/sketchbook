@@ -6,9 +6,18 @@
 // hendriklaan sketch maps them onto the AHN classification of a street; the
 // elsewhere sketch maps them onto categories it derives from a height field.
 // Having two callers disagree about the meaning is the point.
-import { sequence } from './beat.js';
+import { sequence, NOTES } from './beat.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+// A fraction of the way up something, as a pitch. Fourteen diatonic steps over
+// two octaves, drawn from the pool the bass already plays out of, so a struck
+// note is in the key of the built-in tune rather than on a frequency of its
+// own. Free pitch would want a tuning decision this has no business making.
+export function noteFor(f) {
+  const step = Math.round(clamp(f, 0, 1) * (NOTES.length * 2 - 1));
+  return NOTES[step % NOTES.length].hz * (1 << Math.floor(step / NOTES.length));
+}
 
 // One sequencer drives all three sources. In `field` it drives the band values
 // directly with no AudioContext at all, which is what makes the page move on
@@ -98,15 +107,104 @@ export class Listener {
     this.analyser.fftSize = 2048;
     this.analyser.smoothingTimeConstant = 0.55;
     this.bins = new Uint8Array(this.analyser.frequencyBinCount);
+    // A bus of its own for one-shots, feeding the speakers and the analyser
+    // both. The second connection is the good half: a note the caller strikes
+    // is heard by the FFT and comes back out as displacement, so hitting the
+    // road makes the sub band spike and the ground heave under the blow.
+    this.voice = this.ctx.createGain();
+    this.voice.gain.value = 0;
+    this.voice.connect(this.analyser);
+    this.voice.connect(this.ctx.destination);
     return this.ctx;
+  }
+
+  // One shot, built per hit and disposed of when it ends. The caller decides
+  // what it hit; this decides what that sounds like.
+  strike(kind, hz) {
+    // No context means `field`, which drives the bands from the sequencer and
+    // never opens one — the reason the page moves on load with no gesture and
+    // no permission. Silent by construction rather than by a check.
+    if (!this.ctx || !this.voice) return false;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const g = ctx.createGain();
+    g.connect(this.voice);
+    // Exponential ramps cannot pass through zero, so the rest is at a value
+    // small enough to be silence and large enough to be legal.
+    const REST = 0.0001;
+    const hit = (peak, dur) => {
+      g.gain.setValueAtTime(REST, now);
+      g.gain.exponentialRampToValueAtTime(peak, now + 0.006);
+      g.gain.exponentialRampToValueAtTime(REST, now + dur);
+      return dur;
+    };
+    const done = (node, dur) => {
+      node.stop(now + dur + 0.02);
+      node.onended = () => g.disconnect();
+    };
+
+    if (kind === 'canopy') {
+      // A crown is leaves, a branch and the ground in one column, and none of
+      // it has a pitch. Noise in the band the note points at instead.
+      if (!this.noise) {
+        this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+        const d = this.noise.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = this.noise;
+      src.loop = true;
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = Math.min(9000, hz * 8);
+      bp.Q.value = 1.1;
+      src.connect(bp); bp.connect(g);
+      src.start(now);
+      done(src, hit(0.55, 0.18));
+      return true;
+    }
+
+    const o = ctx.createOscillator();
+    if (kind === 'ground') {
+      // The deck, hit. A sine falling half an octave in a tenth of a second is
+      // the whole of what makes a thud a thud rather than a beep, and ground
+      // has hag near zero, so the pitch mapping has already put it in the bass.
+      o.type = 'sine';
+      o.frequency.setValueAtTime(hz, now);
+      o.frequency.exponentialRampToValueAtTime(hz * 0.5, now + 0.12);
+      o.connect(g);
+      o.start(now);
+      done(o, hit(0.85, 0.4));
+      return true;
+    }
+
+    // Roofs and facades: a struck bell, with a fifth over it for the ring.
+    o.type = 'triangle';
+    o.frequency.value = hz;
+    const fifth = ctx.createOscillator();
+    fifth.type = 'sine';
+    fifth.frequency.value = hz * 1.5;
+    const fg = ctx.createGain();
+    fg.gain.value = 0.4;
+    o.connect(g); fifth.connect(fg); fg.connect(g);
+    o.start(now); fifth.start(now);
+    const dur = hit(0.5, 0.5);
+    fifth.stop(now + dur + 0.02);
+    done(o, dur);
+    return true;
   }
 
   buildTone() {
     const ctx = this.ensureCtx();
     const out = ctx.createGain();
     out.gain.value = TONE_LEVEL;
+    // The analyser is a tap and nothing else. Running the speakers off it —
+    // out → analyser → destination, which is what this was — put the mic on the
+    // path to the destination too the moment `mic` connected its source, three
+    // lines under a comment promising it did not. That is a feedback loop, and
+    // it only wanted a source switched from tone to mic to howl.
     out.connect(this.analyser);
-    this.analyser.connect(ctx.destination);
+    out.connect(ctx.destination);
 
     const osc = (type, freq, to) => {
       const o = ctx.createOscillator();
@@ -173,6 +271,14 @@ export class Listener {
     set(n.hatGain.gain, s.hat * 0.10);
   }
 
+  // Every audible path in one place, so silence is one call and not four. The
+  // bands are the caller's business — they are what the geometry reads, and a
+  // caller that wants the survey exactly has to zero them itself.
+  hush() {
+    if (this.nodes) this.nodes.out.gain.value = 0;
+    if (this.voice) this.voice.gain.value = 0;
+  }
+
   async setMode(mode) {
     this.error = '';
     if (mode === this.mode) return;
@@ -189,6 +295,11 @@ export class Listener {
     } else if (this.nodes) {
       this.nodes.out.gain.value = 0;
     }
+    // Struck notes belong to whichever source can be heard at all, and the
+    // decision is made from the mode this call actually lands on rather than
+    // the one it was asked for — a refused microphone falls back to `field`,
+    // which is inaudible, and would otherwise leave the voice open behind it.
+    const voiceFor = (m) => { if (this.voice) this.voice.gain.value = m === 'field' ? 0 : 0.6; };
     if (mode === 'mic') {
       try {
         this.stream = await navigator.mediaDevices.getUserMedia({
@@ -203,9 +314,11 @@ export class Listener {
       } catch (e) {
         this.error = 'no microphone — staying on the built-in field';
         this.mode = 'field';
+        voiceFor('field');
         return;
       }
     }
     this.mode = mode;
+    voiceFor(mode);
   }
 }

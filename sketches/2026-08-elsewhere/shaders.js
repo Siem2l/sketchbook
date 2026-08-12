@@ -10,6 +10,7 @@
 //
 // Sliding the window is now a uniform. Nothing is written per particle, ever.
 import { WAKE_N, WEIGHT_N } from './touch.js';
+import { CANOPY_HAG, CANOPY_ROUGH, BUILT_DROP } from './terrain.js';
 
 export const POINT_VS = `#version 300 es
 precision highp float;
@@ -135,7 +136,7 @@ Sample lookup(vec4 tiles[13], vec2 w, bool useBorn, float toneLo, float toneGain
   // uAudio at zero makes this term exactly zero, not merely small, so silence
   // returns the square to the survey bit for bit.
   float ground = 1.0 - smoothstep(0.2, 0.8, s.hag);
-  float canopy = step(2.5, s.hag) * smoothstep(0.25, 0.5, rough);
+  float canopy = step(${CANOPY_HAG.toFixed(2)}, s.hag) * smoothstep(0.25, 0.5, rough);
   float built = smoothstep(1.0, 1.6, drop);
   s.y += uAudio * 1.6 * (0.4 + hash1(w * 0.61))
        * (uBands.x * ground + uBands.y * 0.35 + uBands.z * canopy + uBands.w * built);
@@ -143,8 +144,10 @@ Sample lookup(vec4 tiles[13], vec2 w, bool useBorn, float toneLo, float toneGain
   // What a cell is and whether to act on it are separate questions. Gating the
   // branches directly would let a switched-off canopy fall through into the
   // facade case and grow walls out of a tree.
-  bool isCanopy = s.hag > 2.5 && rough > 0.35;
-  bool isFacade = !isCanopy && drop > 1.2 && k < 0.7;
+  // The same three numbers terrain.js classifies with, interpolated from it so
+  // a click and a particle cannot disagree about what they are standing on.
+  bool isCanopy = s.hag > ${CANOPY_HAG.toFixed(2)} && rough > ${CANOPY_ROUGH.toFixed(2)};
+  bool isFacade = !isCanopy && drop > ${BUILT_DROP.toFixed(2)} && k < 0.7;
   if (isCanopy && uCanopy > 0.5) {
     s.y = (s.y - s.hag) + s.hag * (0.42 + 0.58 * sqrt(k));
   } else if (isFacade && uWalls > 0.5) {

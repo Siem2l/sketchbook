@@ -17,8 +17,9 @@ import { median, toneOf } from './place.js';
 import { createSlots } from './slots.js';
 import { createField, CELL, SPAN, HALF, GRID, TILE_SPAN, TILE_H, TILE_P, LAYERS } from './field.js';
 import { createTouch } from './touch.js';
+import { createGround } from './terrain.js';
 import { cachedFetch, coverageUrl, orthoUrl, fetchTileKey, fetchTileBbox, geocode, journey } from '../../shared/pdok.js';
-import { Listener } from '../../shared/audio.js';
+import { Listener, noteFor } from '../../shared/audio.js';
 import { DEFAULT, clone } from '../../shared/beat.js';
 
 const BAKED = '/data/elsewhere/prins-hendriklaan';
@@ -93,6 +94,11 @@ async function main() {
   // would trade a property worth keeping for a livelier first impression.
   const audio = new Listener(clone(DEFAULT));
   let audioOn = false;
+  // The height field, on this side of the GPU. One slot, holding whichever
+  // coarse frame is the current place, so a click can tell a road from a crown
+  // from a roof without reading a texture back.
+  const ground = createGround();
+  const strikes = [];          // the last few, for the tests to look at
   let beats = 0;
   const cam = { x: 0, z: 0, yaw: 0.72, pitch: 0.40, dist: 300 };
 
@@ -137,7 +143,13 @@ async function main() {
     const { surf, terr } = levelled(dsm.data, dtm.data, datum);
     field.uploadHeight(layer, surf, terr);
     field.uploadPhoto(layer, rgba);
-    return { bbox, span, datum, tone };
+    // The levelled arrays go back to the caller rather than being dropped on
+    // the floor: they are the only copy of the height field outside the GPU,
+    // and a click needs to know what it landed on. Deliberately not stored
+    // here — a jump loads its destination before a particle moves, and setting
+    // the ground from inside would have the page playing the place it is
+    // flying to while it is still drawing the one it left.
+    return { bbox, span, datum, tone, surf, terr };
   }
 
   async function loadOpening() {
@@ -156,6 +168,7 @@ async function main() {
     const { surf, terr } = levelled(dsm.data, dtm.data, place.datum);
     field.uploadHeight(0, surf, terr);
     field.uploadPhoto(0, rgba);
+    ground.set(meta.bbox, meta.bbox[2] - meta.bbox[0], surf, terr);
     setLayer(tilesA, PAIRS[0][0], meta.bbox[0], meta.bbox[1], meta.bbox[2] - meta.bbox[0]);
     bornA[PAIRS[0][0]] = -1e4;                      // no changeover on first paint
   }
@@ -234,6 +247,9 @@ async function main() {
   $('m-span').textContent = String(SPAN);
 
   const FOV = 0.82;
+  // The top of the height ramp, and now also the top of the pitch range: a
+  // click reads the same scale the colour does, so what looks high sounds high.
+  const TOP = 18;
   function matrices(w, h) {
     // The camera orbits the square and never translates. WASD slides the framed
     // coordinates instead, so the frame is stationary and the country moves
@@ -342,7 +358,7 @@ async function main() {
     gl.uniform1f(u.uDrop, 11);
     gl.uniform1f(u.uJump, phase === 'flying' || phase === 'gathering' ? 1 : 0);
     gl.uniform1f(u.uSize, view.grain);
-    gl.uniform1f(u.uTop, 18);
+    gl.uniform1f(u.uTop, TOP);
     gl.uniform4fv(u.uBands, audio.bands);
     gl.uniform1f(u.uAudio, audioOn ? 1 : 0);
     gl.uniform1f(u.uWalls, view.walls);
@@ -431,6 +447,7 @@ async function main() {
     tilesA.fill(0);
     bornA.fill(-1e4);
     setLayer(tilesA, f.sharp, f.meta.bbox[0], f.meta.bbox[1], f.meta.span);
+    ground.set(f.meta.bbox, f.meta.span, f.meta.surf, f.meta.terr);
     tilesB.fill(0);
     flight = null;
     phase = 'roam';
@@ -450,6 +467,7 @@ async function main() {
         if (place.centre[0] !== f.dest.x) return;   // already gone somewhere else
         setLayer(tilesA, f.wide, m.bbox[0], m.bbox[1], m.span);
         bornA[f.wide] = -1e4;
+        ground.set(m.bbox, m.span, m.surf, m.terr);
       })
       .catch(() => { /* the sharp ring covers the square on its own */ });
   }
@@ -460,6 +478,11 @@ async function main() {
     if (mode === 'off') {
       audioOn = false;
       audio.bands.fill(0);          // exact, not merely still
+      // The bands stopping is what freezes the picture; the bus stopping is
+      // what makes it quiet. This used to do only the first, so choosing `off`
+      // after `tone` held the oscillators at whatever envelope they were last
+      // given and left a drone playing over a still square.
+      audio.hush();
       $('audio').value = 'off';
       note('');
       return;
@@ -604,7 +627,21 @@ async function main() {
   canvas.addEventListener('pointerup', (e) => {
     if (drag && drag.moved < 5) {
       const g = groundAt(e.clientX, e.clientY);
-      if (g) touch.drop(g[0], g[1], nowClock());
+      if (g) {
+        touch.drop(g[0], g[1], nowClock());
+        // The three-way split, read backwards. It decides how sound moves the
+        // geometry; here it decides what the geometry sounds like when it is
+        // hit. Gated on audioOn because off means off — and `field` never opens
+        // a context at all, so it is silent whether or not this asks.
+        const hit = ground.at(g[0], g[1]);
+        if (hit && audioOn) {
+          const hz = noteFor(hit.hag / TOP);
+          if (audio.strike(hit.kind, hz)) {
+            strikes.push({ kind: hit.kind, hz });
+            if (strikes.length > 8) strikes.shift();
+          }
+        }
+      }
     }
     endDrag();
   });
@@ -617,7 +654,16 @@ async function main() {
 
   let lastFrame = performance.now();
   function frame(now) {
-    const dt = Math.min(0.05, (now - lastFrame) / 1000);
+    // Two budgets from one elapsed time. view.clock is clamped hard, because a
+    // backgrounded tab must not fling a tile changeover or a jump across its
+    // whole arc in a single frame. The sequencer is not allowed the same mercy:
+    // beats advancing on a clamped dt means the music runs slow whenever the
+    // renderer does — at five frames a second the pattern drags to a quarter
+    // tempo, which is audible in `tone` and was quietly starving the geometry
+    // in `field`. A second of grace is enough to swallow a stall and not enough
+    // to teleport the bar.
+    const real = (now - lastFrame) / 1000;
+    const dt = Math.min(0.05, real);
     view.clock += dt;
     lastFrame = now;
     // Before the upload, so anything past its life is a hard zero on the way to
@@ -636,7 +682,7 @@ async function main() {
     if (audioOn) {
       // beats is tempo-relative and t is seconds; they are separate on purpose,
       // so changing the tempo does not rescale all elapsed history at once.
-      beats += dt * (audio.pattern.bpm / 60);
+      beats += Math.min(1, real) * (audio.pattern.bpm / 60);
       audio.update(view.clock, beats);
     }
 
@@ -699,6 +745,9 @@ async function main() {
     mix: () => (flight ? flight.mix : 0),
     jumpTo,
     touch: () => touch.live(),
+    strikes: () => strikes.map((s) => ({ ...s })),
+    under: (x, z) => ground.at(x ?? cam.x, z ?? cam.z),
+    voice: () => (audio.voice ? audio.voice.gain.value : null),
     groundAt,
     // A shader that failed to link still leaves a canvas; it just leaves a
     // black one, so coverage is the only assertion that catches it.

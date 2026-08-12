@@ -66,6 +66,17 @@ three moments a frame actually becomes the current place.
 Sampling is nearest, not bilinear, for the same reason the height texture is
 `NEAREST`: a smoothed height ramps every facade into a slope.
 
+Two ways this disagrees with the shader, both found while building it and both
+cheap to live with. The one-metre ring of cells around a building reads as
+canopy rather than built, because the roughness test is a Laplacian and a hard
+step is rough in every direction — the shader says the same thing about the same
+cells, which is exactly what sharing the thresholds is for, so a click and a
+particle stay in agreement even where the agreement is odd. And this grid is the
+coarse frame at a metre where the drawn square is sharp tiles at half of one, so
+a smooth slope reads rougher here than there. Keeping all nine sharp tiles on
+this side would cost eight megabytes to move a handful of clicks between two
+notes.
+
 ## Which note
 
 `hag / 18` — height above ground over the top of the height ramp — mapped onto
@@ -96,9 +107,9 @@ destination and the analyser. The second connection is the good part: a hit you
 play is heard by the FFT and moves the geometry. Strike the road and the sub
 band spikes and the ground heaves under the crater you just made.
 
-## Two bugs in the bus, fixed on the way past
+## Three bugs found on the way past
 
-Both are in routing this change rewires anyway.
+The first two are in routing this change rewires anyway.
 
 **The mic monitors itself.** `buildTone()` runs `analyser.connect(destination)`,
 and `mic` mode runs `micNode.connect(analyser)` — so going tone → mic sends the
@@ -107,22 +118,46 @@ saying it deliberately does not. The analyser becomes a pure tap and `out` and
 `voice` reach the destination directly. Same sound, no loop.
 
 **Selecting `off` stops the picture but not the sound.** `setAudio('off')`
-returns before `setMode` is reached, so `nodes.out.gain` keeps whatever it had
-and `drive()` stops being called — leaving the oscillators sustaining the last
-envelope they were given. To be confirmed in the browser before it is written
-down as fact; if it holds, `off` mutes the bus as well as the bands.
+returns before `setMode` is reached, so nothing ever lowers `nodes.out.gain`
+from `TONE_LEVEL`, and `drive()` simply stops being called — which freezes every
+oscillator at whatever envelope it was last handed. The kick and the hat happen
+to decay to near nothing; the pad sustains between 0.16 and 0.5, so choosing
+`off` after `tone` left a drone playing over a stopped square. `Listener.hush()`
+now closes every audible path in one call, and `setAudio('off')` uses it.
+
+**The music slowed down with the frame rate.** Found by a test rather than by
+reading. `beats` advanced on the frame loop's *clamped* `dt`, so at five frames
+a second the sequencer ran at a quarter tempo and a kick every 1.25 s stretched
+to one every five. The clamp is right for `view.clock`, which drives tile
+changeovers and jumps and must not fling one across its whole arc after a
+backgrounded tab — but music is not owed that mercy: elapsed time elapsed.
+`beats` now advances on real time, capped at a second, which swallows a stall
+without teleporting the bar.
+
+That one had been latent since the sequencer went in, and surfaced only because
+this work made the vertex shader heavy enough to expose it under a software
+renderer. The test it broke was itself watching for a 1.25 s event through a
+1.7 s window; it now samples until the kick lands instead of hoping.
 
 ## Testing
 
-**Unit, in node:** a synthetic grid classifies flat ground as ground, tall rough
-cells as canopy and a cliff edge as built; `at()` returns `null` outside its own
-bbox; every fraction in 0..1 maps to a pitch that is a member of `NOTES` times a
-power of two.
+**Unit, in node:** a synthetic grid classifies flat deck as ground, a flat roof
+as built and a rough crown as canopy; a building edge is pinned as canopy, so
+the agreement with the shader is asserted rather than assumed; a neighbour off
+the frame is clamped rather than wrapped, which would invent a cliff down every
+seam; `at()` returns `null` outside its own bbox and before anything has loaded;
+and every fraction in 0..1 maps to a pitch in `NOTES` times a power of two, with
+out-of-range clamped rather than wrapped.
 
-**Browser:** a click on the square records one strike with a plausible kind; the
-same click with listen `off` records the hit and plays nothing; a strike in
-`tone` mode moves the bands, which is the loop through the analyser proving
-itself; and selecting `off` after `tone` leaves the bus silent.
+**Browser:** a click with listen `off` records no strike at all; the same click
+in `tone` records exactly one, with a kind from the split and a pitch on the
+scale; the voice bus is open in `tone` and shut again the moment `off` is
+chosen, and a click after that is silent.
+
+And one that proves the feature rather than its wiring: a `Listener` of its own,
+in `tone` with the pattern's own gain taken to zero, is struck once and the
+analyser bins are read before and after. If the voice reached neither the
+speakers nor the FFT they would not move. They do.
 
 The rest-state guarantee is untouched — sound moves no pixels — and the existing
 weight test already pins a click returning the canvas to byte-identical.

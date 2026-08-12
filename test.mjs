@@ -367,6 +367,82 @@ try {
     });
   }
 
+  // ------------------------------------------------------------------ terrain
+  {
+    const { createGround } = await import('./sketches/2026-08-elsewhere/terrain.js');
+    const { noteFor } = await import('./shared/audio.js');
+    const { NOTES } = await import('./shared/beat.js');
+
+    // A 32 m square at a metre: flat deck, one flat-roofed block, one crown
+    // rough in every direction. The three things the split has to tell apart.
+    const scene = () => {
+      const n = 32, surf = new Float32Array(n * n), terr = new Float32Array(n * n);
+      for (let r = 0; r < n; r++) {
+        for (let c = 0; c < n; c++) {
+          let y = 0;
+          if (c >= 20 && c <= 27 && r >= 4 && r <= 11) y = 9;
+          if (c >= 4 && c <= 11 && r >= 20 && r <= 27) y = 6 + ((c * 7 + r * 13) % 5);
+          surf[r * n + c] = y;
+        }
+      }
+      const g = createGround();
+      g.set([1000, 5000, 1032, 5032], 32, surf, terr);
+      // Rasters are north-up, so row 0 is the north edge and the row index runs
+      // the other way to northing — the same inversion the shader does.
+      return (col, row) => g.at(1000 + col + 0.5, 5000 + 32 * (1 - (row + 0.5) / 32));
+    };
+
+    await test('the height field alone tells a road from a roof from a crown', async () => {
+      const at = scene();
+      assert.equal(at(16, 16).kind, 'ground', 'flat deck did not read as ground');
+      assert.equal(at(24, 8).kind, 'built', 'a flat roof did not read as built');
+      assert.equal(at(8, 24).kind, 'canopy', 'a rough crown did not read as canopy');
+      assert.equal(at(16, 16).hag, 0);
+      assert.equal(at(24, 8).hag, 9);
+    });
+
+    await test('a building edge reads as canopy, the same way it does in the shader', async () => {
+      // Not a defect to be fixed here. Roughness is a Laplacian and a hard step
+      // is rough in every direction, so the shader spreads that ring through a
+      // crown too. The thresholds are shared precisely so a click and a
+      // particle cannot disagree about a cell, including on this.
+      assert.equal(scene()(20, 8).kind, 'canopy');
+    });
+
+    await test('ground outside the frame is unknown rather than guessed', async () => {
+      const at = scene();
+      assert.equal(at(-4, 8), null, 'a point west of the frame was answered anyway');
+      assert.equal(at(40, 8), null);
+      // Fresh, before anything has been loaded: also unknown, not a crash.
+      assert.equal(createGround().at(1000, 5000), null);
+      assert.equal(createGround().have(), false);
+    });
+
+    await test('a neighbour off the edge is clamped, not wrapped', async () => {
+      // Wrapping would read the east column while standing on the west one and
+      // invent a nine-metre cliff down the seam of every frame.
+      const at = scene();
+      assert.equal(at(0, 16).kind, 'ground', 'the west seam grew a building');
+      assert.equal(at(31, 16).kind, 'ground', 'the east seam grew a building');
+    });
+
+    await test('every height in range strikes a note the bass could have played', async () => {
+      // Free pitch would want a tuning decision this sketch has no business
+      // making. The pool is the one beat.js already carries, so a click lands
+      // in the key of the built-in tune however hard it is hit.
+      const pool = new Set(NOTES.map((n) => n.hz));
+      for (let i = 0; i <= 100; i++) {
+        const hz = noteFor(i / 100);
+        assert.ok(pool.has(hz) || pool.has(hz / 2), `${hz} Hz is not in the pool`);
+      }
+      assert.equal(noteFor(0), NOTES[0].hz, 'the deck is not at the bottom of the range');
+      assert.equal(noteFor(1), NOTES[NOTES.length - 1].hz * 2, 'the range is not two octaves');
+      // Out of range in either direction is clamped, not wrapped round.
+      assert.equal(noteFor(-3), noteFor(0));
+      assert.equal(noteFor(9), noteFor(1));
+    });
+  }
+
   // ------------------------------------------------------------------ helpers
   const state = (p, fn) => p.evaluate(fn);
   const parts = (p) => state(p, () => window.__inconstructions.parts());
@@ -2230,6 +2306,78 @@ try {
       assert.deepEqual(errors, []);
     });
 
+    await test('a click strikes the ground it landed on, and off stays silent', async () => {
+      // The three-way split, read backwards: it decides how sound moves the
+      // geometry, and now also what the geometry says when it is hit.
+      await p.waitForFunction(() => window.__elsewhere.under() !== null, null, { timeout: 60000 });
+      const box = await p.locator('canvas').boundingBox();
+      const cx = box.x + box.width * 0.5, cy = box.y + box.height * 0.6;
+      const click = async () => {
+        await p.mouse.move(cx, cy);
+        await p.mouse.down();
+        await p.mouse.up();
+        await p.waitForTimeout(120);
+      };
+
+      // `off` is the default, and nothing on this page makes a noise unbidden.
+      assert.equal(await el(() => window.__elsewhere.audioMode()), 'off');
+      await click();
+      assert.deepEqual(await el(() => window.__elsewhere.strikes()), [],
+        'a click made a sound while the source was off');
+
+      await p.selectOption('#audio', 'tone');
+      await click();
+      const hits = await el(() => window.__elsewhere.strikes());
+      assert.equal(hits.length, 1, `one click, ${hits.length} strikes`);
+      assert.ok(['ground', 'canopy', 'built'].includes(hits[0].kind),
+        `struck something that is not in the split: ${hits[0].kind}`);
+      assert.ok(hits[0].hz > 100 && hits[0].hz < 520, `${hits[0].hz} Hz is off the scale`);
+      // The voice taps the analyser as well as the speakers, so a note played
+      // is a note the geometry hears. That loop is the point of the routing.
+      assert.ok(await el(() => window.__elsewhere.voice()) > 0, 'the voice bus is shut');
+
+      // Choosing off has to stop the bus, not only the bands. It used to stop
+      // only the bands, which left the oscillators droning over a still square.
+      await p.selectOption('#audio', 'off');
+      await p.waitForTimeout(150);
+      assert.equal(await el(() => window.__elsewhere.voice()), 0, 'off left the voice open');
+      await click();
+      assert.equal((await el(() => window.__elsewhere.strikes())).length, 1,
+        'a click made a sound after the source was switched off');
+      assert.deepEqual(errors, []);
+    });
+
+    await test('a struck note is a sound, and the geometry can hear it', async () => {
+      // The wiring assertions above prove the gate is open; this proves
+      // something comes through it. A Listener of its own, with the tone bank
+      // silenced so the only thing on the bus is the strike, and the analyser
+      // read directly — if the voice reached neither the speakers nor the FFT,
+      // these bins would stay where the silence left them.
+      const heard = await p.evaluate(async () => {
+        const { Listener } = await import('/shared/audio.js');
+        const { DEFAULT, clone } = await import('/shared/beat.js');
+        const l = new Listener(clone(DEFAULT));
+        await l.setMode('tone');
+        l.nodes.out.gain.value = 0;              // the pattern, out of the way
+        const read = () => {
+          l.analyser.getByteFrequencyData(l.bins);
+          return l.bins.reduce((a, b) => a + b, 0);
+        };
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        await wait(250);
+        const quiet = read();
+        const played = l.strike('built', 261.63);
+        await wait(90);
+        const loud = read();
+        l.hush();
+        return { played, quiet, loud, ctx: l.ctx.state };
+      });
+      assert.equal(heard.played, true, 'strike() declined to play');
+      assert.ok(heard.loud > heard.quiet * 2 + 500,
+        `a struck note made no sound (${heard.quiet} -> ${heard.loud}, ctx ${heard.ctx})`);
+      assert.deepEqual(errors, []);
+    });
+
     await test('the pointer meets the ground where it is pointing, and misses past the horizon', async () => {
       // A ray against the datum plane, not against the height field, which only
       // ever exists in a texture. Looking level or above has no answer at all,
@@ -2267,15 +2415,25 @@ try {
 
       await p.selectOption('#audio', 'field');   // no gesture, no permission, no AudioContext
       assert.equal(await el(() => window.__elsewhere.audioMode()), 'field');
+      // Sampled until the kick lands rather than for a fixed window. A kick
+      // every 1.25 s through a 1.7 s window was always going to be tight, and
+      // it only has to be missed once to fail; under a software renderer the
+      // whole pattern used to slow down with the frame rate too, which made it
+      // a coin toss. Ten seconds is many bars however slowly they arrive.
       const seen = [];
-      for (let i = 0; i < 14; i++) {
+      const range = () => {
+        const sub = seen.map((b) => b[0]);
+        return Math.max(...sub) - Math.min(...sub);
+      };
+      for (let i = 0; i < 100 && !(seen.length > 1 && range() > 0.15); i++) {
         seen.push(await el(() => window.__elsewhere.bands()));
-        await p.waitForTimeout(120);
+        await p.waitForTimeout(100);
       }
       for (const v of seen.flat()) assert.ok(v >= 0 && v <= 1, `band out of range: ${v}`);
       const sub = seen.map((b) => b[0]);
-      assert.ok(Math.max(...sub) - Math.min(...sub) > 0.15,
-        `the sub band never moved (${Math.min(...sub)}..${Math.max(...sub)})`);
+      assert.ok(range() > 0.15,
+        `the sub band never moved over ${seen.length} samples `
+        + `(${Math.min(...sub).toFixed(3)}..${Math.max(...sub).toFixed(3)})`);
 
       await el(() => window.__elsewhere.setAudio('off'));
       await p.waitForTimeout(400);
