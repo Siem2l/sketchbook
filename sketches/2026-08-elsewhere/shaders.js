@@ -9,6 +9,7 @@
 // look like a diagram of a city rather than a city.
 //
 // Sliding the window is now a uniform. Nothing is written per particle, ever.
+import { WAKE_N, WEIGHT_N } from './touch.js';
 
 export const POINT_VS = `#version 300 es
 precision highp float;
@@ -35,6 +36,15 @@ uniform float uAudio;                  // 0 closes the whole channel
 // the inference can be seen rather than taken on trust. All four at zero is the
 // raster as PDOK sent it.
 uniform float uWalls, uCanopy, uTone, uShade;
+
+// The cursor, as a field. Both rings hold world x, world z, birth time and
+// strength, and an expired entry has strength exactly 0.0 — so a square nobody
+// is touching is the survey bit for bit, which is the property the rest-state
+// test pins and the reason touch needs no switch of its own.
+uniform vec4 uWake[${WAKE_N}];
+uniform vec4 uWeights[${WEIGHT_N}];
+uniform vec4 uWakeK;               // life, radius, lift, push
+uniform vec4 uWeightK;             // life, radius, depth, rim
 
 out vec3 vCol;
 out float vAlive;
@@ -145,6 +155,87 @@ Sample lookup(vec4 tiles[13], vec2 w, bool useBorn, float toneLo, float toneGain
   return s;
 }
 
+// What the cursor does to this patch of ground, in metres. Returned rather than
+// applied, because where it gets applied is the whole argument: on the drawn
+// position and never on w. A particle shoved sideways carries its own roof
+// colour and its own measured height with it; feeding the offset back into the
+// lookup would have it resample whatever ground it flew over, which is the jump
+// rule the wrong way round — there a particle keeps its ground and changes what
+// it stands on, here it keeps what it stands on and changes its ground.
+vec3 touchOf(vec2 w, float k) {
+  vec3 d = vec3(0.0);
+
+  // A wake. Each entry is somewhere the pointer passed and how fast it was
+  // going there; particles near that line lift, get out of the way, and settle.
+  // Lift is what makes it visible at all — a purely lateral dodge on a flat
+  // street reads as nothing from an orbiting camera, and lift on its own reads
+  // as a bulge rather than as something moving aside.
+  vec3 wk = vec3(0.0);
+  for (int i = 0; i < ${WAKE_N}; i++) {
+    float s = uWake[i].w;
+    if (s == 0.0) continue;
+    vec2 rel = w - uWake[i].xy;
+    float r = length(rel);
+    if (r > uWakeK.y) continue;
+    float fall = 1.0 - smoothstep(0.0, uWakeK.y, r);
+    float age = clamp((uTime - uWake[i].z) / uWakeK.x, 0.0, 1.0);
+    // Kicks in the first quarter of its life and settles through the rest, and
+    // lands on exactly zero rather than approaching it — sine of the root is
+    // zero at both ends, and the linear term makes the landing doubly flat.
+    float env = sin(3.14159265 * sqrt(age)) * (1.0 - age);
+    float a = s * fall * env;
+    // Jittered by the same hash the canopy and the audio terms use, so what
+    // passes is a scatter of particles and not a smooth dome travelling.
+    wk.y += uWakeK.z * a * (0.45 + 1.1 * k);
+    wk.xz += (rel / max(r, 1e-3)) * uWakeK.w * a * (0.6 + 0.8 * k);
+  }
+  // Samples overlap on purpose — that is what makes a trail of discs read as
+  // one furrow — but a pointer scribbling in one place piles a dozen of them on
+  // the same particle. Capped, so a vigorous sweep stays vigorous instead of
+  // becoming a launch. Multiplying through zero still gives zero, so the cap
+  // costs nothing at rest.
+  wk.y = min(wk.y, uWakeK.z * 2.6);
+  float lat = length(wk.xz);
+  wk.xz *= lat > uWakeK.w * 2.2 ? (uWakeK.w * 2.2) / lat : 1.0;
+  d += wk;
+
+  // A weight, landed and relaxing. A bowl inside the radius and a ring of
+  // thrown material at the rim: without the ring it reads as a hole punched
+  // through the city rather than as something heavy sitting on it. The ring
+  // carries most of the drama, and deliberately so — a point cloud shows what
+  // is flung up into the light far better than what is pressed down into the
+  // dark, and the first pass, which was almost all bowl, barely registered.
+  vec3 wt = vec3(0.0);
+  for (int i = 0; i < ${WEIGHT_N}; i++) {
+    float s = uWeights[i].w;
+    if (s == 0.0) continue;
+    vec2 rel = w - uWeights[i].xy;
+    float r = length(rel);
+    if (r > uWeightK.y * 3.0) continue;
+    float q = r / uWeightK.y;
+    float bowl = exp(-q * q * 2.4);
+    float ring = exp(-pow((q - 1.05) * 2.0, 2.0));
+    float age = clamp((uTime - uWeights[i].z) / uWeightK.x, 0.0, 1.0);
+    // Full depth on impact, then a damped rebound that overshoots flat, all of
+    // it multiplied to exactly zero at the end of the life. A dent that merely
+    // decayed towards flat would mean a settled square is no longer the survey.
+    float env = (1.0 - age) * exp(-2.4 * age) * cos(age * 7.4);
+    float amp = uWeightK.z * s * env * (0.75 + 0.5 * k);
+    wt.y += amp * (uWeightK.w * ring - bowl);
+    // The ring travels outward as well as upward, and reverses with the
+    // envelope, so the rebound draws the material back in rather than leaving
+    // it standing. Half the depth: enough to see it move, not enough to open a
+    // clearing in the street.
+    wt.xz += (rel / max(r, 1e-3)) * amp * ring * 0.5;
+  }
+  wt.y = clamp(wt.y, -uWeightK.z * 1.6, uWeightK.z * 1.6);
+  float rad = length(wt.xz);
+  wt.xz *= rad > uWeightK.z ? uWeightK.z / rad : 1.0;
+  d += wt;
+
+  return d;
+}
+
 void main() {
   // No vertex buffer: the particle is its index.
   int id = gl_VertexID;
@@ -202,7 +293,9 @@ void main() {
   vec2 stream = -uDir * uSwing * arc * (1.0 - uJump) * (0.5 + r);
   float lift = uLift * arc * (1.0 - uJump) * (0.35 + 1.1 * r);
 
-  vec3 p = vec3(w.x + stream.x - uCentre.x, y + lift, w.y + stream.y - uCentre.y);
+  vec3 tch = touchOf(w, hash1(w * 1.13 + 5.7));
+
+  vec3 p = vec3(w.x + stream.x - uCentre.x, y + lift, w.y + stream.y - uCentre.y) + tch;
   vec4 eye = uView * vec4(p, 1.0);
   gl_Position = uProj * eye;
 
@@ -216,9 +309,13 @@ void main() {
                         : mix(vec3(0.85,0.72,0.42), vec3(1.00,0.98,0.94), (ht-0.76)/0.24);
   float plum = dot(photo, vec3(0.299, 0.587, 0.114));
 
+  // Kicked-up particles catch a little more light, the same small favour the
+  // arc already does for a changeover. Only lift counts: a particle pressed
+  // into a dent should not go dark, it should just be lower.
   vCol = (uColour < 0.5 ? photo * diff
         : uColour < 1.5 ? ramp * diff
-                        : ramp * (0.45 + 1.1 * plum) * diff) + arc * 0.06;
+                        : ramp * (0.45 + 1.1 * plum) * diff)
+       + arc * 0.06 + max(0.0, tch.y) * 0.045;
 
   // Residency is whether a layer actually holds this ground, not anything to do
   // with the clock. Conflating the two drew nothing at all: the opening frame

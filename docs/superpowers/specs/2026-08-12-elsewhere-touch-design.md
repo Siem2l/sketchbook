@@ -117,7 +117,10 @@ rule inverted: there a particle keeps its ground and changes what it stands on;
 here it keeps what it stands on and changes its ground.
 
 An expired sample has strength exactly `0.0`, so its whole contribution is
-exactly `0.0`. `pointerleave` clears the ring outright.
+exactly `0.0`. `pointerleave` ends the stroke — it resets the anchor and the
+speed, so re-entering does not read as one enormous jump — but it deliberately
+leaves live samples alone. Wiping them would snap the furrow shut the instant
+the cursor crossed an edge, and they reach zero on their own within 0.8 s.
 
 ## The weights
 
@@ -182,11 +185,39 @@ except two small uniform arrays.
 - a click drops exactly one weight; a 40 px drag drops none and orbits instead
 - the existing rest-state test at `test.mjs:2063` still passes unchanged
 
-## Starting numbers
+## The numbers, and what moved them
 
-Trail 12 samples, 0.8 s life, 0.6 m spacing, 7 m radius, 2.2 m lift, 1.8 m push,
-full strength at a brisk swipe. Weights 8, 1.6 s life, 9 m radius, 3.5 m depth.
-All of them will move once there is something to look at.
+Trail 28 samples, 0.9 s life, 5 m spacing, 20 m radius, 8 m lift and 4 m push
+per sample before overlap. Weights 8, 1.8 s life, 22 m radius, 20 m depth, rim
+throwing back 85% of it.
+
+They started roughly a third of that and three things had to be learned first,
+each of which is now a comment in the file it belongs to.
+
+**The scale is set by the framing, not by the subject.** A 240 m square across
+the screen puts a metre at about four pixels. The first pass was sized as if
+someone were standing in the street — a 7 m furrow, a 3 m dent — and neither was
+visible at all. What reads here is weather, not footsteps.
+
+**The trail follows the path, not the polling rate.** A pointer moving at any
+speed worth noticing covers twenty metres of ground between two events, so
+marking the end of each segment laid a chain of separate craters with clear air
+between them. `move()` walks the segment and lays a sample every 5 m, which is
+also what makes them overlap into one continuous furrow instead of a dotted
+line.
+
+**A point cloud shows what is thrown into the light, not what is pressed into
+the dark.** The weight was almost all bowl and barely registered — displaced
+material sinking below the datum just goes dim. Most of the drama moved to the
+rim, which now throws a ring of particles up and outward and draws it back in as
+the envelope reverses.
+
+One bug sat underneath all of that: the pointer was timestamped with
+`view.clock`, which only advances once a frame, so several pointermoves inside
+one frame all arrived with the same time, every velocity came out as a division
+by zero and was discarded, and a hard swipe landed at exactly the same strength
+as a slow drift. `nowClock()` interpolates from the last frame's stamp, which
+puts the pointer back on uTime's timeline at the resolution it actually has.
 
 ## Out of scope
 

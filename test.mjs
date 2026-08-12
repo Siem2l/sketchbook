@@ -287,6 +287,86 @@ try {
     });
   }
 
+  // -------------------------------------------------------------------- touch
+  {
+    const { createTouch, WAKE_N, WEIGHT_N } = await import('./sketches/2026-08-elsewhere/touch.js');
+    // A stroke, as the canvas would deliver it: samples a frame apart, spaced
+    // far enough in ground metres to clear the gate.
+    const sweep = (t, n = 6, at = 0, step = 7) => {
+      for (let i = 0; i < n; i++) t.move(i * step, 0, i * 40, 0, at + i * 0.016);
+    };
+    const strengths = (arr, n) => Array.from({ length: n }, (_, i) => arr[i * 4 + 3]);
+
+    await test('a pointer that does not travel leaves no wake', async () => {
+      // The gate is ground metres, not events. A cursor jittering in place
+      // delivers a hundred pointermoves a second and must disturb nothing.
+      const t = createTouch();
+      for (let i = 0; i < 40; i++) t.move(0.01 * (i % 2), 0, 400, 300, i * 0.016);
+      assert.equal(t.live().wake, 0);
+    });
+
+    await test('a sweep lays down a wake, and it is gone at the end of its life', async () => {
+      // The whole design in one assertion. Everything touch does is driven by
+      // something that reaches exactly zero, which is what lets the rest-state
+      // guarantee cover it instead of having to make an exception for it.
+      const t = createTouch();
+      sweep(t, 6, 100);
+      assert.ok(t.live().wake > 0, 'a sweep across the ground disturbed nothing');
+      t.expire(100.5);
+      assert.ok(t.live().wake > 0, 'the wake vanished before its life was up');
+      t.expire(101.0);
+      assert.equal(t.live().wake, 0, 'the wake outlived it');
+      assert.deepEqual(strengths(t.wake, WAKE_N), new Array(WAKE_N).fill(0));
+    });
+
+    await test('an expired entry is zeroed whole, not merely faded', async () => {
+      // Strength exactly 0 is a value the shader can test and skip on. Left as
+      // a small number it would be a displacement of some size forever, and a
+      // settled square would stop being the survey.
+      const t = createTouch();
+      sweep(t, 4, 100);
+      t.drop(5, 5, 100);
+      t.expire(200);
+      assert.ok(Array.from(t.wake).every((v) => v === 0), 'a wake entry kept a value');
+      assert.ok(Array.from(t.weights).every((v) => v === 0), 'a weight kept a value');
+    });
+
+    await test('a slow drift ripples less than a fast swipe', async () => {
+      // Both drifts cover the same ground at the same frame rate; only the
+      // pointer's speed across the screen differs. Ground metres decide when a
+      // sample is laid down, pixels per second decide how hard it lands, and
+      // the two being separate is what keeps the furrow the same shape however
+      // far the camera has dollied out.
+      const fast = createTouch(), slow = createTouch();
+      for (let i = 0; i < 6; i++) fast.move(i * 7, 0, i * 90, 0, i * 0.016);
+      for (let i = 0; i < 6; i++) slow.move(i * 7, 0, i * 6, 0, i * 0.016);
+      const peak = (t) => Math.max(...strengths(t.wake, WAKE_N));
+      assert.ok(peak(fast) > peak(slow) + 0.3,
+        `speed did not shape the furrow (${peak(fast).toFixed(2)} vs ${peak(slow).toFixed(2)})`);
+      assert.ok(peak(slow) > 0, 'a slow drift did nothing at all');
+    });
+
+    await test('leaving the canvas ends the stroke but does not wipe it', async () => {
+      // Wiping live samples would snap the furrow shut the moment the cursor
+      // crossed an edge. They reach zero on their own soon enough.
+      const t = createTouch();
+      sweep(t, 5, 100);
+      const before = t.live().wake;
+      t.leave();
+      assert.equal(t.live().wake, before, 'leaving the canvas erased the furrow');
+      // Re-entering somewhere else is a teleport, not one enormous stride.
+      assert.equal(t.move(9000, 9000, 20, 20, 100.1), 0);
+    });
+
+    await test('weights recycle oldest-first once the ring is full', async () => {
+      const t = createTouch();
+      for (let i = 0; i < WEIGHT_N + 3; i++) t.drop(i, 0, 100 + i);
+      assert.equal(t.live().weights, WEIGHT_N, 'the ring grew');
+      const xs = Array.from({ length: WEIGHT_N }, (_, i) => t.weights[i * 4]).sort((a, b) => a - b);
+      assert.deepEqual(xs, [3, 4, 5, 6, 7, 8, 9, 10], 'the wrong weights survived');
+    });
+  }
+
   // ------------------------------------------------------------------ helpers
   const state = (p, fn) => p.evaluate(fn);
   const parts = (p) => state(p, () => window.__inconstructions.parts());
@@ -2080,6 +2160,99 @@ try {
       const a = await shot();
       await p.waitForTimeout(1000);
       assert.ok(a.equals(await shot()), 'the square drifted while it was supposed to be at rest');
+    });
+
+    await test('the cursor has weight, and the square is the survey again once it stops', async () => {
+      // Touch is the one thing this sketch adds that has no switch, and this is
+      // the argument for that: it is exactly zero whenever nobody is touching,
+      // so the rest-state guarantee above covers it rather than excusing it.
+      // Every entry expires to a hard zero — no small residue, no drift.
+      await p.waitForFunction(() => window.__elsewhere.loading() === 0, null, { timeout: 120000 });
+      await el(() => window.__elsewhere.setAudio('off'));
+      await p.waitForTimeout(1200);
+      // digest() rather than a screenshot: it renders and hashes in one call,
+      // where a screenshot's round trip outlasts the furrow it is trying to
+      // photograph. Same pixels, asked for in time.
+      const digest = () => el(() => window.__elsewhere.digest());
+      const untouched = await digest();
+
+      // A sweep across the middle of the square, fast enough to matter. The
+      // panel sits over the bottom of the canvas, so this stays well above it.
+      const box = await p.locator('canvas').boundingBox();
+      const my = box.y + box.height * 0.42;
+      await p.mouse.move(box.x + box.width * 0.28, my);
+      for (let i = 1; i <= 10; i++) {
+        await p.mouse.move(box.x + box.width * (0.28 + 0.044 * i), my);
+      }
+      assert.ok((await el(() => window.__elsewhere.touch())).wake > 0,
+        'sweeping the pointer across the square laid down no wake');
+      assert.notEqual(await digest(), untouched, 'the cursor passed over the square and moved nothing');
+
+      // Park the pointer off the canvas and let both lifetimes run out. Waited
+      // on the condition rather than on the wall: the frame loop clamps its dt,
+      // so under a slow renderer view.clock runs behind real time and a 0.9 s
+      // life takes longer than 0.9 s to elapse. That is the same clock every
+      // other animation in the sketch is on, and the right one to be on.
+      await p.mouse.move(box.x + box.width * 0.5, box.y - 40);
+      await p.waitForFunction(() => window.__elsewhere.touch().wake === 0, null, { timeout: 30000 });
+      assert.deepEqual(await el(() => window.__elsewhere.touch()), { wake: 0, weights: 0, peak: 0 });
+      assert.equal(await digest(), untouched,
+        'the square did not come all the way back to the survey after being touched');
+      assert.deepEqual(errors, []);
+    });
+
+    await test('a click drops a weight; a drag orbits and drops nothing', async () => {
+      // The two gestures touch needed were the two that were still free. If a
+      // drag ever started dropping weights, orbiting would crater the city.
+      // Same reason as above: the condition, not the wall.
+      const idle = () => p.waitForFunction(
+        () => { const t = window.__elsewhere.touch(); return t.wake === 0 && t.weights === 0; },
+        null, { timeout: 30000 });
+      await idle();
+      const box = await p.locator('canvas').boundingBox();
+      const cx = box.x + box.width * 0.5, cy = box.y + box.height * 0.42;
+
+      await p.mouse.move(cx, cy);
+      await p.mouse.down();
+      await p.mouse.up();
+      assert.equal((await el(() => window.__elsewhere.touch())).weights, 1,
+        'clicking the square dropped nothing');
+
+      await idle();
+      const yaw = await el(() => window.__elsewhere.cam().yaw);
+      await p.mouse.move(cx, cy);
+      await p.mouse.down();
+      for (let i = 1; i <= 8; i++) await p.mouse.move(cx + i * 5, cy);
+      await p.mouse.up();
+      assert.equal((await el(() => window.__elsewhere.touch())).weights, 0,
+        'a drag dropped a weight, so orbiting craters the city');
+      assert.notEqual(await el(() => window.__elsewhere.cam().yaw), yaw, 'the drag did not orbit');
+      assert.deepEqual(errors, []);
+    });
+
+    await test('the pointer meets the ground where it is pointing, and misses past the horizon', async () => {
+      // A ray against the datum plane, not against the height field, which only
+      // ever exists in a texture. Looking level or above has no answer at all,
+      // and returning one would put a furrow behind the camera.
+      const box = await p.locator('canvas').boundingBox();
+      const at = (fx, fy) => el(([x, y]) => window.__elsewhere.groundAt(x, y),
+        [box.x + box.width * fx, box.y + box.height * fy]);
+      const c = await el(() => window.__elsewhere.centre());
+
+      const middle = await at(0.5, 0.5);
+      assert.ok(middle, 'the middle of the screen is not looking at any ground');
+      assert.ok(Math.hypot(middle[0] - c.x, middle[1] - c.z) < 240,
+        'the centre of the view landed outside the square it is framing');
+      // Lower on the screen is nearer the camera, which is south-east of the
+      // square at the default yaw — so the two hits must differ, and by metres.
+      const lower = await at(0.5, 0.72);
+      assert.ok(Math.hypot(lower[0] - middle[0], lower[1] - middle[1]) > 5,
+        'every pixel resolved to the same patch of ground');
+
+      await el(() => window.__elsewhere.setCam({ pitch: 0.06 }));
+      assert.equal(await at(0.5, 0.02), null, 'the sky came back as ground');
+      await el(() => window.__elsewhere.setCam({ pitch: 0.40 }));
+      assert.deepEqual(errors, []);
     });
 
     await test('sound moves the square, and silence puts it back', async () => {

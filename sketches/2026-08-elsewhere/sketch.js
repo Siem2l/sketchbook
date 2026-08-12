@@ -16,6 +16,7 @@ import { decodeFloatTiff } from '../../shared/geotiff.js';
 import { median, toneOf } from './place.js';
 import { createSlots } from './slots.js';
 import { createField, CELL, SPAN, HALF, GRID, TILE_SPAN, TILE_H, TILE_P, LAYERS } from './field.js';
+import { createTouch } from './touch.js';
 import { cachedFetch, coverageUrl, orthoUrl, fetchTileKey, fetchTileBbox, geocode, journey } from '../../shared/pdok.js';
 import { Listener } from '../../shared/audio.js';
 import { DEFAULT, clone } from '../../shared/beat.js';
@@ -254,7 +255,49 @@ async function main() {
       proj: perspective(FOV, w / h, 1, 6000),
       // one cell, projected: half the framebuffer height over tan of half the fov
       pointK: CELL * (h * 0.5) / Math.tan(FOV / 2) * 1.15,
+      // The basis the view matrix was built from. Handed back so a pointer ray
+      // can be assembled directly instead of inverting the matrix again.
+      basis: { eye, x, y, z },
     };
+  }
+
+  // ------------------------------------------------------------------ touch
+  const touch = createTouch();
+
+  // uTime's own timeline, but read between frames rather than on them. Handing
+  // the pointer view.clock directly looked right and was not: it only advances
+  // once a frame, so several pointermoves inside one frame all arrive with the
+  // same timestamp, every velocity comes out as a division by zero and is
+  // discarded, and a hard swipe lands at the same strength as a slow drift.
+  //
+  // Clamped by the same 0.05 the frame loop clamps its own dt with, and for the
+  // same reason. Without it a stalled frame — a readback, a texture upload —
+  // stamps a sample further ahead than view.clock will reach on the next tick,
+  // and a birth in the future is a sample that never expires. The pointer's
+  // real elapsed time goes separately to touch(), which is what a velocity
+  // actually wants; a birth stamp wants to be on the clock it is compared to.
+  const nowClock = () => view.clock + Math.min(0.05, (performance.now() - lastFrame) / 1000);
+
+  // Where the pointer is standing, in RD. The heights only ever exist in a
+  // texture, so this meets the datum plane rather than the surface; at this
+  // framing a roof is a couple of metres out, well inside the radius of
+  // anything touch does with the answer.
+  function groundAt(clientX, clientY) {
+    const w = innerWidth, h = innerHeight;
+    const b = matrices(w, h).basis;
+    const tan = Math.tan(FOV / 2);
+    const sx = ((clientX / w) * 2 - 1) * tan * (w / h);
+    const sy = (1 - (clientY / h) * 2) * tan;
+    const dir = norm3([
+      sx * b.x[0] + sy * b.y[0] - b.z[0],
+      sx * b.x[1] + sy * b.y[1] - b.z[1],
+      sx * b.x[2] + sy * b.y[2] - b.z[2],
+    ]);
+    // Level with the horizon or above it: there is no ground under the pointer,
+    // and the intersection would be behind the camera or at infinity.
+    if (dir[1] > -1e-4) return null;
+    const k = -b.eye[1] / dir[1];
+    return [b.eye[0] + dir[0] * k + cam.x, b.eye[2] + dir[2] * k + cam.z];
   }
 
   function render(w, h) {
@@ -306,6 +349,10 @@ async function main() {
     gl.uniform1f(u.uCanopy, view.canopy);
     gl.uniform1f(u.uTone, view.tone);
     gl.uniform1f(u.uShade, view.shade);
+    gl.uniform4fv(u.uWake, touch.wake);
+    gl.uniform4fv(u.uWeights, touch.weights);
+    gl.uniform4fv(u.uWakeK, touch.wakeK);
+    gl.uniform4fv(u.uWeightK, touch.weightK);
     field.drawPoints();
   }
 
@@ -530,31 +577,52 @@ async function main() {
   });
   addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
+  // Press-drag orbits and the wheel dollies, both from before. What was still
+  // free is hovering and pressing without going anywhere, which is exactly the
+  // two gestures touch wants, so nothing here has been rebound.
   let drag = null;
   canvas.addEventListener('pointerdown', (e) => {
-    drag = { x: e.clientX, y: e.clientY };
+    drag = { x: e.clientX, y: e.clientY, moved: 0 };
     canvas.classList.add('dragging');
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', (e) => {
-    if (!drag) return;
+    if (!drag) {
+      const g = groundAt(e.clientX, e.clientY);
+      if (g) touch.move(g[0], g[1], e.clientX, e.clientY, nowClock(), e.timeStamp / 1000);
+      else touch.leave();       // over the horizon is off the ground
+      return;
+    }
+    // Travel accumulated rather than measured start to end: a drag that comes
+    // back to where it began is still a drag, and should not drop anything.
+    drag.moved += Math.hypot(e.clientX - drag.x, e.clientY - drag.y);
     cam.yaw -= (e.clientX - drag.x) * 0.004;
     cam.pitch = Math.max(0.06, Math.min(1.45, cam.pitch + (e.clientY - drag.y) * 0.003));
-    drag = { x: e.clientX, y: e.clientY };
+    drag.x = e.clientX; drag.y = e.clientY;
   });
-  const endDrag = () => { drag = null; canvas.classList.remove('dragging'); };
-  canvas.addEventListener('pointerup', endDrag);
+  const endDrag = () => { drag = null; canvas.classList.remove('dragging'); touch.leave(); };
+  canvas.addEventListener('pointerup', (e) => {
+    if (drag && drag.moved < 5) {
+      const g = groundAt(e.clientX, e.clientY);
+      if (g) touch.drop(g[0], g[1], nowClock());
+    }
+    endDrag();
+  });
   canvas.addEventListener('pointercancel', endDrag);
+  canvas.addEventListener('pointerleave', () => touch.leave());
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     cam.dist = Math.max(60, Math.min(1800, cam.dist * Math.exp(e.deltaY * 0.0011)));
   }, { passive: false });
 
-  let last = performance.now();
+  let lastFrame = performance.now();
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    const dt = Math.min(0.05, (now - lastFrame) / 1000);
     view.clock += dt;
-    last = now;
+    lastFrame = now;
+    // Before the upload, so anything past its life is a hard zero on the way to
+    // the GPU rather than a small number the shader has to tolerate.
+    touch.expire(view.clock);
 
     if (phase === 'flying' && !held) {
       flight.mix = Math.min(1, (view.clock - flight.started) / flight.j.seconds);
@@ -596,6 +664,17 @@ async function main() {
   requestAnimationFrame(frame);
   $('veil').classList.add('gone');
 
+  // A fresh render and a readback of the middle of it. Rendering here rather
+  // than trusting the last frame is what makes both readers below answer for
+  // the state as it is at the moment of the call.
+  function readCentre() {
+    render(canvas.width, canvas.height);
+    const s = Math.min(600, canvas.width, canvas.height);
+    const px = new Uint8Array(s * s * 4);
+    gl.readPixels((canvas.width - s) >> 1, (canvas.height - s) >> 1, s, s, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    return { px, s };
+  }
+
   window.__elsewhere = {
     // the wide frame of whichever pair is current, not layer 0 — the pairs
     // alternate, and layer 0 is a ring slot now
@@ -604,6 +683,7 @@ async function main() {
     place: () => ({ ...place }),
     state: () => ({ ...view }),
     centre: () => ({ x: cam.x, z: cam.z }),
+    cam: () => ({ ...cam }),
     loading: () => queue.length + inflight,
     layers: () => Array.from({ length: LAYERS }, (_, i) => tilesA[i * 4 + 3] > 0.5),
     setColour,
@@ -618,16 +698,25 @@ async function main() {
     phase: () => phase,
     mix: () => (flight ? flight.mix : 0),
     jumpTo,
+    touch: () => touch.live(),
+    groundAt,
     // A shader that failed to link still leaves a canvas; it just leaves a
     // black one, so coverage is the only assertion that catches it.
     coverage: () => {
-      render(canvas.width, canvas.height);
-      const s = Math.min(600, canvas.width, canvas.height);
-      const px = new Uint8Array(s * s * 4);
-      gl.readPixels((canvas.width - s) >> 1, (canvas.height - s) >> 1, s, s, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const { px, s } = readCentre();
       let lit = 0;
       for (let i = 0; i < px.length; i += 4) if (px[i] + px[i+1] + px[i+2] > 60) lit++;
       return lit / (s * s);
+    },
+    // The same pixels, as one number. A screenshot is the honest way to compare
+    // two frames and it is far too slow to catch a wake in the act — the round
+    // trip outlasts the 0.8 s the furrow is alive. This renders and hashes in
+    // one call, so a test can ask what is on screen *now*.
+    digest: () => {
+      const { px } = readCentre();
+      let h = 2166136261;
+      for (let i = 0; i < px.length; i++) { h ^= px[i]; h = Math.imul(h, 16777619); }
+      return h >>> 0;
     },
   };
 }
