@@ -94,12 +94,13 @@ try {
       assert.ok(lo < -60, `land reaches only ${lo.toFixed(1)}°S — the southern band has no map under it`);
     });
 
-    // The cross-section on the page is a toy: parallel sunlight, a spherical
-    // Earth, no parallax, no oblateness, no atmosphere. This asserts that the
-    // toy is nonetheless the actual mechanism, by holding its one prediction
-    // against 7,628 eclipses NASA computed properly. If the agreement ever
-    // breaks, the drawing has stopped explaining the data it sits above.
-    await test('the cross-section predicts the catalog it is drawn above', async () => {
+    // The shadow the page casts on the globe is driven by a toy model: parallel
+    // sunlight, a spherical Earth, no parallax, no oblateness, no atmosphere.
+    // This asserts the toy is nonetheless the actual mechanism, by holding its
+    // one prediction against 7,628 eclipses NASA computed properly. If the
+    // agreement ever breaks, the shadow has stopped explaining the dots it
+    // falls across.
+    await test('the shadow model predicts the catalog it falls across', async () => {
       const errs = [];
       for (let i = 0; i < raw.count; i++) {
         const g = Math.abs(raw.gamma[i]);

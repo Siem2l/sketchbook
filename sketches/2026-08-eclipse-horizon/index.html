@@ -37,8 +37,10 @@
   <a class="back" href="/">← sketchbook</a>
   <div id="ui">
     <div class="row" id="hint">
-      <span><b>top:</b> why — drag γ to slide the Moon's shadow across the Earth and watch where it lands.</span>
-      <span><b>bottom:</b> where — every dot is a place on Earth, coloured by how high the Sun stood there. drag to turn.</span>
+      <span>sunlight comes from behind you, so the whole disc is daylight and <b>its rim is the sunrise line</b> — the Sun is on the horizon all the way round it.</span>
+    </div>
+    <div class="row" id="hint">
+      <span>drag γ to slide the Moon's shadow across the Earth — <b>one arrangement, shown live.</b> the dots are 11,898 real ones, each at the place it peaked, coloured by how high the Sun stood there.</span>
     </div>
     <div class="row">
       <button id="play">play</button>
@@ -49,8 +51,9 @@
     <div class="row">
       <label>γ — how far the shadow axis misses the Earth's centre
         <input id="gamma" type="range" min="0" max="1.7" step="0.01" value="0.3" style="width: 14rem" />
-        <span class="val" id="gamma-val"></span></label>
+        <span class="val" id="gamma-val" style="min-width: 20rem"></span></label>
     </div>
+    <div class="row"><span id="shadow-note" style="color:#8a877e;font-size:11px"></span></div>
     <div class="row" id="readout"></div>
     <div class="row" id="legend"></div>
     <div class="row" id="caveat">

@@ -20,19 +20,9 @@
 // need a dependency behind them.
 import { drawGlobe, drawLand } from './globe.js';
 import { drawPoints, colorFor, RAMP, HORIZON_COLOR } from './points.js';
-import { drawGeometry, sunAltitudeFor, GAMMA_MAX } from './geometry.js';
+import { drawShadow, sunAltitudeFor, shadowState, GAMMA_MAX } from './geometry.js';
 
 const SIZE = 720;
-
-// The cross-section goes above the globe deliberately: it is the explanation,
-// and the globe is the consequence. Read top to bottom and the rings stop being
-// a pattern you have to take on trust.
-const GEO_W = 720, GEO_H = 380;
-const geoCanvas = document.createElement('canvas');
-geoCanvas.width = GEO_W; geoCanvas.height = GEO_H;
-geoCanvas.id = 'geometry';
-document.body.insertBefore(geoCanvas, document.getElementById('ui'));
-const geoCtx = geoCanvas.getContext('2d');
 
 const canvas = document.createElement('canvas');
 canvas.width = SIZE; canvas.height = SIZE;
@@ -62,12 +52,17 @@ const $ = (id) => document.getElementById(id);
 let gamma = 0.3;
 
 function renderGeometry() {
-  drawGeometry(geoCtx, gamma, GEO_W, GEO_H);
   const alt = sunAltitudeFor(gamma);
+  const state = shadowState(gamma);
   $('gamma-val').textContent = gamma.toFixed(2)
-    + (alt === null ? ' · no eclipse'
-      : alt === 0 ? ' · sun on the horizon'
+    + (alt === null ? ' · misses the Earth entirely'
+      : alt === 0 ? ' · sun on the horizon — partial, at sunrise'
         : ` · sun ${alt.toFixed(0)}° up`);
+  $('shadow-note').textContent = state === 'none'
+    ? 'not even the penumbra reaches the Earth — no eclipse anywhere'
+    : state === 'partial'
+      ? 'the umbra has missed the planet; only the penumbra still clips the rim'
+      : 'the umbra reaches the surface — total or annular along its track';
 }
 
 function render() {
@@ -77,6 +72,11 @@ function render() {
   drawGlobe(ctx, view, r, SIZE / 2, SIZE / 2);
   drawLand(ctx, land, view, r, SIZE / 2, SIZE / 2);
   drawn = data ? drawPoints(ctx, data, index, view, r, SIZE / 2, SIZE / 2) : 0;
+  // Shadow last, over the marks as well as the map. Drawn underneath, the case
+  // that matters most — the penumbra clipping the rim past gamma 1, which is
+  // 36% of the catalog — was hidden behind the very band of amber dots it is
+  // there to explain. A shadow falls on whatever is under it.
+  drawShadow(ctx, gamma, r, SIZE / 2, SIZE / 2);
 }
 
 // Recomputed over the whole prefix on every scrub — 11,898 iterations, well
@@ -213,6 +213,9 @@ window.eclipse = {
   playing: () => playing,
   stats,
   gamma: () => gamma,
+  // The loop repaints on its own; this forces one synchronously so a test or a
+  // screenshot can read the canvas without racing the next frame.
+  renderNow: () => render(),
   setGamma: (g) => { gamma = Math.max(0, Math.min(GAMMA_MAX + 0.15, g)); $('gamma').value = String(gamma); renderGeometry(); },
   sunAltitudeFor,
   // Cheap "is anything actually drawn" probe for the tests. Counts opaque
