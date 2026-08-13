@@ -2662,10 +2662,29 @@ try {
     });
 
     await test('it draws the front hemisphere and not the back', async () => {
-      const drawn = await p.evaluate(() => window.eclipse.drawn());
-      const total = await p.evaluate(() => window.eclipse.total());
+      // Bounding the count is not enough: the two hemispheres hold 5,896 and
+      // 6,002 points, so a cull with its sign flipped would paint the far side
+      // and still land inside any loose range. This recomputes which points
+      // ought to be visible, independently of drawPoints, and demands the exact
+      // number — which the inverted cull misses by 106.
+      const { drawn, expected, total } = await p.evaluate(async () => {
+        const j = await (await fetch('/data/eclipses.json')).json();
+        const v = window.eclipse.view();
+        const RAD = Math.PI / 180;
+        const phi = v.phi * RAD;
+        let n = 0;
+        for (let i = 0; i < j.count; i++) {
+          const lat = j.lat[i] * RAD;
+          const dl = (j.lon[i] - v.lambda) * RAD;
+          const z = Math.sin(phi) * Math.sin(lat)
+            + Math.cos(phi) * Math.cos(lat) * Math.cos(dl);
+          if (z > 0) n++;
+        }
+        return { drawn: window.eclipse.drawn(), expected: n, total: j.count };
+      });
       assert.ok(drawn > 1000, `only ${drawn} marks drawn`);
-      assert.ok(drawn < total * 0.75, `${drawn} of ${total} drawn — the far side is being painted`);
+      assert.equal(drawn, expected,
+        `${drawn} drawn, ${expected} are actually facing us (${total} total)`);
     });
 
     await p.close();

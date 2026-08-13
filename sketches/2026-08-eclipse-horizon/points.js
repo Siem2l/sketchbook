@@ -19,18 +19,30 @@ export const HORIZON_COLOR = '#e0a316';
 
 // Horizon-ness, not altitude: alt 90 is the dim end, alt 1 the bright one.
 //
-// The parameter is cos(alt), not a linear walk from 90 down to 1, and that is
-// not a cosmetic curve. Central-eclipse altitude is distributed as sin(alt) —
-// uniform gamma pushed through alt = 90 − arcsin|gamma| — so a linear ramp puts
-// roughly two thirds of all 7,604 marks into its two dimmest steps and the
-// globe comes out one flat colour. cos(alt) is that distribution's own CDF, so
-// the five steps carry equal populations and the ramp shows what it encodes.
-// Reading the scale off the physics is also what makes it honest: the steps are
-// equal shares of eclipses, not equal spans of degrees.
+// The parameter is cos(alt) rather than a linear walk from 90 down to 1, and
+// the reason is the data's own shape. Central-eclipse altitude is distributed
+// as sin(alt) — uniform gamma pushed through alt = 90 − arcsin|gamma| — whose
+// survival function is exactly cos(alt). (The CDF is 1 − cos(alt); either is
+// uniform on [0,1], and the survival function is the one that already points
+// the right way, bright at the horizon.) Pushing altitude through it makes the
+// ramp parameter uniform, so the steps carry equal shares of eclipses instead
+// of equal spans of degrees.
+//
+// Linear put 20.0/34.5/27.8/15.5/2.2 percent of the 7,604 central marks into
+// the five steps — the bright end all but empty, the globe one flat colour.
+//
+// floor, not round: round gives the two end steps half-width capture intervals
+// and starves them. Measured over the 7,604 central eclipses, dim→bright:
+//
+//   linear + round   20.0  34.5  27.8  15.5   2.2   max:min 15.42
+//   cos    + round   13.3  24.3  23.6  26.6  12.2   max:min  2.17
+//   cos    + floor   20.0  19.1  19.5  21.5  19.9   max:min  1.13
+//
+// The residual wobble in the last row is the catalog's, not the mapping's.
 export function colorFor(alt) {
   if (alt === 0) return HORIZON_COLOR;
   const t = Math.cos(alt * Math.PI / 180);            // 0 at overhead, →1 at the horizon
-  return RAMP[Math.min(RAMP.length - 1, Math.max(0, Math.round(t * (RAMP.length - 1))))];
+  return RAMP[Math.min(RAMP.length - 1, Math.max(0, Math.floor(t * RAMP.length)))];
 }
 
 export function drawPoints(ctx, data, upTo, view, r, cx, cy) {

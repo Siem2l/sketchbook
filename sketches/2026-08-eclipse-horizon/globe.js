@@ -5,7 +5,12 @@
 const RAD = Math.PI / 180;
 
 // view.lambda = longitude at the centre, view.phi = latitude at the centre.
-// z < 0 is the far side of the sphere and should not be drawn.
+//
+// Visible means z > 0, everywhere in this sketch. Exactly zero is the limb
+// itself, seen edge-on, and it is culled rather than drawn — the one convention
+// both this file and points.js follow, because a graticule that keeps its limb
+// points and a scatter that drops them disagree by a hairline at the edge of
+// the disc and nobody ever finds out why.
 export function project(latDeg, lonDeg, view) {
   const lat = latDeg * RAD, dl = (lonDeg - view.lambda) * RAD, phi = view.phi * RAD;
   const cosLat = Math.cos(lat), sinLat = Math.sin(lat);
@@ -22,7 +27,7 @@ function strokeParallel(ctx, latDeg, view, r, cx, cy) {
   let drawing = false;
   for (let lon = -180; lon <= 180; lon += 2) {
     const q = project(latDeg, lon, view);
-    if (q.z < 0) { drawing = false; continue; }
+    if (q.z <= 0) { drawing = false; continue; }
     const px = cx + q.x * r, py = cy - q.y * r;
     if (drawing) ctx.lineTo(px, py); else { ctx.moveTo(px, py); drawing = true; }
   }
@@ -34,7 +39,7 @@ function strokeMeridian(ctx, lonDeg, view, r, cx, cy) {
   let drawing = false;
   for (let lat = -90; lat <= 90; lat += 2) {
     const q = project(lat, lonDeg, view);
-    if (q.z < 0) { drawing = false; continue; }
+    if (q.z <= 0) { drawing = false; continue; }
     const px = cx + q.x * r, py = cy - q.y * r;
     if (drawing) ctx.lineTo(px, py); else { ctx.moveTo(px, py); drawing = true; }
   }
