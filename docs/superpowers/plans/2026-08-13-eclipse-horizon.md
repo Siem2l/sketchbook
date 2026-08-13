@@ -180,12 +180,16 @@ for (const url of urls) {
       const m = ROW.exec(line);
       if (!m) { unmatched++; console.error(`unmatched: ${line.slice(0, 90)}`); continue; }
       rows.push({
+        // The regex has 16 groups, not 17: the time column is matched by a
+        // bare \S+ and captures nothing. Counting it is an easy off-by-one
+        // that still "works" — every index lands on a real field, just the
+        // wrong one — so the data comes out plausible and wrong.
         year: Number(m[2]),
-        type: m[9][0],
-        gamma: Number(m[11]),
-        lat: Number(m[13]) * (m[14] === 'N' ? 1 : -1),
-        lon: Number(m[15]) * (m[16] === 'E' ? 1 : -1),
-        alt: Number(m[17]),
+        type: m[8][0],
+        gamma: Number(m[10]),
+        lat: Number(m[12]) * (m[13] === 'N' ? 1 : -1),
+        lon: Number(m[14]) * (m[15] === 'E' ? 1 : -1),
+        alt: Number(m[16]),
       });
     }
   }
