@@ -219,7 +219,7 @@ console.log(`${horizon.length} at the horizon (${(100 * horizon.length / rows.le
 - [ ] **Step 4: Run the script**
 
 Run: `node scripts/fetch-eclipses.mjs`
-Expected: 50 dots, then a summary. The eclipse count should be near 11,898 and the horizon share near 35%, `|lat|` range 60–80.
+Expected: 50 dots, then a summary reading `11898 eclipses, -1999 to 3000` and `4294 at the horizon (36.1%), |lat| 60-72`.
 
 **If the count differs from 11,898, the parser is right and the spec's number was wrong** — say so in the commit message and move on. If any line reports `unmatched`, stop: read the offending line and widen `ROW` to cover it. Do not loosen `LOOKS_LIKE_ROW` to make the error disappear.
 
