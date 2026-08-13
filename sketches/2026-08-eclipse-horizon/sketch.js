@@ -47,7 +47,40 @@ function render() {
   drawn = data ? drawPoints(ctx, data, data.count, view, r, SIZE / 2, SIZE / 2) : 0;
 }
 
-function loop() { render(); requestAnimationFrame(loop); }
+// Pointer events rather than mouse events: one code path covers trackpad and
+// touch, and setPointerCapture means a drag that leaves the canvas still ends
+// on this element rather than being dropped mid-gesture.
+let dragging = false, lastX = 0, lastY = 0, idleSince = performance.now();
+
+canvas.addEventListener('pointerdown', (e) => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  canvas.classList.add('dragging');
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  view.lambda = ((view.lambda - (e.clientX - lastX) * 0.35 + 180) % 360 + 360) % 360 - 180;
+  view.phi = Math.max(-90, Math.min(90, view.phi + (e.clientY - lastY) * 0.35));
+  lastX = e.clientX; lastY = e.clientY;
+  idleSince = performance.now();
+});
+
+for (const ev of ['pointerup', 'pointercancel']) {
+  canvas.addEventListener(ev, () => {
+    dragging = false;
+    canvas.classList.remove('dragging');
+    idleSince = performance.now();
+  });
+}
+
+function loop(now) {
+  if (!dragging && now - idleSince > 3000) {
+    view.lambda = ((view.lambda + 0.08 + 180) % 360 + 360) % 360 - 180;
+  }
+  render();
+  requestAnimationFrame(loop);
+}
 
 window.eclipse = {
   view: () => ({ ...view }),
@@ -78,4 +111,4 @@ fetch('/data/eclipses.json')
   .then((j) => { data = j; })
   .catch((e) => { console.error('eclipses.json did not load', e); });
 
-loop();
+requestAnimationFrame(loop);

@@ -2687,6 +2687,23 @@ try {
         `${drawn} drawn, ${expected} are actually facing us (${total} total)`);
     });
 
+    await test('dragging turns the globe, and letting go hands it back to the drift', async () => {
+      const before = await p.evaluate(() => window.eclipse.view());
+      const box = await p.locator('canvas').boundingBox();
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await p.mouse.down();
+      await p.mouse.move(box.x + box.width / 2 + 160, box.y + box.height / 2 + 40, { steps: 8 });
+      await p.mouse.up();
+      const after = await p.evaluate(() => window.eclipse.view());
+      assert.ok(Math.abs(after.lambda - before.lambda) > 10, `lambda barely moved (${before.lambda} → ${after.lambda})`);
+      assert.ok(Math.abs(after.phi - before.phi) > 3, `phi barely moved (${before.phi} → ${after.phi})`);
+      assert.ok(after.phi <= 90 && after.phi >= -90, `phi escaped its clamp at ${after.phi}`);
+
+      await p.waitForTimeout(3800);
+      const drifted = await p.evaluate(() => window.eclipse.view());
+      assert.notEqual(drifted.lambda, after.lambda, 'the idle drift never resumed');
+    });
+
     await p.close();
   }
 
