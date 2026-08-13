@@ -1,0 +1,74 @@
+{
+  "name": "medieval-bike / blacksmith-contraption",
+  "frame": {
+    "width": 96,
+    "height": 96,
+    "pivot": {
+      "x": 48,
+      "y": 68
+    }
+  },
+  "projection": {
+    "type": "2:1 isometric",
+    "pitchDegrees": 30,
+    "yawStepDegrees": 45
+  },
+  "sheet": {
+    "columns": 8,
+    "rows": 4,
+    "order": [
+      "N",
+      "NE",
+      "E",
+      "SE",
+      "S",
+      "SW",
+      "W",
+      "NW"
+    ]
+  },
+  "roll": {
+    "phases": 4,
+    "wheelRadius": 15,
+    "travelPerCycle": 11.780972450961723
+  },
+  "outline": "#10121a",
+  "ramps": {
+    "iron": [
+      "#23262e",
+      "#3d434f",
+      "#5a6270",
+      "#838c9b"
+    ],
+    "darkiron": [
+      "#15171d",
+      "#242932",
+      "#363c46",
+      "#4a515c"
+    ],
+    "brass": [
+      "#4a3413",
+      "#8a6a24",
+      "#c49230",
+      "#ecc463"
+    ],
+    "leather": [
+      "#2b190f",
+      "#4d2c19",
+      "#70452a",
+      "#96603c"
+    ],
+    "wood": [
+      "#33210f",
+      "#55381d",
+      "#7a5230",
+      "#a0714a"
+    ],
+    "glass": [
+      "#b0651a",
+      "#e8a52c",
+      "#ffd36b",
+      "#fff3c4"
+    ]
+  }
+}
