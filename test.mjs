@@ -2704,6 +2704,49 @@ try {
       assert.notEqual(drifted.lambda, after.lambda, 'the idle drift never resumed');
     });
 
+    await test('the past is a prefix: scrubbing back draws strictly fewer eclipses', async () => {
+      await p.evaluate(() => window.eclipse.setIndex(window.eclipse.total()));
+      await p.waitForTimeout(120);
+      const all = await p.evaluate(() => window.eclipse.drawn());
+      await p.evaluate(() => window.eclipse.setIndex(Math.floor(window.eclipse.total() / 4)));
+      await p.waitForTimeout(120);
+      const quarter = await p.evaluate(() => window.eclipse.drawn());
+      assert.ok(quarter < all, `${quarter} drawn at a quarter, ${all} at the end`);
+      assert.ok(quarter > 100, `only ${quarter} drawn at a quarter of the catalog`);
+    });
+
+    await test('the readout earns its numbers as the points land', async () => {
+      await p.evaluate(() => window.eclipse.setIndex(window.eclipse.total()));
+      await p.waitForTimeout(150);
+      const s = await p.evaluate(() => window.eclipse.stats());
+      assert.ok(Math.abs(s.pctZero - 36.1) < 1, `${s.pctZero}% at the horizon, expected 36.1`);
+      assert.ok(Math.abs(s.pctLow - 45.1) < 1, `${s.pctLow}% below 30 degrees, expected 45.1`);
+      assert.equal(s.latMin, 60, `horizon eclipses reach down to ${s.latMin}`);
+      assert.equal(s.latMax, 72, `horizon eclipses reach up to ${s.latMax}`);
+
+      // Early on the claim has not been earned yet, and the page should show
+      // that rather than a settled number computed from data not yet on screen.
+      await p.evaluate(() => window.eclipse.setIndex(12));
+      await p.waitForTimeout(120);
+      const early = await p.evaluate(() => window.eclipse.stats());
+      assert.equal(early.n, 12, `stats read ${early.n} with 12 eclipses placed`);
+      assert.notEqual(early.pctZero, s.pctZero, 'the readout is not tracking what has landed');
+    });
+
+    await test('space plays and pauses the five thousand years', async () => {
+      await p.evaluate(() => window.eclipse.setIndex(0));
+      await p.keyboard.press('Space');
+      await p.waitForTimeout(700);
+      assert.equal(await p.evaluate(() => window.eclipse.playing()), true);
+      const moving = await p.evaluate(() => window.eclipse.index());
+      assert.ok(moving > 0, 'play did not advance the catalog');
+      await p.keyboard.press('Space');
+      await p.waitForTimeout(300);
+      const held = await p.evaluate(() => window.eclipse.index());
+      await p.waitForTimeout(500);
+      assert.equal(await p.evaluate(() => window.eclipse.index()), held, 'pause did not hold');
+    });
+
     await p.close();
   }
 

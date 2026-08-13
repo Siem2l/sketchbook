@@ -38,14 +38,74 @@ const view = { lambda: 20, phi: 15 };
 let data = null;
 
 let drawn = 0;
+let index = 0;            // eclipses placed so far
+let playing = false;
+let carry = 0;            // fractional eclipses between frames
+let lastFrame = performance.now();
+
+const $ = (id) => document.getElementById(id);
 
 function render() {
   ctx.fillStyle = '#0e0e11';
   ctx.fillRect(0, 0, SIZE, SIZE);
   const r = SIZE * 0.44;
   drawGlobe(ctx, view, r, SIZE / 2, SIZE / 2);
-  drawn = data ? drawPoints(ctx, data, data.count, view, r, SIZE / 2, SIZE / 2) : 0;
+  drawn = data ? drawPoints(ctx, data, index, view, r, SIZE / 2, SIZE / 2) : 0;
 }
+
+// Recomputed over the whole prefix on every scrub — 11,898 iterations, well
+// under a millisecond. An incremental accumulator would be faster and would
+// eventually disagree with what is on screen; this cannot, because it reads
+// the same prefix the renderer draws.
+function stats() {
+  let low = 0, zero = 0, latMin = null, latMax = null;
+  for (let i = 0; i < index; i++) {
+    if (data.alt[i] <= 30) low++;
+    if (data.alt[i] === 0) {
+      zero++;
+      const a = Math.abs(data.lat[i]);
+      if (latMin === null || a < latMin) latMin = a;
+      if (latMax === null || a > latMax) latMax = a;
+    }
+  }
+  return {
+    n: index,
+    pctLow: index ? +(100 * low / index).toFixed(1) : 0,
+    pctZero: index ? +(100 * zero / index).toFixed(1) : 0,
+    latMin, latMax,
+  };
+}
+
+const yearLabel = (y) => (y < 0 ? `${-y} BC` : `${y} AD`);
+
+function paintReadout() {
+  const s = stats();
+  const band = s.latMin === null ? '—' : `${s.latMin}–${s.latMax}°`;
+  $('readout').innerHTML =
+    `<span>placed <b>${s.n}</b></span>`
+    + `<span>sun ≤30° <b>${s.pctLow}%</b></span>`
+    + `<span class="zero">sun exactly 0° <b>${s.pctZero}%</b></span>`
+    + `<span class="zero">their latitudes <b>${band}</b></span>`;
+}
+
+function setIndex(i) {
+  index = Math.max(0, Math.min(data.count, Math.round(i)));
+  $('scrub').value = String(index);
+  $('year').textContent = index > 0 ? yearLabel(data.year[index - 1]) : '—';
+  paintReadout();
+}
+
+function togglePlay() {
+  playing = !playing;
+  if (playing && index >= data.count) setIndex(0);
+  $('play').textContent = playing ? 'pause' : 'play';
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space' || !data) return;
+  e.preventDefault();
+  togglePlay();
+});
 
 // Pointer events rather than mouse events: one code path covers trackpad and
 // touch, and setPointerCapture means a drag that leaves the canvas still ends
@@ -75,6 +135,16 @@ for (const ev of ['pointerup', 'pointercancel']) {
 }
 
 function loop(now) {
+  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+  lastFrame = now;
+  if (playing && data) {
+    carry += dt * (+$('speed').value) * 12;
+    if (carry >= 1) {
+      setIndex(index + Math.floor(carry));
+      carry %= 1;
+      if (index >= data.count) { playing = false; $('play').textContent = 'play'; }
+    }
+  }
   if (!dragging && now - idleSince > 3000) {
     view.lambda = ((view.lambda + 0.08 + 180) % 360 + 360) % 360 - 180;
   }
@@ -88,6 +158,11 @@ window.eclipse = {
   drawn: () => drawn,
   total: () => (data ? data.count : 0),
   colorFor,
+  year: () => (index > 0 ? data.year[index - 1] : null),
+  index: () => index,
+  setIndex,
+  playing: () => playing,
+  stats,
   // Cheap "is anything actually drawn" probe for the tests. Counts opaque
   // pixels that differ from the page background, on a coarse grid.
   //
@@ -108,7 +183,17 @@ window.eclipse = {
 
 fetch('/data/eclipses.json')
   .then((r) => r.json())
-  .then((j) => { data = j; })
+  .then((j) => {
+    data = j;
+    $('scrub').max = String(j.count);
+    $('scrub').addEventListener('input', (e) => {
+      playing = false; $('play').textContent = 'play';
+      setIndex(+e.target.value);
+    });
+    $('play').addEventListener('click', togglePlay);
+    $('reset').addEventListener('click', () => { setIndex(0); });
+    setIndex(j.count);
+  })
   .catch((e) => { console.error('eclipses.json did not load', e); });
 
 requestAnimationFrame(loop);

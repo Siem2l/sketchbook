@@ -18,6 +18,9 @@
     input[type=range] { accent-color: #7fb3a3; }
     #hint { position: fixed; top: 1rem; right: 1rem; color: #8a877e; text-align: right; line-height: 1.5; font-size: 12px; max-width: 22rem; }
     #hint b { color: #e0a316; font-weight: normal; }
+    #readout { color: #8a877e; font-size: 11px; gap: 1.1rem; }
+    #readout b { color: #e8e6e0; font-weight: normal; }
+    #readout .zero { color: #e0a316; }
   </style>
 </head>
 <body>
@@ -28,7 +31,15 @@
     daylight anywhere is below 30° too. the rings<br />
     are what eclipses add to that.
   </div>
-  <div id="ui"><div class="row" id="controls"></div></div>
+  <div id="ui">
+    <div class="row">
+      <button id="play">play</button>
+      <button id="reset">rewind</button>
+      <label>year <input id="scrub" type="range" min="0" max="1" step="1" value="1" style="width: 18rem" /><span class="val" id="year">—</span></label>
+      <label>speed <input id="speed" type="range" min="1" max="60" step="1" value="18" style="width: 5rem" /></label>
+    </div>
+    <div class="row" id="readout"></div>
+  </div>
   <script type="module" src="./sketch.js"></script>
 </body>
 </html>
