@@ -68,9 +68,16 @@ async function main() {
     throw new Error('dist/ not found after build');
   }
 
+  // Slugs named on the command line are the only ones shot:
+  //   npm run thumbs -- 2026-08-errand
+  // Regenerating all of them rewrites every PNG in the repo, which buries one
+  // new sketch's thumbnail in a diff nobody asked for.
+  const only = process.argv.slice(2).filter((a) => !a.startsWith('-'));
   const slugs = readdirSync(sketchesDir, { withFileTypes: true })
     .filter((d) => d.isDirectory() && d.name !== '_template')
-    .map((d) => d.name);
+    .map((d) => d.name)
+    .filter((name) => only.length === 0 || only.includes(name));
+  if (only.length && !slugs.length) throw new Error(`no such sketch: ${only.join(', ')}`);
 
   const { server, port } = await startStaticServer(distDir);
   console.log(`[thumbs] serving dist/ on http://127.0.0.1:${port}`);
