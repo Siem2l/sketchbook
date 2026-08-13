@@ -53,6 +53,54 @@ const browser = await chromium.launch();
 try {
   await waitForServer(BASE);
 
+  // ----------------------------------------------------------------- eclipses
+  // Node-side: the data is on disk and the claim this sketch makes is a claim
+  // about the data, so neither the server nor a page is involved.
+  {
+    const raw = JSON.parse(readFileSync(new URL('./public/data/eclipses.json', import.meta.url), 'utf8'));
+
+    await test('the catalog parsed whole, with every column the same length', async () => {
+      assert.ok(raw.count > 11000, `only ${raw.count} eclipses — pages are missing`);
+      for (const k of ['year', 'lat', 'lon', 'alt', 'gamma']) {
+        assert.equal(raw[k].length, raw.count, `${k} is ${raw[k].length}, count is ${raw.count}`);
+      }
+      assert.equal(raw.type.length, raw.count);
+      assert.ok(raw.year[0] < -1900, `starts at ${raw.year[0]}, not the BCE end`);
+      assert.ok(raw.year[raw.count - 1] > 2900, `ends at ${raw.year[raw.count - 1]}`);
+    });
+
+    // The design's central claim, asserted against its own source. If a refetch
+    // ever changes this, the build fails loudly rather than the page quietly
+    // telling a story that is no longer true.
+    await test('every horizon eclipse lands between 60 and 72 degrees of latitude', async () => {
+      const horizon = [];
+      for (let i = 0; i < raw.count; i++) if (raw.alt[i] === 0) horizon.push(Math.abs(raw.lat[i]));
+      assert.ok(horizon.length / raw.count > 0.3, `only ${horizon.length} at the horizon`);
+      assert.equal(Math.min(...horizon), 60, `the band's low edge moved to ${Math.min(...horizon)}`);
+      assert.equal(Math.max(...horizon), 72, `the band's high edge moved to ${Math.max(...horizon)}`);
+    });
+
+    // Every partial is a horizon eclipse; the converse is false, and the
+    // exceptions are the interesting ones. 68 annular and 26 total eclipses also
+    // peak at 0° — the "non-central" ones the catalog marks A- and T+, where the
+    // shadow axis misses the Earth but the antumbra still grazes the polar limb.
+    // They are the same near-miss geometry as the partials, caught one notch
+    // closer in. Asserting the biconditional would delete them.
+    await test('a partial always peaks on the horizon, and it is not alone there', async () => {
+      let partials = 0, nonCentral = 0;
+      for (let i = 0; i < raw.count; i++) {
+        if (raw.type[i] === 'P') { partials++; assert.equal(raw.alt[i], 0, `partial in ${raw.year[i]} peaks at ${raw.alt[i]}°`); }
+        else if (raw.alt[i] === 0) {
+          nonCentral++;
+          assert.ok('AT'.includes(raw.type[i]), `alt 0 in ${raw.year[i]} is type ${raw.type[i]}`);
+          assert.ok(Math.abs(raw.gamma[i]) > 0.99, `a non-central ${raw.type[i]} in ${raw.year[i]} at gamma ${raw.gamma[i]}`);
+        }
+      }
+      assert.ok(partials > 4000, `only ${partials} partials`);
+      assert.ok(nonCentral > 50 && nonCentral < 200, `${nonCentral} non-central eclipses at the horizon`);
+    });
+  }
+
   // ------------------------------------------------------------------ geotiff
   // Node-side and browser-free: the decoder is pure and the fixtures are on
   // disk, so this needs neither the server nor a page.
