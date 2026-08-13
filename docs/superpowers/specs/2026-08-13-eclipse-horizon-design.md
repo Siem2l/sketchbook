@@ -9,14 +9,24 @@ true, and the reason is a single number that has no opinion about you at all.
 
 Espenak's Five Millennium Catalog of Solar Eclipses gives, for every eclipse
 from −1999 to +3000, the latitude, longitude and **solar altitude** at the
-moment of greatest eclipse. Parsing 20 centuries of it (4,773 eclipses, the
-sample this design was checked against) gives three facts:
+moment of greatest eclipse. Parsing all 50 century pages — 11,898 eclipses —
+gives three facts:
 
 ```
-1,684 of 4,773  (35.3%)  have the Sun at exactly 0°
-   all 1,684              fall between |lat| 60° and 80°
-   none                   fall below |lat| 60°
+4,294 of 11,898  (36.1%)  have the Sun at exactly 0°
+   all 4,294               fall between |lat| 60° and 72°
+   none                    fall anywhere else — the band is exact
 ```
+
+Of those 4,294, most are partial eclipses, but 94 are not: 68 annular and 26
+total, the ones the catalog marks `A-` and `T+`. Those are the *non-central*
+eclipses, where the shadow axis misses the Earth and the antumbra grazes the
+polar limb regardless. Same near-miss geometry as the partials, caught one notch
+closer in — which is why they land in the same band.
+
+> An earlier draft of this design said 60°–80° and 35.3%, taken from a 10°-bin
+> histogram over 20 of the 50 centuries. The bin edge was not the extremum and
+> the sample was not the catalog. The numbers above are measured over all of it.
 
 The mechanism is gamma — the miss distance of the Moon's shadow axis from the
 Earth's centre, in Earth radii. Over 2,000 years it is flat:
@@ -32,8 +42,8 @@ so everything from 1.0 to 1.55 — a third of the range — is the shadow sailin
 surface that curves away far enough to catch the shadow's edge: the sunrise
 line. Sun on the horizon, by construction, at high latitude, by construction.
 
-For the 3,089 that do connect, altitude follows `sin(alt)` almost exactly —
-uniform γ pushed through `alt = 90° − arcsin|γ|`:
+For the 7,604 that do connect, altitude follows `sin(alt)` — uniform γ pushed
+through `alt = 90° − arcsin|γ|`. Measured over 20 centuries, the fit was:
 
 ```
         obs    pred
@@ -42,6 +52,10 @@ uniform γ pushed through `alt = 90° − arcsin|γ|`:
 60-70  14.7%  15.8%
 80-90  18.5%  17.4%
 ```
+
+And the geography that follows from it: **91.8%** of eclipses inside |lat| 15°
+peak with the Sun 60° or higher, against **45.1%** of all eclipses peaking at
+30° or lower. Tropics overhead, poles on the horizon, nothing in between.
 
 Nothing in the sketch computes any of this. It plots the points.
 
@@ -117,7 +131,7 @@ at 60 fps. The sketch header says this, so the next person does not read the
 missing `import p5` as an oversight.
 
 Drag to rotate — horizontal on λ, vertical on φ clamped to ±90°. Slow idle spin
-resumes a few seconds after release. Graticule every 15°, with **60° and 80°
+resumes a few seconds after release. Graticule every 15°, with **60° and 72°
 drawn heavier in both hemispheres**: those two circles are exactly what the
 horizon eclipses refuse to cross, and drawing them is the difference between a
 pattern the viewer notices and one they can check.
@@ -163,7 +177,7 @@ Node-side, no browser or server needed, since the data is on disk and the claim
 is about the data:
 
 - `eclipses.json` has exactly 11,898 records and all six arrays agree in length
-- every record with `alt === 0` has `60 ≤ |lat| ≤ 80`
+- every record with `alt === 0` has `60 ≤ |lat| ≤ 72`, and both bounds are hit
 
 That second one is the design's central claim asserted against its own source.
 If a refetch ever changes it, the build fails loudly instead of the page quietly

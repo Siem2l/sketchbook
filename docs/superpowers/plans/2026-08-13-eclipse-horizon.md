@@ -73,19 +73,32 @@ Insert into `test.mjs` immediately after the `const failures = [];` / `async fun
   // The design's central claim, asserted against its own source. If a refetch
   // ever changes this, the build fails loudly rather than the page quietly
   // telling a story that is no longer true.
-  await test('every horizon eclipse lands between 60 and 80 degrees of latitude', async () => {
+  await test('every horizon eclipse lands between 60 and 72 degrees of latitude', async () => {
     const horizon = [];
     for (let i = 0; i < raw.count; i++) if (raw.alt[i] === 0) horizon.push(Math.abs(raw.lat[i]));
     assert.ok(horizon.length / raw.count > 0.3, `only ${horizon.length} at the horizon`);
-    assert.ok(Math.min(...horizon) >= 60, `a horizon eclipse at |lat| ${Math.min(...horizon)}`);
-    assert.ok(Math.max(...horizon) <= 80, `a horizon eclipse at |lat| ${Math.max(...horizon)}`);
+    assert.equal(Math.min(...horizon), 60, `the band's low edge moved to ${Math.min(...horizon)}`);
+    assert.equal(Math.max(...horizon), 72, `the band's high edge moved to ${Math.max(...horizon)}`);
   });
 
-  await test('a partial eclipse is always a horizon eclipse and never the reverse', async () => {
+  // Every partial is a horizon eclipse; the converse is false, and the
+  // exceptions are the interesting ones. 68 annular and 26 total eclipses also
+  // peak at 0° — the "non-central" ones the catalog marks A- and T+, where the
+  // shadow axis misses the Earth but the antumbra still grazes the polar limb.
+  // They are the same near-miss geometry as the partials, caught one notch
+  // closer in. Asserting the biconditional would delete them.
+  await test('a partial always peaks on the horizon, and it is not alone there', async () => {
+    let partials = 0, nonCentral = 0;
     for (let i = 0; i < raw.count; i++) {
-      if (raw.type[i] === 'P') assert.equal(raw.alt[i], 0, `partial at year ${raw.year[i]} has alt ${raw.alt[i]}`);
-      if (raw.alt[i] === 0) assert.equal(raw.type[i], 'P', `alt 0 at year ${raw.year[i]} is type ${raw.type[i]}`);
+      if (raw.type[i] === 'P') { partials++; assert.equal(raw.alt[i], 0, `partial in ${raw.year[i]} peaks at ${raw.alt[i]}°`); }
+      else if (raw.alt[i] === 0) {
+        nonCentral++;
+        assert.ok('AT'.includes(raw.type[i]), `alt 0 in ${raw.year[i]} is type ${raw.type[i]}`);
+        assert.ok(Math.abs(raw.gamma[i]) > 0.99, `a non-central ${raw.type[i]} in ${raw.year[i]} at gamma ${raw.gamma[i]}`);
+      }
     }
+    assert.ok(partials > 4000, `only ${partials} partials`);
+    assert.ok(nonCentral > 50 && nonCentral < 200, `${nonCentral} non-central eclipses at the horizon`);
   });
 }
 ```
@@ -210,23 +223,24 @@ Expected: 50 dots, then a summary. The eclipse count should be near 11,898 and t
 
 **If the count differs from 11,898, the parser is right and the spec's number was wrong** — say so in the commit message and move on. If any line reports `unmatched`, stop: read the offending line and widen `ROW` to cover it. Do not loosen `LOOKS_LIKE_ROW` to make the error disappear.
 
-**The measured numbers govern, and they may not be the ones written here.** The
-`60`/`80` latitude band and the ~35% horizon share were measured over 20 of the
-catalog's 50 centuries (1001–3000 CE). The full run may widen the band or shift
-the share. The data is the authority, not this plan:
+**The numbers below are measured over all 50 pages and are the ones to use.**
+An earlier draft of this plan carried `60`/`80` and 35.3%, read off a 10°-bin
+histogram of 20 centuries. The bin edge was not the extremum. The full run says:
 
-- Record the script's printed band and share.
-- If the band is not exactly 60–80, change the two bounds in this task's
-  latitude test to the measured values, and report the real numbers in your
-  report file. Do **not** loosen the test into a tautology like `>= 0` — a band
-  of 58–81 is still a claim worth asserting; "some latitude" is not.
-- A band that is not a band at all — horizon eclipses appearing near the equator
-  — is not a number to update. It falsifies the sketch's premise. Stop and
-  report BLOCKED with the offending rows.
-- Later tasks hardcode the same numbers (Task 5 asserts `latMin`/`latMax` and
-  the ~35%/~45% shares; Task 6's README entry and Task 2's `meta.json` state
-  them in prose). Your report file must state the measured values plainly so
-  those tasks use them rather than the ones written here.
+```
+11,898 eclipses          -1999 to +3000, exactly the published count
+ 4,294 at alt 0 (36.1%)  |lat| 60-72, exact — nothing outside the band
+       of those: 4,200 partial, 68 non-central annular, 26 non-central total
+45.1%  of all eclipses peak with the Sun 30° or lower
+91.8%  of eclipses inside |lat| 15 peak with the Sun 60° or higher
+```
+
+If your run disagrees with any of these, the run is the authority and something
+is wrong with this plan — report the discrepancy rather than editing the numbers
+to match, because three later tasks and the spec now quote them.
+
+A band that is not a band at all — horizon eclipses near the equator — would
+falsify the sketch's premise. Stop and report BLOCKED with the offending rows.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -297,7 +311,7 @@ Expected: FAIL — the page 404s, so `window.eclipse` never appears and `waitFor
   "title": "eclipse horizon",
   "date": "2026-08-13",
   "tags": ["nasa", "eclipses", "globe", "canvas", "deep-time"],
-  "description": "Every solar eclipse from 1999 BC to 3000 AD, plotted where it peaked. A third of them happen with the Sun exactly on the horizon, and all of those land in two rings between 60 and 80 degrees of latitude — because the Moon's shadow misses the Earth entirely a third of the time, and a near miss is only visible from the sunrise line."
+  "description": "All 11,898 solar eclipses from 1999 BC to 3000 AD, plotted where each one peaked. 36% of them peak with the Sun exactly on the horizon, and every single one of those lands in two rings between 60 and 72 degrees of latitude — because the Moon's shadow misses the Earth entirely about a third of the time, and a near miss is only visible from the sunrise line."
 }
 ```
 
@@ -397,12 +411,13 @@ export function drawGlobe(ctx, view, r, cx, cy) {
   for (let lat = -75; lat <= 75; lat += 15) if (lat % 15 === 0) strokeParallel(ctx, lat, view, r, cx, cy);
   for (let lon = -180; lon < 180; lon += 15) strokeMeridian(ctx, lon, view, r, cx, cy);
 
-  // 60 and 80 are drawn heavier because they are exactly what the horizon
-  // eclipses refuse to cross. Drawing them is the difference between a pattern
-  // a viewer notices and one they can check.
+  // 60 and 72 are drawn heavier because they are exactly what the horizon
+  // eclipses refuse to cross — measured over all 11,898, not rounded to the
+  // graticule. Drawing them is the difference between a pattern a viewer
+  // notices and one they can check.
   ctx.strokeStyle = '#3c4a46';
   ctx.lineWidth = 1.5;
-  for (const lat of [-80, -60, 60, 80]) strokeParallel(ctx, lat, view, r, cx, cy);
+  for (const lat of [-72, -60, 60, 72]) strokeParallel(ctx, lat, view, r, cx, cy);
 
   ctx.strokeStyle = '#2e2e38';
   ctx.lineWidth = 1;
@@ -762,10 +777,10 @@ await test('the readout earns its numbers as the points land', async () => {
   await p.evaluate(() => window.eclipse.setIndex(window.eclipse.total()));
   await p.waitForTimeout(150);
   const s = await p.evaluate(() => window.eclipse.stats());
-  assert.ok(Math.abs(s.pctZero - 35) < 4, `${s.pctZero}% at the horizon, expected about 35`);
-  assert.ok(Math.abs(s.pctLow - 45) < 5, `${s.pctLow}% below 30 degrees, expected about 45`);
+  assert.ok(Math.abs(s.pctZero - 36.1) < 1, `${s.pctZero}% at the horizon, expected 36.1`);
+  assert.ok(Math.abs(s.pctLow - 45.1) < 1, `${s.pctLow}% below 30 degrees, expected 45.1`);
   assert.equal(s.latMin, 60, `horizon eclipses reach down to ${s.latMin}`);
-  assert.equal(s.latMax, 80, `horizon eclipses reach up to ${s.latMax}`);
+  assert.equal(s.latMax, 72, `horizon eclipses reach up to ${s.latMax}`);
 
   // Early on the claim has not been earned yet, and the page should show that
   // rather than a settled number computed from data not yet on screen.
@@ -1044,7 +1059,7 @@ Expected: `public/sketches/2026-08-eclipse-horizon/thumb.png` appears. Open it: 
 
 Add an entry to the `## Sketches` list in `README.md`, matching the register of the existing entries — what the data is, where it came from, and the one non-obvious thing. Roughly:
 
-> - **eclipse horizon** (`2026-08-eclipse-horizon`) — every solar eclipse from 1999 BC to 3000 AD, at the point where it peaked, out of Espenak's Five Millennium Catalog. A third of them have the Sun at exactly 0°, and all of those land between 60° and 80° of latitude, because gamma — the miss distance of the Moon's shadow axis from the Earth's centre — is uniform out to about 1.55 Earth radii while the Earth stops at 1.0. A third of the range is the shadow missing the planet, and a near miss is only visible from the sunrise line. The ramp runs on horizon-ness rather than altitude, so the low Sun is the bright end; the 0° eclipses are off the ramp entirely, on a reserved colour and a hollow mark, because 35% of the data stacked on one value is a category, not the bottom of a scale. `scripts/fetch-eclipses.mjs` pulls the 50 century pages by hand and the result is committed, so a page load never depends on NASA being up.
+> - **eclipse horizon** (`2026-08-eclipse-horizon`) — all 11,898 solar eclipses from 1999 BC to 3000 AD, at the point where each one peaked, out of Espenak's Five Millennium Catalog. 4,294 of them — 36% — have the Sun at exactly 0°, and every one of those lands between 60° and 72° of latitude with nothing outside the band, because gamma, the miss distance of the Moon's shadow axis from the Earth's centre, is uniform out to about 1.55 Earth radii while the Earth stops at 1.0. A third of the range is the shadow missing the planet, and a near miss is only visible from the sunrise line. Mostly those are partial eclipses, but 94 are not: the non-central annulars and totals the catalog marks `A-` and `T+`, where the axis misses and the antumbra grazes the limb anyway. The ramp runs on horizon-ness rather than altitude, so the low Sun is the bright end; the 0° eclipses are off the ramp entirely, on a reserved colour and a hollow mark, because a third of the data stacked on one value is a category and not the bottom of a scale. `scripts/fetch-eclipses.mjs` pulls the 50 century pages by hand and the result is committed, so a page load never depends on NASA being up.
 
 - [ ] **Step 8: Commit**
 
