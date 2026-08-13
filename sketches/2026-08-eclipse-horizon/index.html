@@ -21,6 +21,9 @@
     #readout { color: #8a877e; font-size: 11px; gap: 1.1rem; }
     #readout b { color: #e8e6e0; font-weight: normal; }
     #readout .zero { color: #e0a316; }
+    #legend { color: #8a877e; font-size: 11px; gap: 0.35rem; align-items: center; }
+    #legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+    #legend i.ring { background: transparent; border: 1.5px solid #e0a316; }
   </style>
 </head>
 <body>
@@ -39,6 +42,7 @@
       <label>speed <input id="speed" type="range" min="1" max="60" step="1" value="18" style="width: 5rem" /></label>
     </div>
     <div class="row" id="readout"></div>
+    <div class="row" id="legend"></div>
   </div>
   <script type="module" src="./sketch.js"></script>
 </body>

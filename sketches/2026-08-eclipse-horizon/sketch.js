@@ -19,7 +19,7 @@
 // this sketch's own projection; see globe.js for why six lines of trig did not
 // need a dependency behind them.
 import { drawGlobe } from './globe.js';
-import { drawPoints, colorFor } from './points.js';
+import { drawPoints, colorFor, RAMP, HORIZON_COLOR } from './points.js';
 
 const SIZE = 720;
 const canvas = document.createElement('canvas');
@@ -93,6 +93,20 @@ function setIndex(i) {
   $('scrub').value = String(index);
   $('year').textContent = index > 0 ? yearLabel(data.year[index - 1]) : '—';
   paintReadout();
+}
+
+// Built from the same constants the marks are drawn from, so a palette change
+// cannot leave the key describing the old one. The horizon swatch is styled
+// through border-color and never background: it stands for a hollow mark, and a
+// filled amber dot here would advertise an encoding the globe does not use.
+function buildLegend() {
+  const swatch = (c) => `<i style="background:${c}"></i>`;
+  $('legend').innerHTML =
+    '<span>sun 90°</span>'
+    + RAMP.map(swatch).reverse().join('')
+    + '<span>1°</span>'
+    + '<span style="margin-left:0.8rem">on the horizon, 0°</span>'
+    + `<i class="ring" style="border-color:${HORIZON_COLOR}"></i>`;
 }
 
 function togglePlay() {
@@ -192,6 +206,7 @@ fetch('/data/eclipses.json')
     });
     $('play').addEventListener('click', togglePlay);
     $('reset').addEventListener('click', () => { setIndex(0); });
+    buildLegend();
     setIndex(j.count);
   })
   .catch((e) => { console.error('eclipses.json did not load', e); });

@@ -2747,6 +2747,26 @@ try {
       assert.equal(await p.evaluate(() => window.eclipse.index()), held, 'pause did not hold');
     });
 
+    await test('the page says what its colours mean, in degrees', async () => {
+      const txt = await p.evaluate(() => document.getElementById('legend').innerText);
+      assert.match(txt, /0°/, 'the horizon mark is unlabelled');
+      assert.match(txt, /90°/, 'the overhead end is unlabelled');
+      const swatches = await p.evaluate(() =>
+        [...document.querySelectorAll('#legend i')].map((el) => getComputedStyle(el).backgroundColor));
+      assert.ok(swatches.length >= 5, `only ${swatches.length} swatches`);
+
+      // The horizon key must be hollow like the mark it stands for. Asserting on
+      // the border rather than the fill is the point: a filled amber dot here
+      // would advertise an encoding the globe does not use.
+      const ring = await p.evaluate(() => {
+        const s = getComputedStyle(document.querySelector('#legend i.ring'));
+        return { border: s.borderTopColor, fill: s.backgroundColor };
+      });
+      assert.equal(ring.border, 'rgb(224, 163, 22)', 'the horizon key is not on its reserved colour');
+      assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(ring.fill),
+        `the horizon key is filled (${ring.fill}) — it should be hollow`);
+    });
+
     await p.close();
   }
 

@@ -39,6 +39,31 @@ for the `sketchbook` group.
 
 ## Sketches
 
+- **eclipse horizon** (`2026-08-eclipse-horizon`) — all 11,898 solar eclipses
+  from 1999 BC to 3000 AD, at the point where each one peaked, out of Espenak's
+  Five Millennium Catalog. 4,294 of them — 36% — have the Sun at exactly 0°, and
+  every one of those lands between 60° and 72° of latitude with nothing outside
+  the band. The cause is one number: gamma, the miss distance of the Moon's
+  shadow axis from the Earth's centre, is uniform out to about 1.55 Earth radii
+  while the Earth stops at 1.0. A third of the range is the shadow missing the
+  planet, and a near miss is only visible from the sliver of surface curving
+  away toward sunrise. Mostly those are partial eclipses, but 94 are not: the
+  non-central annulars and totals the catalog marks `A-` and `T+`, where the
+  axis misses and the antumbra grazes the limb anyway. The ramp runs on
+  horizon-ness rather than altitude, so the low Sun is the bright end, and it is
+  parameterised by `cos(alt)` — the survival function of the `sin(alt)` altitude
+  distribution — so its five steps carry equal shares of eclipses instead of
+  equal spans of degrees; walking it linearly put two thirds of the marks in the
+  two darkest steps and the globe came out one flat colour. The 0° eclipses are
+  off the ramp entirely, on a reserved colour and a hollow mark, because a third
+  of the data stacked on one value is a category and not the bottom of a scale.
+  The page also says, in the corner, that a sphere is horizon-heavy for free —
+  half of all daylight anywhere is below 30° too — because a sketch that shows a
+  striking pattern and omits that some of it is geometry is doing the thing this
+  repo exists not to do. `scripts/fetch-eclipses.mjs` pulls the 50 century pages
+  by hand and the result is committed, so a page load never depends on NASA
+  being up.
+
 - **hendriklaan** (`2026-08-hendriklaan`) — 240 metres of Utrecht around Prins
   Hendriklaan 17, cut out of the AHN5 LiDAR survey and driven by sound. The
   geometry is 201,635 real returns, not a generator. The tile it comes from is
