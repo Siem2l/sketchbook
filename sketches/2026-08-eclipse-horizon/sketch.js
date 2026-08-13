@@ -20,10 +20,23 @@
 // need a dependency behind them.
 import { drawGlobe } from './globe.js';
 import { drawPoints, colorFor, RAMP, HORIZON_COLOR } from './points.js';
+import { drawGeometry, sunAltitudeFor, GAMMA_MAX } from './geometry.js';
 
 const SIZE = 720;
+
+// The cross-section goes above the globe deliberately: it is the explanation,
+// and the globe is the consequence. Read top to bottom and the rings stop being
+// a pattern you have to take on trust.
+const GEO_W = 720, GEO_H = 380;
+const geoCanvas = document.createElement('canvas');
+geoCanvas.width = GEO_W; geoCanvas.height = GEO_H;
+geoCanvas.id = 'geometry';
+document.body.insertBefore(geoCanvas, document.getElementById('ui'));
+const geoCtx = geoCanvas.getContext('2d');
+
 const canvas = document.createElement('canvas');
 canvas.width = SIZE; canvas.height = SIZE;
+canvas.id = 'globe';   // there are two canvases on this page; drag targets this one
 document.body.insertBefore(canvas, document.getElementById('ui'));
 // No willReadFrequently: this canvas is written every frame and read only by
 // the test probe below. The hint asks the browser for a software-backed
@@ -44,6 +57,17 @@ let carry = 0;            // fractional eclipses between frames
 let lastFrame = performance.now();
 
 const $ = (id) => document.getElementById(id);
+
+let gamma = 0.3;
+
+function renderGeometry() {
+  drawGeometry(geoCtx, gamma, GEO_W, GEO_H);
+  const alt = sunAltitudeFor(gamma);
+  $('gamma-val').textContent = gamma.toFixed(2)
+    + (alt === null ? ' · no eclipse'
+      : alt === 0 ? ' · sun on the horizon'
+        : ` · sun ${alt.toFixed(0)}° up`);
+}
 
 function render() {
   ctx.fillStyle = '#0e0e11';
@@ -186,6 +210,9 @@ window.eclipse = {
   setIndex,
   playing: () => playing,
   stats,
+  gamma: () => gamma,
+  setGamma: (g) => { gamma = Math.max(0, Math.min(GAMMA_MAX + 0.15, g)); $('gamma').value = String(gamma); renderGeometry(); },
+  sunAltitudeFor,
   // Cheap "is anything actually drawn" probe for the tests. Counts opaque
   // pixels that differ from the page background, on a coarse grid.
   //
@@ -215,7 +242,9 @@ fetch('/data/eclipses.json')
     });
     $('play').addEventListener('click', togglePlay);
     $('reset').addEventListener('click', () => { setIndex(0); });
+    $('gamma').addEventListener('input', (e) => { gamma = +e.target.value; renderGeometry(); });
     buildLegend();
+    renderGeometry();
     setIndex(j.count);
   })
   .catch((e) => { console.error('eclipses.json did not load', e); });

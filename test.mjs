@@ -73,6 +73,27 @@ try {
       assert.equal(raw.year[raw.count - 1], 3000, `ends at ${raw.year[raw.count - 1]}`);
     });
 
+    // The cross-section on the page is a toy: parallel sunlight, a spherical
+    // Earth, no parallax, no oblateness, no atmosphere. This asserts that the
+    // toy is nonetheless the actual mechanism, by holding its one prediction
+    // against 7,628 eclipses NASA computed properly. If the agreement ever
+    // breaks, the drawing has stopped explaining the data it sits above.
+    await test('the cross-section predicts the catalog it is drawn above', async () => {
+      const errs = [];
+      for (let i = 0; i < raw.count; i++) {
+        const g = Math.abs(raw.gamma[i]);
+        if (g >= 1) continue;
+        const predicted = Math.asin(Math.sqrt(1 - g * g)) * 180 / Math.PI;
+        errs.push(Math.abs(predicted - raw.alt[i]));
+      }
+      errs.sort((a, b) => a - b);
+      const median = errs[Math.floor(errs.length / 2)];
+      const p99 = errs[Math.floor(errs.length * 0.99)];
+      assert.ok(errs.length > 7000, `only ${errs.length} central eclipses to compare`);
+      assert.ok(median < 0.5, `median disagreement ${median.toFixed(2)}° — the model has drifted`);
+      assert.ok(p99 < 2.5, `99th percentile disagreement ${p99.toFixed(2)}°`);
+    });
+
     await test('the numbers the page prints are the numbers the catalog holds', async () => {
       // Every figure quoted in the README, meta.json and the sketch's own header
       // is asserted here, so prose and data cannot drift apart unnoticed.
@@ -2706,8 +2727,15 @@ try {
     });
 
     await test('dragging turns the globe, and letting go hands it back to the drift', async () => {
+      // #globe, not `canvas`: the page grew a second canvas for the
+      // cross-section, and a bare selector silently started dragging that one.
+      // And scroll it in first — with the cross-section above it the globe's
+      // centre sits below a 720px viewport, so mouse coordinates taken from the
+      // page box land nowhere near it.
+      await p.locator('#globe').scrollIntoViewIfNeeded();
+      await p.waitForTimeout(150);
       const before = await p.evaluate(() => window.eclipse.view());
-      const box = await p.locator('canvas').boundingBox();
+      const box = await p.locator('#globe').boundingBox();
       await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await p.mouse.down();
       await p.mouse.move(box.x + box.width / 2 + 160, box.y + box.height / 2 + 40, { steps: 8 });
@@ -2804,6 +2832,29 @@ try {
       assert.equal(first, at90, 'the swatch beside "sun 90°" is not the colour a 90° sun gets');
       assert.equal(last, at1, 'the swatch beside "1°" is not the colour a 1° sun gets');
       assert.notEqual(first, last, 'the key has no range at all');
+    });
+
+    await test('the shadow slides off, and the sun goes down with it', async () => {
+      const seen = await p.evaluate(() => {
+        const out = [];
+        for (const g of [0, 0.5, 0.9, 1.0, 1.3, 1.6]) {
+          window.eclipse.setGamma(g);
+          out.push([g, window.eclipse.gamma(), window.eclipse.sunAltitudeFor(g)]);
+        }
+        return out;
+      });
+      const alt = Object.fromEntries(seen.map(([g, , a]) => [g, a]));
+      assert.equal(alt[0], 90, 'a dead-centre hit does not put the Sun overhead');
+      assert.ok(Math.abs(alt[0.5] - 60) < 0.01, `gamma 0.5 gives ${alt[0.5]}°, not 60°`);
+      assert.ok(alt[0.9] > 0 && alt[0.9] < 30, `gamma 0.9 gives ${alt[0.9]}°`);
+      assert.equal(alt[1.0], 0, 'a grazing axis does not put the Sun on the horizon');
+      assert.equal(alt[1.3], 0, 'a missed axis should still be a horizon eclipse');
+      assert.equal(alt[1.6], null, 'gamma 1.6 should be no eclipse at all');
+      // Monotone: the further the axis misses, the lower the Sun. That is the
+      // whole claim the page makes, in one assertion.
+      for (const [a, b] of [[0, 0.5], [0.5, 0.9], [0.9, 1.0]]) {
+        assert.ok(alt[a] > alt[b], `sun altitude did not fall from gamma ${a} to ${b}`);
+      }
     });
 
     await test('the years read in astronomical numbering, where there is a year zero', async () => {

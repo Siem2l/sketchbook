@@ -29,7 +29,12 @@
 <body>
   <a class="back" href="/">← sketchbook</a>
   <div id="hint">
+    <b>above:</b> why. drag γ to slide the Moon's shadow<br />
+    across the Earth and watch where it lands.<br />
+    <b>below:</b> where. every dot is a place on Earth,<br />
+    coloured by how high the Sun stood there.<br />
     drag to turn · space = play/pause<br />
+    <br />
     <b>a sphere is horizon-heavy for free:</b> half of all<br />
     daylight anywhere is below 30° too. the rings<br />
     are what eclipses add to that.
@@ -40,6 +45,11 @@
       <button id="reset">rewind</button>
       <label>year <input id="scrub" type="range" min="0" max="1" step="1" value="1" style="width: 18rem" /><span class="val" id="year">—</span></label>
       <label>speed <input id="speed" type="range" min="1" max="60" step="1" value="18" style="width: 5rem" /></label>
+    </div>
+    <div class="row">
+      <label>γ — how far the shadow axis misses the Earth's centre
+        <input id="gamma" type="range" min="0" max="1.7" step="0.01" value="0.3" style="width: 14rem" />
+        <span class="val" id="gamma-val"></span></label>
     </div>
     <div class="row" id="readout"></div>
     <div class="row" id="legend"></div>
