@@ -8,9 +8,11 @@ true, and the reason is a single number that has no opinion about you at all.
 ## What the catalog says
 
 Espenak's Five Millennium Catalog of Solar Eclipses gives, for every eclipse
-from −1999 to +3000, the latitude, longitude and **solar altitude** at the
-moment of greatest eclipse. Parsing all 50 century pages — 11,898 eclipses —
-gives three facts:
+from astronomical year −1999 to +3000, the latitude, longitude and **solar
+altitude** at the moment of greatest eclipse. Those are astronomical year
+numbers, which include a year 0 — three eclipses fall in it — and year 0 is
+1 BC, so the span is **2000 BC to 3000 AD**, which is how NASA titles it.
+Parsing all 50 century pages — 11,898 eclipses — gives three facts:
 
 ```
 4,294 of 11,898  (36.1%)  have the Sun at exactly 0°

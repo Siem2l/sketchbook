@@ -315,7 +315,7 @@ Expected: FAIL — the page 404s, so `window.eclipse` never appears and `waitFor
   "title": "eclipse horizon",
   "date": "2026-08-13",
   "tags": ["nasa", "eclipses", "globe", "canvas", "deep-time"],
-  "description": "All 11,898 solar eclipses from 1999 BC to 3000 AD, plotted where each one peaked. 36% of them peak with the Sun exactly on the horizon, and every single one of those lands in two rings between 60 and 72 degrees of latitude — because the Moon's shadow misses the Earth entirely about a third of the time, and a near miss is only visible from the sunrise line."
+  "description": "All 11,898 solar eclipses from 2000 BC to 3000 AD, plotted where each one peaked. 36% of them peak with the Sun exactly on the horizon, and every single one of those lands in two rings between 60 and 72 degrees of latitude — because the Moon's shadow misses the Earth entirely about a third of the time, and a near miss is only visible from the sunrise line."
 }
 ```
 
@@ -325,7 +325,7 @@ Take the chrome from `sketches/2026-08-edge/index.html` — same back link, same
 `#ui` panel, same fonts and colours, so the two pages are visibly siblings.
 "Same visual language", not "byte-identical stylesheet": this page has a hint
 block that `edge` does not, has no `#note` element to style, and needs a wider
-`label .val` because its readout says `1999 BC` where `edge`'s says a number.
+`label .val` because its readout says `2000 BC` where `edge`'s says a number.
 Diverge where this page genuinely differs and nowhere else. The controls are
 added in Task 5; leave the panel in place with only the hint block populated.
 
@@ -445,7 +445,7 @@ export function drawGlobe(ctx, view, r, cx, cy) {
 - [ ] **Step 6: Write sketch.js**
 
 ```js
-// Every solar eclipse NASA has computed, from 1999 BC to 3000 AD, plotted at
+// Every solar eclipse NASA has computed, from 2000 BC to 3000 AD, plotted at
 // the point where it peaked. The claim the page makes is not subtle and is not
 // argued: 4,294 of the 11,898 — 36% — have the Sun at exactly 0°, and every
 // one of those lands between 60° and 72° of latitude, with nothing outside the
@@ -604,7 +604,7 @@ export const HORIZON_COLOR = '#e0a316';
 // The parameter is cos(alt), not a linear walk from 90 down to 1, and that is
 // not a cosmetic curve. Central-eclipse altitude is distributed as sin(alt) —
 // uniform gamma pushed through alt = 90 − arcsin|gamma| — so a linear ramp puts
-// roughly two thirds of all 7,604 marks into its two dimmest steps and the
+// 54.5% of all 7,604 marks into its two dimmest steps, 2.2% in the brightest,
 // globe comes out one flat colour. cos(alt) is that distribution's own CDF, so
 // the five steps carry equal populations and the ramp shows what it encodes.
 // Reading the scale off the physics is also what makes it honest: the steps are
@@ -1112,7 +1112,7 @@ Expected: `public/sketches/2026-08-eclipse-horizon/thumb.png` appears. Open it: 
 
 Add an entry to the `## Sketches` list in `README.md`, matching the register of the existing entries — what the data is, where it came from, and the one non-obvious thing. Roughly:
 
-> - **eclipse horizon** (`2026-08-eclipse-horizon`) — all 11,898 solar eclipses from 1999 BC to 3000 AD, at the point where each one peaked, out of Espenak's Five Millennium Catalog. 4,294 of them — 36% — have the Sun at exactly 0°, and every one of those lands between 60° and 72° of latitude with nothing outside the band, because gamma, the miss distance of the Moon's shadow axis from the Earth's centre, is uniform out to about 1.55 Earth radii while the Earth stops at 1.0. A third of the range is the shadow missing the planet, and a near miss is only visible from the sunrise line. Mostly those are partial eclipses, but 94 are not: the non-central annulars and totals the catalog marks `A-` and `T+`, where the axis misses and the antumbra grazes the limb anyway. The ramp runs on horizon-ness rather than altitude, so the low Sun is the bright end; the 0° eclipses are off the ramp entirely, on a reserved colour and a hollow mark, because a third of the data stacked on one value is a category and not the bottom of a scale. `scripts/fetch-eclipses.mjs` pulls the 50 century pages by hand and the result is committed, so a page load never depends on NASA being up.
+> - **eclipse horizon** (`2026-08-eclipse-horizon`) — all 11,898 solar eclipses from 2000 BC to 3000 AD, at the point where each one peaked, out of Espenak's Five Millennium Catalog. 4,294 of them — 36% — have the Sun at exactly 0°, and every one of those lands between 60° and 72° of latitude with nothing outside the band, because gamma, the miss distance of the Moon's shadow axis from the Earth's centre, is uniform out to about 1.55 Earth radii while the Earth stops at 1.0. A third of the range is the shadow missing the planet, and a near miss is only visible from the sunrise line. Mostly those are partial eclipses, but 94 are not: the non-central annulars and totals the catalog marks `A-` and `T+`, where the axis misses and the antumbra grazes the limb anyway. The ramp runs on horizon-ness rather than altitude, so the low Sun is the bright end; the 0° eclipses are off the ramp entirely, on a reserved colour and a hollow mark, because a third of the data stacked on one value is a category and not the bottom of a scale. `scripts/fetch-eclipses.mjs` pulls the 50 century pages by hand and the result is committed, so a page load never depends on NASA being up.
 
 - [ ] **Step 8: Commit**
 

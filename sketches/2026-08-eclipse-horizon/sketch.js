@@ -1,4 +1,4 @@
-// Every solar eclipse NASA has computed, from 1999 BC to 3000 AD, plotted at
+// Every solar eclipse NASA has computed, from 2000 BC to 3000 AD, plotted at
 // the point where it peaked. The claim the page makes is not subtle and is not
 // argued: 4,294 of the 11,898 — 36% — have the Sun at exactly 0°, and every
 // one of those lands between 60° and 72° of latitude, with nothing outside the
@@ -76,7 +76,12 @@ function stats() {
   };
 }
 
-const yearLabel = (y) => (y < 0 ? `${-y} BC` : `${y} AD`);
+// The catalog counts in astronomical years, which have a year 0 — and three
+// eclipses fall in it. Year 0 is 1 BC, so the offset is 1 − y and not −y, which
+// is why the catalog spans 2000 BC rather than the 1999 BC its first row reads
+// as. NASA titles it "2000 BCE to 3000 CE" for exactly this reason. Getting it
+// wrong renders an impossible "0 AD" and dates every BC eclipse a year late.
+const yearLabel = (y) => (y <= 0 ? `${1 - y} BC` : `${y} AD`);
 
 function paintReadout() {
   const s = stats();
@@ -102,8 +107,12 @@ function setIndex(i) {
 function buildLegend() {
   const swatch = (c) => `<i style="background:${c}"></i>`;
   $('legend').innerHTML =
+    // RAMP is stored dim→bright and colorFor sends alt 90 to the dim end, so
+    // reading it in storage order under a "sun 90° … 1°" axis is already right.
+    // Reversing it here put the bright swatch under 90° and stated the exact
+    // inverse of the encoding the globe uses.
     '<span>sun 90°</span>'
-    + RAMP.map(swatch).reverse().join('')
+    + RAMP.map(swatch).join('')
     + '<span>1°</span>'
     + '<span style="margin-left:0.8rem">on the horizon, 0°</span>'
     + `<i class="ring" style="border-color:${HORIZON_COLOR}"></i>`;

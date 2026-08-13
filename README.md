@@ -40,7 +40,7 @@ for the `sketchbook` group.
 ## Sketches
 
 - **eclipse horizon** (`2026-08-eclipse-horizon`) — all 11,898 solar eclipses
-  from 1999 BC to 3000 AD, at the point where each one peaked, out of Espenak's
+  from 2000 BC to 3000 AD, at the point where each one peaked, out of Espenak's
   Five Millennium Catalog. 4,294 of them — 36% — have the Sun at exactly 0°, and
   every one of those lands between 60° and 72° of latitude with nothing outside
   the band. The cause is one number: gamma, the miss distance of the Moon's
@@ -53,10 +53,11 @@ for the `sketchbook` group.
   horizon-ness rather than altitude, so the low Sun is the bright end, and it is
   parameterised by `cos(alt)` — the survival function of the `sin(alt)` altitude
   distribution — so its five steps carry equal shares of eclipses instead of
-  equal spans of degrees; walking it linearly put two thirds of the marks in the
-  two darkest steps and the globe came out one flat colour. The 0° eclipses are
-  off the ramp entirely, on a reserved colour and a hollow mark, because a third
-  of the data stacked on one value is a category and not the bottom of a scale.
+  equal spans of degrees; walking it linearly put 54.5% of the marks in the two
+  darkest steps and only 2.2% in the brightest, and the globe came out one flat
+  colour. The 0° eclipses are off the ramp entirely, on a reserved colour and a
+  hollow mark, because a third of the data stacked on one value is a category
+  and not the bottom of a scale.
   The page also says, in the corner, that a sphere is horizon-heavy for free —
   half of all daylight anywhere is below 30° too — because a sketch that shows a
   striking pattern and omits that some of it is geometry is doing the thing this

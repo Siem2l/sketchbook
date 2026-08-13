@@ -61,13 +61,31 @@ try {
     const raw = JSON.parse(readFileSync(new URL('./public/data/eclipses.json', import.meta.url), 'utf8'));
 
     await test('the catalog parsed whole, with every column the same length', async () => {
-      assert.ok(raw.count > 11000, `only ${raw.count} eclipses — pages are missing`);
+      // Pinned, not bounded. The page, the README and this file all state 11,898
+      // as a fact; a loose `> 11000` would let a refetch drop a century while
+      // every prose claim around it silently became wrong.
+      assert.equal(raw.count, 11898, `${raw.count} eclipses — a page is missing or doubled`);
       for (const k of ['year', 'lat', 'lon', 'alt', 'gamma']) {
         assert.equal(raw[k].length, raw.count, `${k} is ${raw[k].length}, count is ${raw.count}`);
       }
       assert.equal(raw.type.length, raw.count);
-      assert.ok(raw.year[0] < -1900, `starts at ${raw.year[0]}, not the BCE end`);
-      assert.ok(raw.year[raw.count - 1] > 2900, `ends at ${raw.year[raw.count - 1]}`);
+      assert.equal(raw.year[0], -1999, `starts at ${raw.year[0]} — astronomical, so 2000 BC`);
+      assert.equal(raw.year[raw.count - 1], 3000, `ends at ${raw.year[raw.count - 1]}`);
+    });
+
+    await test('the numbers the page prints are the numbers the catalog holds', async () => {
+      // Every figure quoted in the README, meta.json and the sketch's own header
+      // is asserted here, so prose and data cannot drift apart unnoticed.
+      let zero = 0, low = 0, nonCentral = 0, central = 0;
+      for (let i = 0; i < raw.count; i++) {
+        if (raw.alt[i] <= 30) low++;
+        if (raw.alt[i] === 0) { zero++; if (raw.type[i] !== 'P') nonCentral++; } else central++;
+      }
+      assert.equal(zero, 4294, `${zero} eclipses peak at exactly 0°`);
+      assert.equal(central, 7604, `${central} central eclipses`);
+      assert.equal(nonCentral, 94, `${nonCentral} non-central eclipses at the horizon`);
+      assert.equal((100 * zero / raw.count).toFixed(1), '36.1');
+      assert.equal((100 * low / raw.count).toFixed(1), '45.1');
     });
 
     // The design's central claim, asserted against its own source. If a refetch
@@ -2765,6 +2783,42 @@ try {
       assert.equal(ring.border, 'rgb(224, 163, 22)', 'the horizon key is not on its reserved colour');
       assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(ring.fill),
         `the horizon key is filled (${ring.fill}) — it should be hollow`);
+    });
+
+    await test('the key runs the same way round as the encoding it describes', async () => {
+      // A legend can be laid out in the exact inverse of the scale it explains
+      // and still look entirely plausible, so this reads the swatches in DOM
+      // order and checks them against colorFor at the altitudes the labels name.
+      const { first, last, at90, at1 } = await p.evaluate(() => {
+        const sw = [...document.querySelectorAll('#legend i:not(.ring)')]
+          .map((el) => getComputedStyle(el).backgroundColor);
+        const hex = (h) => {
+          const n = parseInt(h.slice(1), 16);
+          return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+        };
+        return {
+          first: sw[0], last: sw[sw.length - 1],
+          at90: hex(window.eclipse.colorFor(90)), at1: hex(window.eclipse.colorFor(1)),
+        };
+      });
+      assert.equal(first, at90, 'the swatch beside "sun 90°" is not the colour a 90° sun gets');
+      assert.equal(last, at1, 'the swatch beside "1°" is not the colour a 1° sun gets');
+      assert.notEqual(first, last, 'the key has no range at all');
+    });
+
+    await test('the years read in astronomical numbering, where there is a year zero', async () => {
+      // The catalog has three eclipses in year 0, which is 1 BC — so the first
+      // row is 2000 BC, not 1999 BC, and no eclipse is ever "0 AD".
+      const labels = await p.evaluate(async () => {
+        const out = {};
+        window.eclipse.setIndex(1);
+        out.first = document.getElementById('year').textContent;
+        window.eclipse.setIndex(window.eclipse.total());
+        out.last = document.getElementById('year').textContent;
+        return out;
+      });
+      assert.equal(labels.first, '2000 BC', `the catalog opens at ${labels.first}`);
+      assert.equal(labels.last, '3000 AD', `the catalog closes at ${labels.last}`);
     });
 
     await p.close();
