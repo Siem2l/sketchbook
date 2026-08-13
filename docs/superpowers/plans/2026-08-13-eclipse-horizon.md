@@ -434,9 +434,9 @@ export function drawGlobe(ctx, view, r, cx, cy) {
 ```js
 // Every solar eclipse NASA has computed, from 1999 BC to 3000 AD, plotted at
 // the point where it peaked. The claim the page makes is not subtle and is not
-// argued: a third of them have the Sun at exactly 0°, and every one of those
-// lands between 60° and 80° of latitude. Turn the globe and the two rings are
-// simply there.
+// argued: 4,294 of the 11,898 — 36% — have the Sun at exactly 0°, and every
+// one of those lands between 60° and 72° of latitude, with nothing outside the
+// band. Turn the globe and the two rings are simply there.
 //
 // Why gamma: the Moon's shadow axis misses the Earth's centre by a distance
 // that, over 5,000 years, is uniformly distributed from 0 to about 1.55 Earth
@@ -449,9 +449,10 @@ export function drawGlobe(ctx, view, r, cx, cy) {
 // is the bright end. That is backwards for an altitude scale and correct for
 // this page, whose subject is the horizon.
 //
-// No p5 and no import at all: see globe.js for why the projection does not
-// need one.
-import { project, drawGlobe } from './globe.js';
+// No drawing library of any kind — no p5, no d3, no WebGL. The only import is
+// this sketch's own projection; see globe.js for why six lines of trig did not
+// need a dependency behind them.
+import { drawGlobe } from './globe.js';
 
 const SIZE = 720;
 const canvas = document.createElement('canvas');
@@ -606,10 +607,12 @@ export function drawPoints(ctx, data, upTo, view, r, cx, cy) {
 
 - [ ] **Step 4: Wire it into sketch.js**
 
-Add the import, track the count, and extend the exposed object:
+Add the import, track the count, and extend the exposed object. `sketch.js`
+never calls `project` itself — `points.js` and `globe.js` both do, and they
+import it directly — so the import line stays two names wide:
 
 ```js
-import { project, drawGlobe } from './globe.js';
+import { drawGlobe } from './globe.js';
 import { drawPoints, colorFor } from './points.js';
 ```
 

@@ -18,6 +18,7 @@ const NOISE = `${BASE}/sketches/2026-07-message-noise/`;
 const EDGE = `${BASE}/sketches/2026-08-edge/`;
 const HYDRA = `${BASE}/sketches/2026-08-hydra-edge/`;
 const HENDRIKLAAN = `${BASE}/sketches/2026-08-hendriklaan/`;
+const ECLIPSE = `${BASE}/sketches/2026-08-eclipse-horizon/`;
 
 let passed = 0;
 const failures = [];
@@ -2635,6 +2636,21 @@ try {
     } finally {
       rmSync(FIX, { recursive: true, force: true });
     }
+  }
+
+  // ------------------------------------------------------------ eclipse-horizon
+  {
+    const p = await browser.newPage();
+    await p.goto(ECLIPSE, { waitUntil: 'load' });
+    await p.waitForFunction(() => window.eclipse?.ready(), null, { timeout: 15000 });
+    await p.waitForTimeout(400);
+
+    await test('the globe draws itself with no gesture', async () => {
+      const ink = await p.evaluate(() => window.eclipse.inkCount());
+      assert.ok(ink > 2000, `only ${ink} lit pixels — the canvas is effectively blank`);
+    });
+
+    await p.close();
   }
 
 } finally {
