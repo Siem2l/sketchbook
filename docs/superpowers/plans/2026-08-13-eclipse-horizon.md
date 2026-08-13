@@ -416,18 +416,25 @@ export function drawGlobe(ctx, view, r, cx, cy) {
   ctx.fillStyle = '#15151a';
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
 
+  // 60 and 72 are drawn heavier below, so the plain graticule skips ±60 rather
+  // than laying a thin line under a thick one.
+  const BAND = [-72, -60, 60, 72];
+
   ctx.lineWidth = 1;
   ctx.strokeStyle = '#26262e';
-  for (let lat = -75; lat <= 75; lat += 15) if (lat % 15 === 0) strokeParallel(ctx, lat, view, r, cx, cy);
+  for (let lat = -75; lat <= 75; lat += 15) {
+    if (BAND.includes(lat)) continue;
+    strokeParallel(ctx, lat, view, r, cx, cy);
+  }
   for (let lon = -180; lon < 180; lon += 15) strokeMeridian(ctx, lon, view, r, cx, cy);
 
-  // 60 and 72 are drawn heavier because they are exactly what the horizon
-  // eclipses refuse to cross — measured over all 11,898, not rounded to the
-  // graticule. Drawing them is the difference between a pattern a viewer
-  // notices and one they can check.
+  // 60 and 72 are exactly what the horizon eclipses refuse to cross — measured
+  // over all 11,898, not rounded to the graticule, which is why 72 is not on
+  // the 15° grid above. Drawing them is the difference between a pattern a
+  // viewer notices and one they can check.
   ctx.strokeStyle = '#3c4a46';
   ctx.lineWidth = 1.5;
-  for (const lat of [-72, -60, 60, 72]) strokeParallel(ctx, lat, view, r, cx, cy);
+  for (const lat of BAND) strokeParallel(ctx, lat, view, r, cx, cy);
 
   ctx.strokeStyle = '#2e2e38';
   ctx.lineWidth = 1;
@@ -464,7 +471,11 @@ const SIZE = 720;
 const canvas = document.createElement('canvas');
 canvas.width = SIZE; canvas.height = SIZE;
 document.body.insertBefore(canvas, document.getElementById('ui'));
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
+// No willReadFrequently: this canvas is written every frame and read only by
+// the test probe below. The hint asks the browser for a software-backed
+// surface, which is exactly the wrong trade for a page whose job is to draw
+// 11,898 marks per frame.
+const ctx = canvas.getContext('2d');
 
 const view = { lambda: 20, phi: 25 };
 let data = null;
@@ -480,12 +491,18 @@ function loop() { render(); requestAnimationFrame(loop); }
 window.eclipse = {
   view: () => ({ ...view }),
   ready: () => data !== null,
-  // Cheap "is anything actually drawn" probe for the tests. Counts pixels that
-  // differ from the page background on a coarse grid.
+  // Cheap "is anything actually drawn" probe for the tests. Counts opaque
+  // pixels that differ from the page background, on a coarse grid.
+  //
+  // The alpha test is not redundant. An untouched canvas is transparent black,
+  // which differs from the background tuple just as much as a drawn pixel does
+  // — so without it this returns "everything is ink" for a page that rendered
+  // nothing at all, which is the one answer it exists to rule out.
   inkCount: () => {
     const d = ctx.getImageData(0, 0, SIZE, SIZE).data;
     let n = 0;
     for (let i = 0; i < d.length; i += 4 * 4) {
+      if (d[i + 3] === 0) continue;
       if (d[i] !== 14 || d[i + 1] !== 14 || d[i + 2] !== 17) n++;
     }
     return n;
