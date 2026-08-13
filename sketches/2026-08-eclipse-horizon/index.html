@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>eclipse horizon</title>
   <style>
-    body { margin: 0; padding-bottom: 7rem; box-sizing: border-box; background: #0e0e11; color: #e8e6e0; font: 14px ui-monospace, monospace; display: grid; place-items: center; min-height: 100vh; }
+    /* The panel grew to six rows once the orientation and caveat text moved
+       into it, and it is fixed, so the page needs to reserve that much or the
+       globe's south pole sits underneath it. */
+    body { margin: 0; padding-bottom: 13rem; box-sizing: border-box; background: #0e0e11; color: #e8e6e0; font: 14px ui-monospace, monospace; display: grid; place-items: center; min-height: 100vh; }
     a.back { position: fixed; top: 1rem; left: 1rem; color: #8a877e; text-decoration: none; }
     canvas { touch-action: none; cursor: grab; }
     canvas.dragging { cursor: grabbing; }
@@ -16,8 +19,12 @@
     label { display: flex; gap: 0.3rem; align-items: center; color: #8a877e; font-size: 11px; }
     label .val { color: #e8e6e0; min-width: 3.5rem; }
     input[type=range] { accent-color: #7fb3a3; }
-    #hint { position: fixed; top: 1rem; right: 1rem; color: #8a877e; text-align: right; line-height: 1.5; font-size: 12px; max-width: 22rem; }
+    /* In the panel, not floating top-right: the cross-section is 720px wide and
+       a fixed corner block sat straight on top of it. */
+    #hint { color: #8a877e; font-size: 11px; gap: 1.2rem; max-width: 62rem; }
     #hint b { color: #e0a316; font-weight: normal; }
+    #caveat { color: #8a877e; font-size: 11px; max-width: 62rem; text-align: center; }
+    #caveat b { color: #e0a316; font-weight: normal; }
     #readout { color: #8a877e; font-size: 11px; gap: 1.1rem; }
     #readout b { color: #e8e6e0; font-weight: normal; }
     #readout .zero { color: #e0a316; }
@@ -28,18 +35,11 @@
 </head>
 <body>
   <a class="back" href="/">← sketchbook</a>
-  <div id="hint">
-    <b>above:</b> why. drag γ to slide the Moon's shadow<br />
-    across the Earth and watch where it lands.<br />
-    <b>below:</b> where. every dot is a place on Earth,<br />
-    coloured by how high the Sun stood there.<br />
-    drag to turn · space = play/pause<br />
-    <br />
-    <b>a sphere is horizon-heavy for free:</b> half of all<br />
-    daylight anywhere is below 30° too. the rings<br />
-    are what eclipses add to that.
-  </div>
   <div id="ui">
+    <div class="row" id="hint">
+      <span><b>top:</b> why — drag γ to slide the Moon's shadow across the Earth and watch where it lands.</span>
+      <span><b>bottom:</b> where — every dot is a place on Earth, coloured by how high the Sun stood there. drag to turn.</span>
+    </div>
     <div class="row">
       <button id="play">play</button>
       <button id="reset">rewind</button>
@@ -53,6 +53,9 @@
     </div>
     <div class="row" id="readout"></div>
     <div class="row" id="legend"></div>
+    <div class="row" id="caveat">
+      <span><b>a sphere is horizon-heavy for free:</b> half of all daylight anywhere is below 30° too. the rings are what eclipses add to that.</span>
+    </div>
   </div>
   <script type="module" src="./sketch.js"></script>
 </body>

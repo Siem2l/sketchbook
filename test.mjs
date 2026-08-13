@@ -73,6 +73,27 @@ try {
       assert.equal(raw.year[raw.count - 1], 3000, `ends at ${raw.year[raw.count - 1]}`);
     });
 
+    await test('the globe has a map on it, and the map covers both bands', async () => {
+      const land = JSON.parse(readFileSync(new URL('./public/data/coastline.json', import.meta.url), 'utf8'));
+      assert.ok(land.rings.length > 100, `only ${land.rings.length} coastline rings`);
+      let lo = 90, hi = -90, pts = 0;
+      for (const ring of land.rings) {
+        assert.equal(ring.length % 2, 0, 'a ring has an odd number of coordinates');
+        for (let i = 0; i < ring.length; i += 2) {
+          const lon = ring[i], lat = ring[i + 1];
+          assert.ok(lon >= -180.1 && lon <= 180.1, `longitude ${lon} out of range`);
+          assert.ok(lat >= -90.1 && lat <= 90.1, `latitude ${lat} out of range`);
+          lo = Math.min(lo, lat); hi = Math.max(hi, lat); pts++;
+        }
+      }
+      assert.ok(pts > 4000, `only ${pts} coastline points`);
+      // The horizon eclipses sit at |lat| 60-72 in both hemispheres, and the
+      // whole reason for drawing land is that those rings should cross
+      // recognisable places rather than empty grid.
+      assert.ok(hi > 72, `land reaches only ${hi.toFixed(1)}°N — the northern band has no map under it`);
+      assert.ok(lo < -60, `land reaches only ${lo.toFixed(1)}°S — the southern band has no map under it`);
+    });
+
     // The cross-section on the page is a toy: parallel sunlight, a spherical
     // Earth, no parallax, no oblateness, no atmosphere. This asserts that the
     // toy is nonetheless the actual mechanism, by holding its one prediction

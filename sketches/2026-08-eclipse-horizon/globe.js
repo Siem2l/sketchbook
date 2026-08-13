@@ -46,8 +46,50 @@ function strokeMeridian(ctx, lonDeg, view, r, cx, cy) {
   ctx.stroke();
 }
 
+// Land, drawn under the eclipses.
+//
+// Filled, not merely outlined. A coastline stroked as a thread still reads as
+// abstract line-work; a filled landmass reads as a continent, and the whole
+// point of putting geography on this sphere is that "the band crosses Siberia
+// and northern Canada" is a thing you can picture where "the band sits at 60
+// to 72 degrees" is not.
+//
+// Rings are clipped to the visible hemisphere by dropping points with z <= 0
+// and closing whatever contiguous run is left. That is not a correct spherical
+// clip — a landmass straddling the limb gets closed along a chord rather than
+// along the limb itself — but the error lives entirely under the horizon curve
+// where the sphere is edge-on, at this scale a pixel or two, and the honest
+// alternative costs a great-circle intersection per crossing for something no
+// viewer can see.
+export function drawLand(ctx, land, view, r, cx, cy) {
+  if (!land) return;
+  // Land has to be plainly visible or it may as well not be there — the first
+  // pass was two steps off the ocean and read as noise. It still sits well
+  // under the eclipse marks in both lightness and chroma, so the data stays on
+  // top: this is a basemap, not a subject.
+  ctx.fillStyle = '#2c323c';
+  ctx.strokeStyle = '#5d6877';
+  ctx.lineWidth = 0.8;
+  for (const ring of land.rings) {
+    let run = null;
+    for (let i = 0; i < ring.length; i += 2) {
+      const q = project(ring[i + 1], ring[i], view);
+      if (q.z <= 0) {
+        if (run) { ctx.fill(); ctx.stroke(); run = null; }
+        continue;
+      }
+      const px = cx + q.x * r, py = cy - q.y * r;
+      if (!run) { ctx.beginPath(); ctx.moveTo(px, py); run = true; }
+      else ctx.lineTo(px, py);
+    }
+    if (run) { ctx.fill(); ctx.stroke(); }
+  }
+}
+
 export function drawGlobe(ctx, view, r, cx, cy) {
-  ctx.fillStyle = '#15151a';
+  // Ocean, a shade cooler and darker than the page so the limb reads and the
+  // land has something to sit against.
+  ctx.fillStyle = '#12161d';
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
 
   // 60 and 72 are drawn heavier below, so the plain graticule skips ±60 rather

@@ -18,7 +18,7 @@
 // No drawing library of any kind — no p5, no d3, no WebGL. The only import is
 // this sketch's own projection; see globe.js for why six lines of trig did not
 // need a dependency behind them.
-import { drawGlobe } from './globe.js';
+import { drawGlobe, drawLand } from './globe.js';
 import { drawPoints, colorFor, RAMP, HORIZON_COLOR } from './points.js';
 import { drawGeometry, sunAltitudeFor, GAMMA_MAX } from './geometry.js';
 
@@ -49,6 +49,7 @@ const ctx = canvas.getContext('2d');
 // which reads as a bug rather than as a hemisphere. Low enough to keep both.
 const view = { lambda: 20, phi: 15 };
 let data = null;
+let land = null;
 
 let drawn = 0;
 let index = 0;            // eclipses placed so far
@@ -74,6 +75,7 @@ function render() {
   ctx.fillRect(0, 0, SIZE, SIZE);
   const r = SIZE * 0.44;
   drawGlobe(ctx, view, r, SIZE / 2, SIZE / 2);
+  drawLand(ctx, land, view, r, SIZE / 2, SIZE / 2);
   drawn = data ? drawPoints(ctx, data, index, view, r, SIZE / 2, SIZE / 2) : 0;
 }
 
@@ -230,6 +232,13 @@ window.eclipse = {
     return n;
   },
 };
+
+// The map is not required for the page to work, so it loads on its own and the
+// globe simply gains coastlines when it arrives.
+fetch('/data/coastline.json')
+  .then((r) => r.json())
+  .then((j) => { land = j; })
+  .catch((e) => { console.error('coastline.json did not load', e); });
 
 fetch('/data/eclipses.json')
   .then((r) => r.json())
