@@ -477,7 +477,10 @@ document.body.insertBefore(canvas, document.getElementById('ui'));
 // 11,898 marks per frame.
 const ctx = canvas.getContext('2d');
 
-const view = { lambda: 20, phi: 25 };
+// phi 15, not 25: the two bands sit at ±60-72, and tilting far enough to show
+// the northern one properly pushes the southern one off the limb entirely,
+// which reads as a bug rather than as a hemisphere. Low enough to keep both.
+const view = { lambda: 20, phi: 15 };
 let data = null;
 
 function render() {
@@ -597,9 +600,18 @@ export const RAMP = ['#32554b', '#467466', '#5d9383', '#77b3a1', '#90d4c0'];
 export const HORIZON_COLOR = '#e0a316';
 
 // Horizon-ness, not altitude: alt 90 is the dim end, alt 1 the bright one.
+//
+// The parameter is cos(alt), not a linear walk from 90 down to 1, and that is
+// not a cosmetic curve. Central-eclipse altitude is distributed as sin(alt) —
+// uniform gamma pushed through alt = 90 − arcsin|gamma| — so a linear ramp puts
+// roughly two thirds of all 7,604 marks into its two dimmest steps and the
+// globe comes out one flat colour. cos(alt) is that distribution's own CDF, so
+// the five steps carry equal populations and the ramp shows what it encodes.
+// Reading the scale off the physics is also what makes it honest: the steps are
+// equal shares of eclipses, not equal spans of degrees.
 export function colorFor(alt) {
   if (alt === 0) return HORIZON_COLOR;
-  const t = 1 - (alt - 1) / 89;                       // 0 at overhead, 1 at the horizon
+  const t = Math.cos(alt * Math.PI / 180);            // 0 at overhead, →1 at the horizon
   return RAMP[Math.min(RAMP.length - 1, Math.max(0, Math.round(t * (RAMP.length - 1))))];
 }
 
@@ -614,14 +626,19 @@ export function drawPoints(ctx, data, upTo, view, r, cx, cy) {
   }
   vis.sort((a, b) => a[0] - b[0]);
 
+  // Mark sizes are set by the densest case, not the sparsest. 4,294 horizon
+  // eclipses crowd into two narrow bands, and at r=2.6 their strokes overlap
+  // into one solid arc — which loses the hollow ring that is the whole point of
+  // giving them a separate mark. Smaller, thinner, and the band keeps its
+  // grain: you can see it is made of individual eclipses.
   for (const [, px, py, alt] of vis) {
     if (alt === 0) {
       ctx.strokeStyle = HORIZON_COLOR;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(px, py, 2.6, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.arc(px, py, 1.7, 0, Math.PI * 2); ctx.stroke();
     } else {
       ctx.fillStyle = colorFor(alt);
-      ctx.beginPath(); ctx.arc(px, py, 1.9, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px, py, 1.5, 0, Math.PI * 2); ctx.fill();
     }
   }
   return vis.length;
@@ -668,7 +685,13 @@ Expected: both `ok`.
 
 - [ ] **Step 6: Look at it**
 
-Run: `npm run dev`, open the sketch, and confirm by eye that two amber rings are visible near the poles and the teal dots crowd the tropics. The validator checks colour, not layout. If the rings are not obvious, the marks are too small — raise both radii by 0.5 and re-check, but do not change the colours.
+Run `npm run dev`, open the sketch, and confirm by eye that two amber bands sit near the poles and that the teal visibly varies between poles and tropics. The validator checks colour, not layout.
+
+Three things went wrong here on the first pass and every one was invisible to the tests, so look for them specifically:
+
+- **Marks too large, not too small.** At r=2.6 the 4,294 horizon rings overlap into one solid amber arc, which destroys the hollow mark that is the only reason they are drawn differently. The band should have visible grain — you should be able to see it is made of individual eclipses.
+- **The southern band clipped by the default view**, which reads as a rendering bug rather than as a hemisphere.
+- **A flat-looking ramp.** If the teal is all one colour the ramp is mis-scaled against the `sin(alt)` population, not too subtle. Fix the scale, not the palette: the hexes are validated and do not change.
 
 - [ ] **Step 7: Commit**
 

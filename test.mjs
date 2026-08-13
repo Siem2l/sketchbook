@@ -2650,6 +2650,24 @@ try {
       assert.ok(ink > 2000, `only ${ink} lit pixels — the canvas is effectively blank`);
     });
 
+    await test('an overhead eclipse and a horizon eclipse are not the same mark', async () => {
+      const c = await p.evaluate(() => [
+        window.eclipse.colorFor(0), window.eclipse.colorFor(1),
+        window.eclipse.colorFor(45), window.eclipse.colorFor(90),
+      ]);
+      assert.equal(c[0], '#e0a316', 'the horizon spike is not on its reserved colour');
+      assert.equal(c[3], '#32554b', 'overhead is not the dim end');
+      assert.equal(c[1], '#90d4c0', 'a 1-degree Sun is not the bright end');
+      assert.notEqual(c[1], c[2], 'the ramp is flat');
+    });
+
+    await test('it draws the front hemisphere and not the back', async () => {
+      const drawn = await p.evaluate(() => window.eclipse.drawn());
+      const total = await p.evaluate(() => window.eclipse.total());
+      assert.ok(drawn > 1000, `only ${drawn} marks drawn`);
+      assert.ok(drawn < total * 0.75, `${drawn} of ${total} drawn — the far side is being painted`);
+    });
+
     await p.close();
   }
 

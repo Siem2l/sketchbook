@@ -19,6 +19,7 @@
 // this sketch's own projection; see globe.js for why six lines of trig did not
 // need a dependency behind them.
 import { drawGlobe } from './globe.js';
+import { drawPoints, colorFor } from './points.js';
 
 const SIZE = 720;
 const canvas = document.createElement('canvas');
@@ -30,13 +31,20 @@ document.body.insertBefore(canvas, document.getElementById('ui'));
 // 11,898 marks per frame.
 const ctx = canvas.getContext('2d');
 
-const view = { lambda: 20, phi: 25 };
+// phi 15, not 25: the two bands sit at ±60-72, and tilting far enough to show
+// the northern one properly pushes the southern one off the limb entirely,
+// which reads as a bug rather than as a hemisphere. Low enough to keep both.
+const view = { lambda: 20, phi: 15 };
 let data = null;
+
+let drawn = 0;
 
 function render() {
   ctx.fillStyle = '#0e0e11';
   ctx.fillRect(0, 0, SIZE, SIZE);
-  drawGlobe(ctx, view, SIZE * 0.44, SIZE / 2, SIZE / 2);
+  const r = SIZE * 0.44;
+  drawGlobe(ctx, view, r, SIZE / 2, SIZE / 2);
+  drawn = data ? drawPoints(ctx, data, data.count, view, r, SIZE / 2, SIZE / 2) : 0;
 }
 
 function loop() { render(); requestAnimationFrame(loop); }
@@ -44,6 +52,9 @@ function loop() { render(); requestAnimationFrame(loop); }
 window.eclipse = {
   view: () => ({ ...view }),
   ready: () => data !== null,
+  drawn: () => drawn,
+  total: () => (data ? data.count : 0),
+  colorFor,
   // Cheap "is anything actually drawn" probe for the tests. Counts opaque
   // pixels that differ from the page background, on a coarse grid.
   //
