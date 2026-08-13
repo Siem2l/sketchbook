@@ -210,6 +210,24 @@ Expected: 50 dots, then a summary. The eclipse count should be near 11,898 and t
 
 **If the count differs from 11,898, the parser is right and the spec's number was wrong** — say so in the commit message and move on. If any line reports `unmatched`, stop: read the offending line and widen `ROW` to cover it. Do not loosen `LOOKS_LIKE_ROW` to make the error disappear.
 
+**The measured numbers govern, and they may not be the ones written here.** The
+`60`/`80` latitude band and the ~35% horizon share were measured over 20 of the
+catalog's 50 centuries (1001–3000 CE). The full run may widen the band or shift
+the share. The data is the authority, not this plan:
+
+- Record the script's printed band and share.
+- If the band is not exactly 60–80, change the two bounds in this task's
+  latitude test to the measured values, and report the real numbers in your
+  report file. Do **not** loosen the test into a tautology like `>= 0` — a band
+  of 58–81 is still a claim worth asserting; "some latitude" is not.
+- A band that is not a band at all — horizon eclipses appearing near the equator
+  — is not a number to update. It falsifies the sketch's premise. Stop and
+  report BLOCKED with the offending rows.
+- Later tasks hardcode the same numbers (Task 5 asserts `latMin`/`latMax` and
+  the ~35%/~45% shares; Task 6's README entry and Task 2's `meta.json` state
+  them in prose). Your report file must state the measured values plainly so
+  those tasks use them rather than the ones written here.
+
 - [ ] **Step 5: Run the tests to verify they pass**
 
 Run: `npm test 2>&1 | grep -A2 -i eclipse`
@@ -951,7 +969,17 @@ await test('the page says what its colours mean, in degrees', async () => {
   const swatches = await p.evaluate(() =>
     [...document.querySelectorAll('#legend i')].map((el) => getComputedStyle(el).backgroundColor));
   assert.ok(swatches.length >= 5, `only ${swatches.length} swatches`);
-  assert.ok(swatches.includes('rgb(224, 163, 22)'), 'the reserved horizon colour is missing from the legend');
+
+  // The horizon key must be hollow like the mark it stands for. Asserting on
+  // the border rather than the fill is the point: a filled amber dot here
+  // would advertise an encoding the globe does not use.
+  const ring = await p.evaluate(() => {
+    const s = getComputedStyle(document.querySelector('#legend i.ring'));
+    return { border: s.borderTopColor, fill: s.backgroundColor };
+  });
+  assert.equal(ring.border, 'rgb(224, 163, 22)', 'the horizon key is not on its reserved colour');
+  assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(ring.fill),
+    `the horizon key is filled (${ring.fill}) — it should be hollow`);
 });
 ```
 
@@ -973,7 +1001,7 @@ Add to the `<style>` block:
 ```css
     #legend { color: #8a877e; font-size: 11px; gap: 0.35rem; align-items: center; }
     #legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
-    #legend i.ring { background: none; border: 1.5px solid #e0a316; }
+    #legend i.ring { background: transparent; border: 1.5px solid #e0a316; }
 ```
 
 Build it in `sketch.js`, importing `RAMP` and `HORIZON_COLOR`:
@@ -988,11 +1016,14 @@ function buildLegend() {
     + RAMP.map(swatch).reverse().join('')
     + '<span>1°</span>'
     + '<span style="margin-left:0.8rem">on the horizon, 0°</span>'
-    + `<i class="ring" style="background:${HORIZON_COLOR}"></i>`;
+    + `<i class="ring" style="border-color:${HORIZON_COLOR}"></i>`;
 }
 ```
 
-The ring swatch needs the reserved colour present as a background for the test's `getComputedStyle` check and visible as a border for the reader; `background` is overridden by the inline style while `border` comes from the class, so both hold. Call `buildLegend()` in the load callback.
+The horizon swatch is styled through `border-color`, never `background` — it has
+to be hollow, because it stands for a hollow mark. Setting a background here
+would make the key advertise a filled dot the globe never draws. Call
+`buildLegend()` in the load callback.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
