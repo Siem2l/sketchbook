@@ -18,6 +18,7 @@ const NOISE = `${BASE}/sketches/2026-07-message-noise/`;
 const EDGE = `${BASE}/sketches/2026-08-edge/`;
 const HYDRA = `${BASE}/sketches/2026-08-hydra-edge/`;
 const HENDRIKLAAN = `${BASE}/sketches/2026-08-hendriklaan/`;
+const ERRAND = `${BASE}/sketches/2026-08-errand/`;
 
 let passed = 0;
 const failures = [];
@@ -2452,6 +2453,136 @@ try {
       }
       await el(() => window.__elsewhere.setColour(0));
       assert.deepEqual(errors, []);
+    });
+
+    await p.close();
+  }
+
+  // ------------------------------------------------------------------ errand
+  {
+    // The route module is pure, so the geometry is checked in node and only the
+    // ride itself needs a browser.
+    const R = await import('./sketches/2026-08-errand/route.js');
+    const route = R.buildRoute();
+
+    await test('the lane closes, and closes smoothly', async () => {
+      const a = R.at(route, 0);
+      const b = R.at(route, route.length);
+      assert.ok(Math.hypot(a.x - b.x, a.y - b.y) < 1e-6, 'the loop does not meet itself');
+      // A kink at the seam would show up as a heading that jumps there and
+      // nowhere else, which on screen is the bike snapping through two facings.
+      let worst = 0;
+      for (let s = 0; s < route.length; s += route.step) {
+        let d = R.at(route, s + route.step).heading - R.at(route, s).heading;
+        if (d > Math.PI) d -= Math.PI * 2;
+        if (d < -Math.PI) d += Math.PI * 2;
+        worst = Math.max(worst, Math.abs(d));
+      }
+      assert.ok(worst < 0.09, `heading jumps by ${worst.toFixed(3)} rad somewhere on the loop`);
+    });
+
+    await test('one circuit uses all eight facings the sheet holds', async () => {
+      const seen = new Set();
+      for (let s = 0; s < route.length; s += route.step) {
+        const step = Math.round((R.at(route, s).heading - Math.PI / 4) / (Math.PI * 2 / 8));
+        seen.add(((step % 8) + 8) % 8);
+      }
+      assert.equal(seen.size, 8, `only ${seen.size} of 8 facings are ridden through`);
+    });
+
+    await test('nothing is placed in the carriageway or in the river', async () => {
+      const props = R.placeProps(route);
+      const river = R.riverAt(route);
+      assert.ok(props.length > 30, `only ${props.length} props placed`);
+      for (const prop of props) {
+        if (prop.kind === 'plank') continue;
+        assert.ok(prop.dist > R.ROAD_HALF, `a ${prop.kind} stands on the road at s=${prop.s.toFixed(0)}`);
+        const acrossRiver = Math.abs((prop.x - river.x) * river.nx + (prop.y - river.y) * river.ny);
+        assert.ok(acrossRiver >= river.width, `a ${prop.kind} stands in the river`);
+      }
+    });
+
+    const p = await browser.newPage();
+    await p.goto(`${ERRAND}`, { waitUntil: 'load' });
+    await p.waitForTimeout(900);
+
+    const ride = () => p.evaluate(() => ({ ...window.errand.ride, tier: window.errand.tiers() }));
+
+    await test('it arrives rolling, with no gesture and no audio context', async () => {
+      const r = await ride();
+      assert.ok(r.s > 10, `the bike has not moved on its own (s=${r.s})`);
+      assert.ok(r.v > 0, 'the bike is not rolling on load');
+      // The thumbnail grabber and every test above depend on a page that moves
+      // without being clicked and stays silent until it is asked.
+      assert.equal(await p.evaluate(() => !!window.errand.audio.ctx), false,
+        'an AudioContext was opened without a gesture');
+    });
+
+    await test('let go and it coasts to a stop, and the lanes empty with it', async () => {
+      await p.waitForTimeout(6000);
+      const r = await ride();
+      assert.equal(r.v, 0, `still rolling at ${r.v}`);
+      assert.equal(r.tier, 0, 'a stopped bike is still holding a lane open');
+      const pat = await p.evaluate(() => ({ ...window.errand.pattern }));
+      assert.equal(pat.kick | pat.bass | pat.hat, 0, 'the sequencer is still playing to a parked bike');
+      assert.equal(pat.pad, 1, 'the drone went with it');
+    });
+
+    await test('pedalling turns the wheel, the bar, and the arrangement', async () => {
+      const before = await ride();
+      await p.keyboard.down('Space');
+      await p.waitForTimeout(3500);
+      const after = await ride();
+      await p.keyboard.up('Space');
+      assert.ok(after.v > 90, `pedalling only reached ${after.v.toFixed(0)}`);
+      assert.ok(after.s > before.s, 'pedalling did not move the bike');
+      // The claim the page makes in its own header: beats come from distance.
+      assert.ok(after.beats > before.beats, 'the bar did not advance with the wheel');
+      assert.equal(after.tier, 3, `speed did not fill the arrangement (tier ${after.tier})`);
+      const pat = await p.evaluate(() => ({ ...window.errand.pattern }));
+      assert.ok(pat.kick && pat.bass && pat.hat, 'a lane stayed empty at full speed');
+    });
+
+    await test('the roll phase is driven by the ground, not by a clock', async () => {
+      // Held still, a timer-driven animation keeps stepping and a
+      // distance-driven one does not. That is the whole difference, and it is
+      // the difference between wheels that turn and wheels that skate.
+      await p.waitForFunction(() => window.errand.ride.v === 0, null, { timeout: 15000 });
+      const rows = new Set();
+      for (let i = 0; i < 8; i++) {
+        rows.add(await p.evaluate(() => window.errand.ride.row));
+        await p.waitForTimeout(120);
+      }
+      assert.equal(rows.size, 1, `the wheel turned while the bike was parked (rows ${[...rows]})`);
+
+      await p.keyboard.down('Space');
+      const moving = new Set();
+      for (let i = 0; i < 14; i++) {
+        moving.add(await p.evaluate(() => window.errand.ride.row));
+        await p.waitForTimeout(90);
+      }
+      await p.keyboard.up('Space');
+      assert.equal(moving.size, 4, `rolling used ${moving.size} of 4 phases`);
+    });
+
+    await test('riding past a thing plays it', async () => {
+      const struck = await p.evaluate(async () => {
+        const { ride, props, audio } = window.errand;
+        const calls = [];
+        const real = audio.strike.bind(audio);
+        audio.strike = (kind, hz) => { calls.push({ kind, hz }); return real(kind, hz); };
+        // Put the bike just short of the chapel and let it roll past.
+        const chapel = props.find((x) => x.kind === 'chapel');
+        ride.s = chapel.s - 30;
+        ride.v = 120;
+        await new Promise((r) => setTimeout(r, 900));
+        audio.strike = real;
+        return calls;
+      });
+      assert.ok(struck.length > 0, 'passing the chapel struck nothing');
+      assert.ok(struck.some((c) => c.kind === 'bell'), `no bell among ${JSON.stringify(struck)}`);
+      // Pitches come out of the diatonic pool in shared/audio.js, never raw.
+      assert.ok(struck.every((c) => c.hz > 20 && c.hz < 4000), 'a strike landed off the keyboard');
     });
 
     await p.close();

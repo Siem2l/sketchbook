@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>errand</title>
+  <style>
+    html, body { height: 100%; }
+    body { margin: 0; background: #12141a; color: #e8e6e0; font: 14px ui-monospace, monospace; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: pointer; image-rendering: pixelated; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #8a877e; text-decoration: none; z-index: 3; }
+
+    #meta { position: fixed; top: 3rem; left: 1rem; z-index: 3; color: #8a877e; font-size: 11px; line-height: 1.7; max-width: 19rem; }
+    #meta b { color: #e8e6e0; font-weight: normal; }
+
+    #hint { position: fixed; top: 1rem; right: 1rem; z-index: 3; color: #8a877e; text-align: right; line-height: 1.6; font-size: 12px; }
+    #hint kbd { color: #e8e6e0; font: inherit; }
+    /* The hint stops shouting once you are actually pedalling — it has said its
+       piece and the road is the thing to look at. */
+    body.pedalling #hint { opacity: 0.35; }
+    #hint { transition: opacity 0.4s; }
+
+    #ui { position: fixed; bottom: 0.75rem; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 2rem); z-index: 3;
+          display: flex; flex-direction: column; gap: 0.45rem; background: #171a20dd; padding: 0.55rem 0.8rem; border-radius: 8px; }
+    .row { display: flex; gap: 0.9rem; align-items: center; justify-content: center; flex-wrap: wrap; }
+    button { background: #222630; color: #e8e6e0; border: 1px solid #3a3f48; border-radius: 4px; padding: 0.3rem 0.6rem; font: inherit; font-size: 13px; cursor: pointer; }
+    button:hover { border-color: #e0a316; }
+    button.on { border-color: #e0a316; color: #e0a316; }
+
+    .stat { color: #8a877e; font-size: 11px; letter-spacing: 0.06em; display: flex; gap: 0.35rem; align-items: baseline; }
+    .stat b { color: #e8e6e0; font-weight: normal; font-size: 13px; min-width: 1.6rem; text-align: right; }
+    #zone { color: #e0a316; text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; min-width: 7rem; }
+
+    /* The three lanes the speed switches on, as three lamps. The coupling is
+       the point of the page, so it is on screen rather than in the source. */
+    #voices { display: flex; gap: 0.3rem; align-items: center; color: #55535e; font-size: 10px; letter-spacing: 0.08em; }
+    #voices b { font-weight: normal; color: #3a3f48; border: 1px solid #2a2e36; border-radius: 3px; padding: 0 0.3rem; }
+    #voices b.on { color: #e0a316; border-color: #e0a316; }
+
+    #bar { height: 3px; background: #222630; border-radius: 2px; overflow: hidden; }
+    #bar span { display: block; height: 100%; width: 0%; background: #7fb3a3; }
+    #note { color: #e0a316; font-size: 11px; min-height: 1em; text-align: center; }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← sketchbook</a>
+  <canvas id="stage"></canvas>
+
+  <div id="meta">
+    <b>errand</b> — a lane that goes round, and a tune you pedal.<br />
+    The wheel turns the bar: <b>beats advance with distance, not time</b>, so the
+    tempo is your cadence and stopping is a ritardando. Everything beside the
+    road carries the distance it stands at, and passing it plays it.
+  </div>
+
+  <div id="hint">
+    <kbd>SPACE</kbd> / hold anywhere — pedal<br />
+    <kbd>S</kbd> — sound<br />
+    let go and it coasts
+  </div>
+
+  <div id="ui">
+    <div class="row">
+      <span id="zone">village</span>
+      <span class="stat">pace <b id="speed">0</b></span>
+      <span class="stat">bpm <b id="bpm">—</b></span>
+      <span class="stat">lap <b id="lap">0</b></span>
+      <span id="voices">lanes <b>kick</b><b>bass</b><b>hat</b></span>
+      <button id="sound">sound off</button>
+    </div>
+    <div id="bar"><span></span></div>
+    <div id="note"></div>
+  </div>
+
+  <script type="module" src="./sketch.js"></script>
+</body>
+</html>

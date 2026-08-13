@@ -1,0 +1,13 @@
+{
+  "title": "errand",
+  "date": "2026-08-13",
+  "tags": [
+    "isometric",
+    "pixel-art",
+    "sprites",
+    "audio",
+    "generated-assets"
+  ],
+  "description": "A blacksmith's bicycle on a lane that goes round, ridden by holding one key. The sprite is generated rather than drawn — one signed-distance model rendered from eight yaws and four roll phases, quantised to 24 colours — and the page shares its camera, so the world and the bike agree about north. The wheel turns the bar: beats advance with distance rather than time, so the tempo is your cadence, coasting to a halt is a ritardando, and speed adds voices by setting bits in a sixteen-step mask. Everything standing beside the road carries the distance it sits at, and riding past it plays it.",
+  "thumbnail": "thumb.png"
+}
