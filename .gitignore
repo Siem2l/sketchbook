@@ -7,3 +7,6 @@ gallery-data.json
 # the seed + n recorded inside every ranking in lab/results/. The rankings are
 # the data worth keeping; the pngs are a cache.
 lab/variants/
+
+# Harness-managed worktrees: scratch checkouts, never part of the repo.
+.claude/worktrees/
