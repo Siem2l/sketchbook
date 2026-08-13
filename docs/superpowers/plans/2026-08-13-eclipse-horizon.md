@@ -321,7 +321,13 @@ Expected: FAIL — the page 404s, so `window.eclipse` never appears and `waitFor
 
 - [ ] **Step 4: Write index.html**
 
-Follow `sketches/2026-08-edge/index.html` exactly for the chrome — same back link, same `#ui` panel rules, same fonts and colours. The controls are added in Task 5; leave the panel in place with only the hint block populated.
+Take the chrome from `sketches/2026-08-edge/index.html` — same back link, same
+`#ui` panel, same fonts and colours, so the two pages are visibly siblings.
+"Same visual language", not "byte-identical stylesheet": this page has a hint
+block that `edge` does not, has no `#note` element to style, and needs a wider
+`label .val` because its readout says `1999 BC` where `edge`'s says a number.
+Diverge where this page genuinely differs and nowhere else. The controls are
+added in Task 5; leave the panel in place with only the hint block populated.
 
 ```html
 <!doctype html>
