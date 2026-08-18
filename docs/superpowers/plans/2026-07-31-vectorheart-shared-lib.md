@@ -45,6 +45,58 @@ different image every time. Task 1 fixes this by giving splinter a `?seed=`
 URL parameter and building a deterministic capture harness. The thumbnails
 remain a coarse net; `scripts/pixels.js` is the real one.
 
+## A second correction: what the generator landed after this plan was written
+
+This plan was written against `2026-07-inconstructions` at 804 lines. That
+sketch has since gained a generator, an on-canvas parameter dashboard and two
+endless modes (`.scratch/inconstructions-generator/spec.md`,
+`.scratch/inconstructions-endless/spec.md`) and is now ~1840 lines. Four things
+change; the architecture does not.
+
+**1. `panel.js` needs a slider, and the hit layer needs drags.** The dashboard
+introduced the first drag interaction in either sketch — a slider row of label,
+track and value that reports a position as it is dragged. Task 6's `hitLayer`
+grows a drag variant, and Task 7 grows `slider`:
+
+```js
+layer.add(x, y, w, h, { action, drag, label })   // drag(mx, my) is optional
+layer.press(x, y) -> hit | null                  // for the sketch to hold onto
+slider(g, k, x, y, w, label, value, set, { style, layer })
+```
+
+The *lifecycle* stays in the sketch. inconstructions snapshots the world when a
+drag starts and records one `load` op when it ends, so a drag from 0.2 to 0.8
+costs one undo rather than sixty — that is undo semantics, not UI, and the
+library has no business knowing about it. The library's job ends at "this hit
+wants to hear about mouse movement".
+
+**2. `readout` must return its bottom edge.** The readout column is no longer a
+fixed four rows: TOWER mode adds ALT and MODULE, and the printed parameter line
+and the generator panel both stack below it. Task 3's `readout` returns the y it
+finished at, the way `strip`/`stack` already return their end coordinate.
+
+**3. Both sketches now print a parameter line.** splinter has had one; the
+dashboard added one to inconstructions, for the same reason — the seed and
+parameters that reproduce a composition, printed into the PNG. That is a third
+entry for `footer` in Task 3 rather than a new primitive.
+
+**4. Line references in the tasks below are stale.** Every `sketch.js:NNN`
+citation for inconstructions predates the generator. Locate the symbol by name;
+the surrounding code is unchanged in shape.
+
+Two things that do *not* change, checked rather than assumed:
+
+- **The pixel harness still works.** Task 1 polls `demoDone()` rather than
+  waiting a fixed interval, which is exactly right — under load the opening
+  replay takes far longer than the four seconds it nominally runs for. FLUX and
+  TOWER are both off on load, so the captured frame stays deterministic. Do not
+  add a capture with either mode enabled; they animate forever by design.
+- **The reserved keys still hold.** The dashboard's verbs — `t` template,
+  `m` symmetry, `g` grow, `n` step, `p` panel, `f` flux, `w` tower — are all
+  sketch-specific and collide with nothing in `RESERVED`. They do make Task 8's
+  payoff larger: the hardcoded hint string it replaces is now three hardcoded
+  lines that have to be maintained by hand alongside the bindings.
+
 ## File Structure
 
 **Created:**
@@ -493,6 +545,8 @@ export function titleBlock(g, k, {
 
 // A right-aligned label/value column — CELL, PARTS, BEARING and so on. `x` is
 // the right edge that values flush to; labels flush to `x - gap`.
+// Returns the y it finished at, so callers can stack under a column whose
+// length varies at runtime.
 export function readout(g, k, { x, y, rows, theme, gap = 52, rowH = 13, size = 8 }) {
   g.push();
   g.noStroke();
@@ -507,6 +561,10 @@ export function readout(g, k, { x, y, rows, theme, gap = 52, rowH = 13, size = 8
     g.text(value, x, ry);
   });
   g.pop();
+  // The column is not a fixed height — inconstructions adds ALT and MODULE in
+  // TOWER mode, and stacks its parameter line and generator panel underneath —
+  // so hand back where it finished, as strip and stack do.
+  return y + rows.length * rowH * k;
 }
 
 // Corner registration ticks. Print-shop furniture that also does the honest job
@@ -938,9 +996,16 @@ so the tests come first and drive controls by label.
   - `button(g, k, x, y, w, h, label, { on, action, live, layer, style }) -> number`
     returns `x + w`, so callers can chain along a row.
   - `hitLayer() -> layer` with
-    `add(x, y, w, h, action, label)`, `region(x, y, w, h)`, `hit(x, y) -> boolean`
-    (runs the action and returns whether one fired), `swallows(x, y) -> boolean`,
-    `find(label) -> {x, y, w, h} | null`, `clear()`.
+    `add(x, y, w, h, { action, drag, label })`, `region(x, y, w, h)`,
+    `hit(x, y) -> boolean` (runs the action and returns whether one fired),
+    `press(x, y) -> hit | null` (returns a hit carrying a `drag` handler so the
+    sketch can hold onto it for the duration of a drag),
+    `swallows(x, y) -> boolean`, `find(label) -> {x, y, w, h} | null`, `clear()`.
+
+`drag` and `press` exist for the generator dashboard's sliders. The library
+reports positions; the sketch owns what a drag *means* — inconstructions
+snapshots the world on press and records one `load` op on release, so a whole
+drag is one undo. Keep that in the sketch.
 
 Two knobs exist purely to preserve pixels: `align` and `shape`. inconstructions
 centres its labels by measuring with `spacedWidth` and drawing on a baseline,
@@ -1216,6 +1281,11 @@ git commit -m "refactor(lib): share the on-canvas controls and hit testing"
   - `heading(g, k, x, y, text, { theme, size = 6.8 })`
   - `strip(g, k, x, y, h, defs, { gap, layer, style }) -> number` (returns end x)
   - `stack(g, k, x, y, w, h, defs, { gap, layer, style }) -> number` (returns end y)
+  - `slider(g, k, x, y, w, label, value, set, { style, layer, track = 62, tail = 34 })`
+    — label, track, printed value; registers a hit carrying a `drag` handler
+    that maps an x position to `set(0..1)`. Only inconstructions uses it today,
+    but it is the same shape splinter would need for its rate and mix controls,
+    which are currently cycling chips because there was no slider to reach for.
 
   A `def` is `[label, action, on]` for `stack`, and `[width, label, action, on]`
   for `strip`, matching inconstructions' existing tuple shape.

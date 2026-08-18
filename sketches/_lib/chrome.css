@@ -1,0 +1,28 @@
+/* Page chrome every Vectorheart sketch wears: a full-bleed canvas on a paper
+   field, and one way back to the gallery. Colours come from custom properties
+   the page sets, so the stylesheet carries no palette of its own. */
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+}
+body {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+canvas { display: block; }
+
+a.back {
+  position: fixed;
+  right: 1rem;
+  bottom: var(--back-bottom, 1rem);
+  z-index: 2;
+  color: var(--ink);
+  font: 11px ui-monospace, monospace;
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  opacity: var(--back-opacity, 0.5);
+}
+a.back:hover { opacity: 1; }

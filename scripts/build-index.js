@@ -9,7 +9,10 @@ const sketchesDir = resolve(root, 'sketches');
 
 const entries = [];
 for (const dir of readdirSync(sketchesDir, { withFileTypes: true })) {
-  if (!dir.isDirectory() || dir.name === '_template') continue;
+  // An underscore prefix means "not a sketch": _template is the starting point
+  // a new one is copied from, _lib is the shared Vectorheart code. Neither has
+  // meta.json and neither belongs in the gallery.
+  if (!dir.isDirectory() || dir.name.startsWith('_')) continue;
   const metaPath = resolve(sketchesDir, dir.name, 'meta.json');
   if (!existsSync(metaPath)) {
     throw new Error(`sketches/${dir.name}: missing meta.json`);

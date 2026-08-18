@@ -19,7 +19,15 @@
 //
 // A composition is a pure function of its seed. Seed, view, mix, palette and
 // motion are all printed on the page, so any image can be found again.
+import '../_lib/chrome.css';
 import p5 from 'p5';
+// spacedWidth is unused here until Task 6 needs it for centred button labels;
+// Vite tree-shakes the build, so importing it now costs nothing.
+import { spaced, spacedWidth, titleBlock, footer } from '../_lib/type.js';
+import { exportPng as exportPngTo } from '../_lib/export.js';
+import { buttonStyle, button, hitLayer, heading, stack } from '../_lib/panel.js';
+import { keymap } from '../_lib/keys.js';
+import { probe } from '../_lib/probe.js';
 
 // --------------------------------------------------------------- palettes
 
@@ -845,17 +853,18 @@ function drawScene(g, k, w, h, reveal) {
 
 // -------------------------------------------------------------------- type
 
-function spaced(g, str, x, y, tracking) {
-  let cx = x;
-  for (const ch of str) { g.text(ch, cx, y); cx += g.textWidth(ch) + tracking; }
-  return cx - x;
-}
 
 const ROWS = [
   ['WALK AROUND IT', 'DRAG TO ORBIT · WHEEL TO DOLLY'],
   ['DRAW INTO IT', 'SWITCH TO DRAW, THEN DRAG'],
   ['DETONATE IT', 'X TO EXPLODE · G GRAVITY · S PNG'],
 ];
+
+// Rebuilt each frame because the palette is a control, not a constant.
+const theme = () => {
+  const p = pal();
+  return { ink: p.ink, paper: p.bg, accent: p.accent, onAccent: '#ffffff', muted: '#6d6d66' };
+};
 
 function drawType(g, k, w, h) {
   const p = pal();
@@ -872,21 +881,22 @@ function drawType(g, k, w, h) {
   g.rect(bx - 18 * k, by - 44 * k, bw + 36 * k, 192 * k);
 
   g.textAlign(g.LEFT, g.BASELINE);
-  g.textFont(DISPLAY);
+  // Two calls, not one: the title is bold and the subtitle is not, and a single
+  // titleBlock inside a BOLD wrapper would set both.
   g.textStyle(g.BOLD);
-  g.fill(p.ink);
-  g.textSize(23 * k);
-  spaced(g, '»SPLINTER', bx, by - 16 * k, 1.4 * k);
+  titleBlock(g, k, {
+    x: bx, y: by - 16 * k,
+    title: '»SPLINTER', titleSize: 23, titleTracking: 1.4, titleFont: DISPLAY,
+    sub: null, rule: 0, theme: theme(),
+  });
   g.textStyle(g.NORMAL);
-  g.textFont('monospace');
-  g.textSize(7.2 * k);
-  g.fill('#6d6d66');
-  spaced(g, `${view().name} · ${MIXES[mixIx].name} · ${p.name} · ${cam.ortho ? 'ORTHO' : 'PERSP'} · ${seed.toString(16).toUpperCase().padStart(8, '0')}`,
-    bx, by - 4 * k, 0.9 * k);
-
-  g.stroke('#bdbdb6');
-  g.strokeWeight(1 * k);
-  g.line(bx, by + 4 * k, bx + bw, by + 4 * k);
+  titleBlock(g, k, {
+    x: bx, y: by - 16 * k, title: '',
+    sub: `${view().name} · ${MIXES[mixIx].name} · ${p.name} · ${cam.ortho ? 'ORTHO' : 'PERSP'} · ${seed.toString(16).toUpperCase().padStart(8, '0')}`,
+    subSize: 7.2, subTracking: 0.9, subDy: 12,
+    rule: bw / k, ruleColor: '#bdbdb6', ruleDy: 20,
+    theme: theme(),
+  });
   g.noStroke();
 
   ROWS.forEach(([title, sub], i) => {
@@ -914,23 +924,15 @@ function drawType(g, k, w, h) {
 
 // ------------------------------------------------------------------- panel
 
-let uiHits = [];
-let uiBounds = { x: 0, y: 0, w: 0, h: 0 };
+const ui = hitLayer();
 
+// Rebuilt per call rather than frozen once: the palette is a control here, so
+// the theme the buttons draw with changes under them.
+const chipStyle = () => buttonStyle({ theme: theme(), size: 7.2, dy: 0.5, align: 'center', shape: 'rect' });
+
+// The wrapper stays so the thirty-odd call sites in drawPanel do not change.
 function chip(g, k, x, y, w, h, label, on, action, live) {
-  const p = pal();
-  g.fill(on ? p.accent : 'rgba(0,0,0,0)');
-  g.stroke(p.ink);
-  g.strokeWeight(1 * k);
-  g.rect(x, y, w, h);
-  g.noStroke();
-  g.fill(on ? '#ffffff' : p.ink);
-  g.textFont('monospace');
-  g.textSize(7.2 * k);
-  g.textAlign(g.CENTER, g.CENTER);
-  g.text(label, x + w / 2, y + h / 2 + 0.5 * k);
-  g.textAlign(g.LEFT, g.BASELINE);
-  if (live) uiHits.push({ x, y, w, h, action, label });
+  button(g, k, x, y, w, h, label, { on, action, live, layer: ui, style: chipStyle() });
 }
 
 function drawPanel(g, k, w, h, live) {
@@ -947,36 +949,34 @@ function drawPanel(g, k, w, h, live) {
   g.fill(bgc);
   g.rect(M - 10 * k, top, panelW + 20 * k, 440 * k);
 
-  const heading = (t) => {
-    g.noStroke(); g.fill('#6d6d66'); g.textFont('monospace'); g.textSize(6.8 * k);
-    g.textAlign(g.LEFT, g.BASELINE); g.text(t, M, y - 6 * k); y += 2 * k;
-  };
+  // The shared heading draws only; the 2k spacer it used to fold in stays here,
+  // where the column's vertical rhythm lives.
+  const head = (t) => { heading(g, k, M, y - 6 * k, t, { theme: theme() }); y += 2 * k; };
 
-  heading('MODE');
+  head('MODE');
   chip(g, k, M, y, cw, bh, 'LOOK', mode === 'LOOK', () => { mode = 'LOOK'; }, live);
   chip(g, k, M + cw + gap, y, cw, bh, 'DRAW', mode === 'DRAW', () => { mode = 'DRAW'; }, live);
   y += bh + gap + 12 * k;
 
-  heading('COMPONENTS');
+  head('COMPONENTS');
   COMP_KEYS.forEach((key, i) => {
     chip(g, k, M + (i % 2) * (cw + gap), y + Math.floor(i / 2) * (bh + gap), cw, bh,
       key.toUpperCase(), COMP[key], () => { COMP[key] = !COMP[key]; regenerate(); }, live);
   });
   y += Math.ceil(COMP_KEYS.length / 2) * (bh + gap) + 12 * k;
 
-  heading('COMPOSITION');
-  const cyc = [
-    [`VIEW ${view().name}`, () => { viewIx = (viewIx + 1) % VIEWS.length; regenerate(); }],
-    [`MIX ${MIXES[mixIx].name}`, () => { mixIx = (mixIx + 1) % MIXES.length; regenerate(); }],
-    [`PAL ${pal().name}`, () => { paletteIx = (paletteIx + 1) % PALETTES.length; regenerate(); }],
-    [`CAM ${cam.ortho ? 'ORTHO' : 'PERSP'}`, () => { cam.ortho = !cam.ortho; P.loop(); }],
-    [`TIME ${MOTIONS[motionIx].name}`, () => { motionIx = (motionIx + 1) % MOTIONS.length; P.loop(); }],
-    [`RATE ${SPEEDS[speedIx].name}`, () => { speedIx = (speedIx + 1) % SPEEDS.length; }],
-  ];
-  for (const [label, action] of cyc) { chip(g, k, M, y, panelW, bh, label, false, action, live); y += bh + gap; }
+  head('COMPOSITION');
+  y = stack(g, k, M, y, panelW, bh, [
+    [`VIEW ${view().name}`, () => { viewIx = (viewIx + 1) % VIEWS.length; regenerate(); }, false],
+    [`MIX ${MIXES[mixIx].name}`, () => { mixIx = (mixIx + 1) % MIXES.length; regenerate(); }, false],
+    [`PAL ${pal().name}`, () => { paletteIx = (paletteIx + 1) % PALETTES.length; regenerate(); }, false],
+    [`CAM ${cam.ortho ? 'ORTHO' : 'PERSP'}`, () => { cam.ortho = !cam.ortho; P.loop(); }, false],
+    [`TIME ${MOTIONS[motionIx].name}`, () => { motionIx = (motionIx + 1) % MOTIONS.length; P.loop(); }, false],
+    [`RATE ${SPEEDS[speedIx].name}`, () => { speedIx = (speedIx + 1) % SPEEDS.length; }, false],
+  ], { gap: 4, layer: ui, style: chipStyle(), live });
 
   y += 10 * k;
-  heading('PHYSICS');
+  head('PHYSICS');
   chip(g, k, M, y, panelW, bh, sim.live ? 'RE-DETONATE' : 'DETONATE', sim.live, () => detonate(), live);
   y += bh + gap;
   chip(g, k, M, y, cw, bh, 'GRAVITY', sim.gravity,
@@ -998,12 +998,9 @@ function drawPanel(g, k, w, h, live) {
   chip(g, k, M + cw + gap, y, cw, bh, 'CLEAR', false, () => { strokes = []; P.loop(); }, live);
   y += bh + gap;
 
-  uiBounds = { x: M - 10 * k, y: top, w: panelW + 20 * k, h: y - top + 6 * k };
+  ui.region(M - 10 * k, top, panelW + 20 * k, y - top + 6 * k);
   g.pop();
 }
-
-const insidePanel = (x, y) => x >= uiBounds.x && x <= uiBounds.x + uiBounds.w
-  && y >= uiBounds.y && y <= uiBounds.y + uiBounds.h;
 
 // ------------------------------------------------------------------ sketch
 
@@ -1015,16 +1012,14 @@ function render(g, k, w, h, reveal, withPanel) {
   drawScene(g, k, w, h, reveal);
   drawType(g, k, w, h);
   // The panel is a tool, not part of the poster — the export leaves it out.
-  if (withPanel) { uiHits = []; drawPanel(g, k, w, h, true); }
-  g.push();
-  g.noStroke();
-  g.fill('#6d6d66');
-  g.textFont('monospace');
-  g.textSize(7 * k);
-  g.textAlign(g.LEFT, g.BASELINE);
-  spaced(g, `SKETCHBOOK · SIEM2L.NL · ${strokes.length} STROKE${strokes.length === 1 ? '' : 'S'}`,
-    36 * k, h - 28 * k, 1.2 * k);
-  g.pop();
+  if (withPanel) { ui.clear(); drawPanel(g, k, w, h, true); }
+  // The overlay is a tool like the panel, so the export leaves it out too.
+  if (withPanel) KEYS.overlay(g, k, w, h, { theme: theme(), title: 'SPLINTER · KEYS' });
+  footer(g, k, {
+    x: 36 * k, y: h - 28 * k,
+    text: `SKETCHBOOK · SIEM2L.NL · ${strokes.length} STROKE${strokes.length === 1 ? '' : 'S'}`,
+    theme: theme(),
+  });
 }
 
 function reseed() {
@@ -1033,57 +1028,82 @@ function reseed() {
 }
 
 function exportPng() {
-  const p = P, k = 3;
-  const g = p.createGraphics(p.width * k, p.height * k);
   const su = unit;
-  updateCamera(p.width, p.height);
-  render(g, k, p.width * k, p.height * k, 1.1, false);
+  updateCamera(P.width, P.height);
+  exportPngTo(P, {
+    name: `splinter-${seed.toString(16)}`,
+    render: (g, k) => render(g, k, P.width * k, P.height * k, 1.1, false),
+  });
   unit = su;
-  p.saveCanvas(g, `splinter-${seed.toString(16)}`, 'png');
-  setTimeout(() => g.remove(), 200);
 }
 
 // Read-only view of what the interface already shows, for the behaviour tests.
-if (typeof window !== 'undefined') {
-  window.__splinter = {
-    seed: () => seed,
-    palette: () => pal().name,
-    view: () => view().name,
-    mix: () => MIXES[mixIx].name,
-    motion: () => MOTIONS[motionIx].name,
-    speed: () => SPEEDS[speedIx].name,
-    mode: () => mode,
-    ortho: () => cam.ortho,
-    camera: () => ({ yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist }),
-    components: () => ({ ...COMP }),
-    pieces: () => scene.length,
-    strokes: () => strokes.length,
-    strokePieces: () => strokes.reduce((a, s) => a + s.length, 0),
-    // Where a named button actually is, so tests never hardcode a pixel and
-    // break the moment the panel gains a row.
-    buttonAt: (label) => {
-      const b = uiHits.find((h) => h.label === label || h.label.startsWith(label));
-      return b ? { x: Math.round(b.x + b.w / 2), y: Math.round(b.y + b.h / 2) } : null;
-    },
-    physics: () => ({ live: sim.live, gravity: sim.gravity, floor: sim.floor,
-      collide: sim.collide, t: sim.t }),
-    collision: () => ({ bodies: bodies.length, contacts: contactCount,
-      worstDepth: +worstDepth.toFixed(4) }),
-    // Mean clearance above the floor *surface beneath each body*. Measuring
-    // against a flat datum would just report the bowl's curvature; this reports
-    // stacking, which is the thing collision is supposed to produce.
-    pileHeight: () => (bodies.length
-      ? bodies.reduce((a, b) => a + (b.at.y - floorAt(b.at.x, b.at.z)), 0) / bodies.length : 0),
-    // Mean distance from each fragment's designed position — 0 when settled.
-    spread: () => {
-      let n = 0, d = 0;
-      for (const it of scene) { if (!it.home) continue; n++; d += Math.hypot(it.at.x - it.home.x, it.at.y - it.home.y, it.at.z - it.home.z); }
-      return n ? d / n : 0;
-    },
-    lowest: () => scene.reduce((m, it) => Math.min(m, it.at ? it.at.y : m), Infinity),
-    settled: () => performance.now() - revealAt > 1500,
-  };
+probe('splinter', {
+  seed: () => seed,
+  palette: () => pal().name,
+  view: () => view().name,
+  mix: () => MIXES[mixIx].name,
+  motion: () => MOTIONS[motionIx].name,
+  speed: () => SPEEDS[speedIx].name,
+  mode: () => mode,
+  ortho: () => cam.ortho,
+  camera: () => ({ yaw: cam.yaw, pitch: cam.pitch, dist: cam.dist }),
+  components: () => ({ ...COMP }),
+  pieces: () => scene.length,
+  strokes: () => strokes.length,
+  strokePieces: () => strokes.reduce((a, s) => a + s.length, 0),
+  helpOpen: () => KEYS.visible,
+  physics: () => ({ live: sim.live, gravity: sim.gravity, floor: sim.floor,
+    collide: sim.collide, t: sim.t }),
+  collision: () => ({ bodies: bodies.length, contacts: contactCount,
+    worstDepth: +worstDepth.toFixed(4) }),
+  // Mean clearance above the floor *surface beneath each body*. Measuring
+  // against a flat datum would just report the bowl's curvature; this reports
+  // stacking, which is the thing collision is supposed to produce.
+  pileHeight: () => (bodies.length
+    ? bodies.reduce((a, b) => a + (b.at.y - floorAt(b.at.x, b.at.z)), 0) / bodies.length : 0),
+  // Mean distance from each fragment's designed position — 0 when settled.
+  spread: () => {
+    let n = 0, d = 0;
+    for (const it of scene) { if (!it.home) continue; n++; d += Math.hypot(it.at.x - it.home.x, it.at.y - it.home.y, it.at.z - it.home.z); }
+    return n ? d / n : 0;
+  },
+  lowest: () => scene.reduce((m, it) => Math.min(m, it.at ? it.at.y : m), Infinity),
+  settled: () => performance.now() - revealAt > 1500,
+}, ui);
+
+// The poster prints its seed because the seed is the composition. Accepting one
+// back through the URL is what makes that promise true — and it is what lets a
+// screenshot harness capture the same image twice.
+function seedFromUrl() {
+  if (typeof location === 'undefined') return null;
+  const q = new URLSearchParams(location.search).get('seed');
+  if (!q) return null;
+  const n = Number.parseInt(q, 16);
+  return Number.isFinite(n) && n > 0 ? n >>> 0 : null;
 }
+
+const KEYS = keymap([
+  { key: ' ', label: 'NEW', hint: 'NEW COMPOSITION', run: () => reseed() },
+  { key: 'v', label: 'VIEW', hint: 'VIEW', run: () => { viewIx = (viewIx + 1) % VIEWS.length; regenerate(); } },
+  { key: 'm', label: 'MIX', hint: 'MIX', run: () => { mixIx = (mixIx + 1) % MIXES.length; regenerate(); } },
+  { key: 'k', label: 'PALETTE', hint: 'PALETTE',
+    run: () => { paletteIx = (paletteIx + 1) % PALETTES.length; regenerate(); } },
+  { key: 't', label: 'TIME', hint: 'MOTION',
+    run: (p) => { motionIx = (motionIx + 1) % MOTIONS.length; p.loop(); } },
+  { key: 'r', label: 'RATE', hint: 'RATE',
+    run: (p) => { speedIx = (speedIx + 1) % SPEEDS.length; p.loop(); } },
+  { key: 'o', label: 'ORTHO', hint: 'ORTHO / PERSP', run: (p) => { cam.ortho = !cam.ortho; p.loop(); } },
+  { key: 'd', label: 'DRAW', hint: 'DRAW / LOOK',
+    run: (p) => { mode = mode === 'DRAW' ? 'LOOK' : 'DRAW'; p.loop(); } },
+  { key: 'z', label: 'UNDO', hint: 'UNDO STROKE', run: (p) => { strokes.pop(); p.loop(); } },
+  { key: 'c', label: 'CLEAR', hint: 'CLEAR STROKES', run: (p) => { strokes = []; p.loop(); } },
+  { key: 'x', label: 'DETONATE', hint: 'DETONATE', run: () => detonate() },
+  { key: 'g', label: 'GRAVITY', hint: 'GRAVITY',
+    run: (p) => { sim.gravity = !sim.gravity; if (!sim.live) detonate(); p.loop(); } },
+  { key: 'b', label: 'COLLIDE', hint: 'COLLIDE', run: (p) => { sim.collide = !sim.collide; p.loop(); } },
+  { key: 's', label: 'PNG', hint: 'PNG', run: () => exportPng() },
+]);
 
 new p5((p) => {
   P = p;
@@ -1091,7 +1111,7 @@ new p5((p) => {
   p.setup = () => {
     p.createCanvas(p.windowWidth, p.windowHeight);
     updateCamera(p.width, p.height);
-    generate(Math.floor(p.random(1, 4294967295)) >>> 0, {});
+    generate(seedFromUrl() ?? (Math.floor(p.random(1, 4294967295)) >>> 0), {});
   };
 
   p.windowResized = () => {
@@ -1115,11 +1135,8 @@ new p5((p) => {
 
   const beginDrag = () => {
     // The panel swallows the gesture — you cannot orbit or draw through a button.
-    for (const hit of uiHits) {
-      if (p.mouseX >= hit.x && p.mouseX <= hit.x + hit.w
-        && p.mouseY >= hit.y && p.mouseY <= hit.y + hit.h) { hit.action(); p.loop(); return; }
-    }
-    if (insidePanel(p.mouseX, p.mouseY)) { p.loop(); return; }
+    if (ui.hit(p.mouseX, p.mouseY)) { p.loop(); return; }
+    if (ui.swallows(p.mouseX, p.mouseY)) { p.loop(); return; }
     lastPt = { x: p.mouseX, y: p.mouseY };
     if (mode === 'DRAW' && !p.keyIsDown(p.SHIFT)) {
       dragging = { kind: 'draw', stroke: [] };
@@ -1169,22 +1186,5 @@ new p5((p) => {
     return false;
   };
 
-  p.keyPressed = () => {
-    const k = p.key.toLowerCase();
-    if (p.key === ' ') { reseed(); return false; }
-    if (k === 'v') { viewIx = (viewIx + 1) % VIEWS.length; regenerate(); return false; }
-    if (k === 'm') { mixIx = (mixIx + 1) % MIXES.length; regenerate(); return false; }
-    if (k === 'k') { paletteIx = (paletteIx + 1) % PALETTES.length; regenerate(); return false; }
-    if (k === 't') { motionIx = (motionIx + 1) % MOTIONS.length; p.loop(); return false; }
-    if (k === 'r') { speedIx = (speedIx + 1) % SPEEDS.length; p.loop(); return false; }
-    if (k === 'o') { cam.ortho = !cam.ortho; p.loop(); return false; }
-    if (k === 'd') { mode = mode === 'DRAW' ? 'LOOK' : 'DRAW'; p.loop(); return false; }
-    if (k === 'z') { strokes.pop(); p.loop(); return false; }
-    if (k === 'c') { strokes = []; p.loop(); return false; }
-    if (k === 'x') { detonate(); return false; }
-    if (k === 'g') { sim.gravity = !sim.gravity; if (!sim.live) detonate(); p.loop(); return false; }
-    if (k === 'b') { sim.collide = !sim.collide; p.loop(); return false; }
-    if (k === 's') { exportPng(); return false; }
-    return true;
-  };
+  p.keyPressed = () => (KEYS.handle(p) ? false : true);
 });

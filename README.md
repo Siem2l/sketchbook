@@ -22,11 +22,53 @@ Each sketch folder needs `index.html`, `sketch.js`, and `meta.json`
 (`title` and `date` required — the build fails otherwise). The gallery
 index is generated from these at build time.
 
-`shared/` holds code used by more than one sketch — currently
-`kernels.glsl`, imported with Vite's `?raw`. It sits outside `sketches/`
-deliberately: the three scanners (vite's page list, `build-index.js`,
-`gen-thumbnails.js`) all treat every directory under `sketches/` as a
-sketch and `build-index.js` fails the build on one without a `meta.json`.
+## Shared code
+
+Two libraries, for two different families of sketch.
+
+`shared/` holds what the WebGL and audio sketches have in common —
+`kernels.glsl` (imported with Vite's `?raw`), the `Listener` and its
+sequencer in `audio.js` and `beat.js`, the GeoTIFF reader, and the PDOK
+client. `elsewhere`, `hendriklaan` and `errand` all draw on it. It sits
+outside `sketches/` because it predates the `_` convention below.
+
+`sketches/_lib/` holds the Vectorheart drawing library — see the house
+rules that follow. A directory under `sketches/` whose name begins with
+`_` is not a sketch and needs no `meta.json`; all three scanners (vite's
+page list, `build-index.js`, `gen-thumbnails.js`) skip it. Without that
+rule `build-index.js` fails the build on any directory lacking a
+`meta.json`, which is what `_template` and `_lib` both are.
+
+## Vectorheart house rules
+
+Sketches in the Vectorheart idiom (`splinter`, `inconstructions`) share
+`sketches/_lib/` — type, panel controls, keys, PNG export, the test probe and
+the page chrome. The template starts from it.
+
+- **`(g, k)` first.** Every drawing function takes the graphics target and the
+  scale factor. `k` is 1 on screen and 3 in a PNG export; that single convention
+  is what makes export a re-render rather than an upscale. Never read a
+  module-level scale inside a shared function.
+- **Colour is data.** The library defines none. Each sketch passes a
+  `{ ink, paper, accent, onAccent, muted }` theme in — a constant if its palette
+  is fixed, a function of the active palette if not.
+- **Reserved keys.** `s` PNG, `z` undo, `y` redo, `c` clear, space new, `?` help.
+  Everything else is yours. `keymap()` throws if you take one for something else.
+  It checks the canonical verb, not the printed one: inconstructions binds NEW to
+  space and prints it as ROLL.
+- **The library never owns the draw loop.** Sketches differ too much — one
+  redraws every frame off a dirty flag, another parks in `noLoop()`. Primitives
+  and plumbing are shared; control flow is not.
+- **The probe is read-only.** `probe(name, fields, layer)` exposes what the
+  interface already shows. Tests click and type like a person, and find controls
+  with `buttonAt(label)` rather than by hardcoding a pixel.
+- **Reproducibility is a feature.** If a composition has a seed, print it and
+  accept it back through `?seed=`.
+
+`npm run pixels` is the guard on all of it: it captures both sketches at a fixed
+viewport and settle point and byte-compares against a baseline in `.pixels/`
+(uncommitted — a baseline belongs to one Chromium build on one machine).
+`npm run pixels -- --update` takes a new one.
 
 ## Serving
 
@@ -170,11 +212,24 @@ for the `sketchbook` group.
   Every composition is a pure function of its printed seed.
 
 - **inconstructions** (`2026-07-inconstructions`) — an ephemeral Vectorheart
-  assembly sandbox. Interlocking axonometric parts snap to a bounded lattice,
-  which makes occlusion a depth sort rather than a z-buffer; picking reads a
-  pixel from an offscreen ID buffer. Colour belongs to the part type, so there
-  is no colour picker. The page opens by building itself, nothing is saved, and
-  the only thing that leaves is a 3x PNG.
+  assembly sandbox with a generator bolted to it. Interlocking axonometric parts
+  snap to a bounded lattice, which makes occlusion a depth sort rather than a
+  z-buffer; picking reads a pixel from an offscreen ID buffer. Colour belongs to
+  the part type, so there is no colour picker. SPACE rolls a composition: five
+  passes over the lattice — field, support, typing, ribbon, trim — where the
+  massing pass crossfades an authored template field with domain-warped perlin.
+  MIX is that crossfade as one slider, so the same control runs from "the
+  template exactly" to "noise decided everything". The GENERATOR panel holds the
+  template, seed, MIX/DENSITY/GRAIN/ACCENT/TRIM, symmetry and legs; dragging a
+  slider regenerates live from the same seed, and the whole drag is one undo.
+  `g` grows the structure you already have under the same rules, `t`/`m` cycle
+  template and symmetry, `p` hides the panel. Two endless modes: `f` FLUX keeps
+  the bounded volume alive, growing and eroding at roughly constant mass, and
+  `w` TOWER removes the ceiling — modules of eight levels generate ahead of a
+  camera that rises at a crawl, each picking its own template, pruned behind so
+  the live set stays the size the sandbox's is. The wheel scrubs the altitude
+  and pauses the climb. Nothing is saved; the 3x PNG export prints the seed and
+  parameters that reproduce it.
 
 - **message noise** (`2026-07-message-noise`) — a hidden message is hashed
   (cyrb128) into noise/random seeds, terrain parameters and a palette; the map

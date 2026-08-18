@@ -10,3 +10,6 @@ lab/variants/
 
 # Harness-managed worktrees: scratch checkouts, never part of the repo.
 .claude/worktrees/
+
+# Pixel-regression captures: derived from the sketches themselves.
+.pixels/
