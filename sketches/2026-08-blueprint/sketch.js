@@ -307,7 +307,12 @@ if (tinted) {
   }
 }
 let t = 0;
-let paused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Reduced motion freezes the page — except in ?bare, where the person has
+// deliberately hung an animated wallpaper; that choice outranks the global
+// preference. ?wind scales the drift for anyone who wants weather they can
+// see without staring.
+const wind = Math.max(0.1, Math.min(5, parseFloat(qs.get('wind')) || 1));
+let paused = window.matchMedia('(prefers-reduced-motion: reduce)').matches && !qs.has('bare');
 
 function applyDrift() {
   if (glOn) return;
@@ -327,7 +332,7 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (!paused) {
-    t += dt;
+    t += dt * wind;
     // A wallpaper does not need 60fps: ~20 is plenty for weather, and pacing
     // by time rather than frame count keeps a 120Hz display at 20, not 40.
     if (now - lastShade >= 48) {
