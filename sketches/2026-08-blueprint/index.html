@@ -21,22 +21,31 @@
     #hint kbd { color: #ffffff; font: inherit; }
     body.bare a.back, body.bare #hint { display: none; }
 
-    /* The weather layer: soft diagonal bands of light and shade, oversized so
-       they can wander without ever showing an edge. The softness lives in the
-       gradient stops themselves — no blur filter, so Plash pays almost nothing
-       to keep this on screen all day. */
+    /* The weather layer: dappled light and shade, like sun through leaves,
+       oversized so it can wander without ever showing an edge. Each patch is
+       an ellipse stretched along the layer's x-axis; the whole layer is then
+       rotated in sketch.js so every smear lies on the same diagonal. Softness
+       lives in the gradient falloff — no blur filter, so Plash pays almost
+       nothing to keep this on screen all day. */
     #streaks { position: fixed; inset: 0; overflow: hidden; }
-    .streak { position: absolute; inset: -30%; will-change: transform; }
+    .streak { position: absolute; inset: -75%; will-change: transform; }
+    /* The layer is 2.5x the viewport, so only positions near its middle are
+       ever on screen — the dapple clusters between 28% and 72% on purpose. */
     .streak.light { background:
-      linear-gradient(112deg, transparent 10%, rgba(235,242,255,0.28) 21%, transparent 30%),
-      linear-gradient(118deg, transparent 38%, rgba(240,246,255,0.38) 49%, transparent 57%),
-      linear-gradient(110deg, transparent 63%, rgba(235,242,255,0.24) 74%, transparent 86%);
+      radial-gradient(26% 8% at 50% 50%, rgba(240,246,255,0.32), transparent 70%),
+      radial-gradient(30% 9% at 36% 34%, rgba(240,246,255,0.30), transparent 70%),
+      radial-gradient(22% 7% at 64% 62%, rgba(240,246,255,0.26), transparent 70%),
+      radial-gradient(16% 5% at 58% 40%, rgba(240,246,255,0.22), transparent 70%),
+      radial-gradient(18% 6% at 40% 66%, rgba(235,242,255,0.20), transparent 70%),
+      radial-gradient(14% 5% at 68% 30%, rgba(240,246,255,0.20), transparent 70%);
     }
     .streak.dark { background:
-      linear-gradient(115deg, rgba(10,16,110,0.5) 0%, rgba(10,16,110,0.5) 5%, transparent 16%),
-      linear-gradient(109deg, transparent 26%, rgba(9,15,105,0.45) 35%, transparent 44%),
-      linear-gradient(117deg, transparent 52%, rgba(10,15,100,0.48) 60%, transparent 69%),
-      linear-gradient(112deg, transparent 80%, rgba(9,14,95,0.48) 91%, transparent 100%);
+      radial-gradient(30% 10% at 32% 62%, rgba(10,16,110,0.50), transparent 70%),
+      radial-gradient(26% 9% at 68% 38%, rgba(9,15,105,0.45), transparent 70%),
+      radial-gradient(20% 7% at 46% 28%, rgba(10,15,100,0.40), transparent 70%),
+      radial-gradient(22% 8% at 58% 72%, rgba(9,14,95,0.45), transparent 70%),
+      radial-gradient(16% 6% at 30% 42%, rgba(10,16,105,0.35), transparent 70%),
+      radial-gradient(28% 10% at 72% 58%, rgba(9,14,95,0.40), transparent 70%);
     }
 
     #geometry { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }

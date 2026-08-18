@@ -50,25 +50,23 @@ function rebuild() {
 
   const pat = el('pattern', {
     id: 'grid', width: cell, height: cell, patternUnits: 'userSpaceOnUse',
-    // Anchor the pattern so line crossings land on the exact centre.
+    // Anchor the pattern so tile seams land on the exact centre.
     x: cx % cell, y: cy % cell,
   }, defs);
   el('rect', { width: cell, height: cell, fill: 'url(#bevel)' }, pat);
-  el('rect', {
-    x: 2.5, y: 2.5, width: cell - 5, height: cell - 5, rx: 5,
-    fill: 'none', stroke: 'rgba(255,255,255,0.06)', 'stroke-width': 1,
-  }, pat);
-  // Two strokes per line: a wide faint one underneath reads as glow.
-  el('path', {
-    d: `M ${cell} 0 H 0 V ${cell}`,
-    fill: 'none', stroke: 'rgba(255,255,255,0.18)', 'stroke-width': 3.5,
-  }, pat);
-  el('path', {
-    d: `M ${cell} 0 H 0 V ${cell}`,
-    fill: 'none', stroke: 'rgba(255,255,255,0.65)', 'stroke-width': 1.3,
-  }, pat);
 
   el('rect', { width: w, height: h, fill: 'url(#grid)' }, svg);
+
+  // The lines are drawn whole, not as pattern-tile edges: a stroke on a tile
+  // edge gets its glow clipped by the tile boundary and every line comes out
+  // lopsided. Walking out from the centre also makes the crosshair share its
+  // coordinates with the grid exactly.
+  const glow = el('g', { stroke: 'rgba(255,255,255,0.15)', 'stroke-width': 3.2 }, svg);
+  const core = el('g', { stroke: 'rgba(255,255,255,0.6)', 'stroke-width': 1.2 }, svg);
+  for (const g of [glow, core]) {
+    for (let x = cx % cell; x <= w; x += cell) el('line', { x1: x, y1: 0, x2: x, y2: h }, g);
+    for (let y = cy % cell; y <= h; y += cell) el('line', { x1: 0, y1: y, x2: w, y2: y }, g);
+  }
 
   // Construction marks: corner-to-corner diagonals, two concentric circles,
   // and a crosshair that runs a little past the outer circle.
@@ -113,11 +111,13 @@ let paused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function applyDrift() {
   const w = window.innerWidth;
   const h = window.innerHeight;
+  // rotate() lays every dapple smear on the same diagonal; the ellipses in
+  // the stylesheet are stretched along plain x so they stay easy to author.
   light.style.transform =
-    `translate3d(${(Math.sin(t / 23) * 0.045 * w).toFixed(2)}px, ` +
+    `rotate(32deg) translate3d(${(Math.sin(t / 23) * 0.045 * w).toFixed(2)}px, ` +
     `${(Math.sin(t / 15.5 + 1.7) * 0.03 * h).toFixed(2)}px, 0)`;
   dark.style.transform =
-    `translate3d(${(Math.sin(t / 29 + 3.1) * 0.05 * w).toFixed(2)}px, ` +
+    `rotate(32deg) translate3d(${(Math.sin(t / 29 + 3.1) * 0.05 * w).toFixed(2)}px, ` +
     `${(Math.cos(t / 19) * 0.035 * h).toFixed(2)}px, 0)`;
 }
 
