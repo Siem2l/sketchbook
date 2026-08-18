@@ -76,13 +76,14 @@ int findLayer(vec4 tiles[13], vec2 w, out vec2 uv, out float span) {
   return best;
 }
 
-struct Sample { float y; float hag; vec3 rgb; vec3 n; float born; float found; };
+struct Sample { float y; float hag; vec3 rgb; vec3 n; float born; float found; float lift; };
 
 Sample lookup(vec4 tiles[13], vec2 w, bool useBorn, float toneLo, float toneGain) {
   Sample s;
   vec2 uv; float span;
   int layer = findLayer(tiles, w, uv, span);
   s.found = layer < 0 ? 0.0 : 1.0;
+  s.lift = 0.0;
   if (layer < 0) { s.y = 0.0; s.hag = 0.0; s.rgb = vec3(0.0); s.n = vec3(0.0, 1.0, 0.0); s.born = -1e4; return s; }
 
   vec2 texel = vec2(1.0) / vec2(textureSize(uHeight, 0).xy);
@@ -138,8 +139,44 @@ Sample lookup(vec4 tiles[13], vec2 w, bool useBorn, float toneLo, float toneGain
   float ground = 1.0 - smoothstep(0.2, 0.8, s.hag);
   float canopy = step(${CANOPY_HAG.toFixed(2)}, s.hag) * smoothstep(0.25, 0.5, rough);
   float built = smoothstep(1.0, 1.6, drop);
-  s.y += uAudio * 1.6 * (0.4 + hash1(w * 0.61))
-       * (uBands.x * ground + uBands.y * 0.35 + uBands.z * canopy + uBands.w * built);
+  //
+  // The spatial argument is the whole difference between a texture and a
+  // motion. This used to be hash1(w) alone — every particle given its own
+  // random share of the band, which means neighbours know nothing about each
+  // other and the square fizzes uniformly however loud it gets. Waves make
+  // neighbours agree, so something travels: rings out of the middle under the
+  // sub, and two crossing trains at shorter wavelengths over the canopy and
+  // the roofline. The grain stays, at a quarter of its old weight, because
+  // this is a point cloud and a perfectly smooth sheet is a different sketch.
+  //
+  // Anchored to the frame rather than to the ground — the opposite of what
+  // touch does, and on purpose. A furrow you cut belongs to the place and
+  // should slide out of view as you drive away from it; a ripple answering the
+  // music belongs to the picture and should stay centred in it.
+  vec2 rel = w - uCentre;
+  float wSub  = sin(length(rel) * 0.075 - uTime * 1.9);
+  float wMid  = sin(dot(rel, vec2(0.052, 0.031)) - uTime * 2.7);
+  float wHigh = sin(dot(rel, vec2(-0.090, 0.140)) - uTime * 4.3);
+  // 0.25 + 0.75·sin runs to −0.5, so a trough presses in as well as a crest
+  // lifting. Bouncing only upward reads as a swelling rather than as a wave.
+  //
+  // The low band's term applies to every particle whatever it is standing on,
+  // and with a wave under it that is the one that makes the whole city breathe
+  // — the class terms only move the population they name, and on a street seen
+  // end-on most of that population is behind something. It carries the most
+  // weight here for that reason.
+  //
+  // Six metres where the survey's own relief is eighteen: the bands run to
+  // about two thirds under the built-in pattern, so the peak swell is nearer
+  // four, which is a storey. At the 1.6 this replaced nothing was visible at
+  // all from the camera the sketch actually opens on.
+  float grain = 0.75 + 0.5 * hash1(w * 0.61);
+  s.lift = uAudio * 6.0 * grain
+       * ( uBands.y * 0.55   * (0.25 + 0.75 * wSub)
+         + uBands.x * ground * (0.25 + 0.75 * wSub)
+         + uBands.z * canopy * (0.25 + 0.75 * wMid)
+         + uBands.w * built  * (0.25 + 0.75 * wHigh));
+  s.y += s.lift;
   //
   // What a cell is and whether to act on it are separate questions. Gating the
   // branches directly would let a switched-off canopy fall through into the
@@ -297,6 +334,7 @@ void main() {
   float lift = uLift * arc * (1.0 - uJump) * (0.35 + 1.1 * r);
 
   vec3 tch = touchOf(w, hash1(w * 1.13 + 5.7));
+  float swell = mix(A.lift, B.lift, pick);
 
   vec3 p = vec3(w.x + stream.x - uCentre.x, y + lift, w.y + stream.y - uCentre.y) + tch;
   vec4 eye = uView * vec4(p, 1.0);
@@ -318,7 +356,11 @@ void main() {
   vCol = (uColour < 0.5 ? photo * diff
         : uColour < 1.5 ? ramp * diff
                         : ramp * (0.45 + 1.1 * plum) * diff)
-       + arc * 0.06 + max(0.0, tch.y) * 0.045;
+       + arc * 0.06 + max(0.0, tch.y) * 0.045
+       // A crest catches the light. This is what makes a wave read as a wave
+       // rather than as the same picture at a different height: the ridge is
+       // brighter than the trough, so the shape survives being seen end-on.
+       + max(0.0, swell) * 0.030;
 
   // Residency is whether a layer actually holds this ground, not anything to do
   // with the clock. Conflating the two drew nothing at all: the opening frame
@@ -338,12 +380,23 @@ in vec3 vCol;
 in float vAlive;
 out vec4 frag;
 void main() {
+  if (vAlive < 0.06) discard;
   vec2 d = gl_PointCoord - 0.5;
-  float r2 = dot(d, d);
-  if (r2 > 0.25 || vAlive < 0.06) discard;
-  // Discarding the rim rather than blending it keeps depth writes honest, so
-  // near roofs actually occlude far ones.
-  frag = vec4(vCol * (0.68 + 0.32 * (1.0 - smoothstep(0.13, 0.25, r2))), 1.0);
+  // Square, not round. What a particle stands for is a cell of a half-metre
+  // grid, and a tile tessellates where a disc leaves a gap at every corner —
+  // the surface closes up and starts reading as a surface. It is also cheaper
+  // than the disc it replaces, which discarded the whole rim.
+  //
+  // Shaded by where the fragment sits inside its own sprite: bright along the
+  // top edge, falling away down the face, with the outer border darkened so
+  // neighbours separate. That is a fake extrusion and deliberately so — the
+  // real thing is 230,400 boxes, 2.8 million triangles, and a vertex buffer
+  // this sketch does not have and does not want.
+  float face = 0.70 + 0.40 * (1.0 - gl_PointCoord.y);
+  float edge = 1.0 - 0.30 * smoothstep(0.34, 0.5, max(abs(d.x), abs(d.y)));
+  // Opaque, with no blended rim, so depth writes stay honest and a near roof
+  // actually occludes a far one.
+  frag = vec4(vCol * face * edge, 1.0);
 }`;
 
 export const FRAME_VS = `#version 300 es

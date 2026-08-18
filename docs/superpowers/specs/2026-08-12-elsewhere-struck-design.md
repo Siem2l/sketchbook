@@ -154,10 +154,16 @@ in `tone` records exactly one, with a kind from the split and a pitch on the
 scale; the voice bus is open in `tone` and shut again the moment `off` is
 chosen, and a click after that is silent.
 
-And one that proves the feature rather than its wiring: a `Listener` of its own,
-in `tone` with the pattern's own gain taken to zero, is struck once and the
-analyser bins are read before and after. If the voice reached neither the
-speakers nor the FFT they would not move. They do.
+**Not pinned by a test: that the note is audible.** It is — an isolated
+`Listener` in `tone` with the pattern's own gain at zero, struck once, took the
+analyser bins from 0 to 103, which is the voice reaching both the speakers and
+the FFT. But asserting it needs a fourth AudioContext in a suite where three
+sketches already open one each, and Chrome caps how many a renderer will hand
+out. The test that did this passed twice and then failed three times in three
+different ways, none of them about the code: a starved context, a renderer
+producing no audio at all, and its own control still ringing through the
+analyser's smoothing. A check that cries wolf is worse than a note in the spec,
+so this is the note. Verified by hand, on purpose, and written down.
 
 The rest-state guarantee is untouched — sound moves no pixels — and the existing
 weight test already pins a click returning the canvas to byte-identical.

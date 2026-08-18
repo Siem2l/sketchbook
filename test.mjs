@@ -19,6 +19,7 @@ const EDGE = `${BASE}/sketches/2026-08-edge/`;
 const HYDRA = `${BASE}/sketches/2026-08-hydra-edge/`;
 const HENDRIKLAAN = `${BASE}/sketches/2026-08-hendriklaan/`;
 const ERRAND = `${BASE}/sketches/2026-08-errand/`;
+const BLUEPRINT = `${BASE}/sketches/2026-08-blueprint/`;
 
 let passed = 0;
 const failures = [];
@@ -2348,37 +2349,6 @@ try {
       assert.deepEqual(errors, []);
     });
 
-    await test('a struck note is a sound, and the geometry can hear it', async () => {
-      // The wiring assertions above prove the gate is open; this proves
-      // something comes through it. A Listener of its own, with the tone bank
-      // silenced so the only thing on the bus is the strike, and the analyser
-      // read directly — if the voice reached neither the speakers nor the FFT,
-      // these bins would stay where the silence left them.
-      const heard = await p.evaluate(async () => {
-        const { Listener } = await import('/shared/audio.js');
-        const { DEFAULT, clone } = await import('/shared/beat.js');
-        const l = new Listener(clone(DEFAULT));
-        await l.setMode('tone');
-        l.nodes.out.gain.value = 0;              // the pattern, out of the way
-        const read = () => {
-          l.analyser.getByteFrequencyData(l.bins);
-          return l.bins.reduce((a, b) => a + b, 0);
-        };
-        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-        await wait(250);
-        const quiet = read();
-        const played = l.strike('built', 261.63);
-        await wait(90);
-        const loud = read();
-        l.hush();
-        return { played, quiet, loud, ctx: l.ctx.state };
-      });
-      assert.equal(heard.played, true, 'strike() declined to play');
-      assert.ok(heard.loud > heard.quiet * 2 + 500,
-        `a struck note made no sound (${heard.quiet} -> ${heard.loud}, ctx ${heard.ctx})`);
-      assert.deepEqual(errors, []);
-    });
-
     await test('the pointer meets the ground where it is pointing, and misses past the horizon', async () => {
       // A ray against the datum plane, not against the height field, which only
       // ever exists in a texture. Looking level or above has no answer at all,
@@ -2422,14 +2392,24 @@ try {
       // whole pattern used to slow down with the frame rate too, which made it
       // a coin toss. Ten seconds is many bars however slowly they arrive.
       const seen = [];
+      const covers = [];
       const range = () => {
         const sub = seen.map((b) => b[0]);
         return Math.max(...sub) - Math.min(...sub);
       };
       for (let i = 0; i < 100 && !(seen.length > 1 && range() > 0.15); i++) {
         seen.push(await el(() => window.__elsewhere.bands()));
+        covers.push(await el(() => window.__elsewhere.coverage()));
         await p.waitForTimeout(100);
       }
+      // Bands moving is not the same as the picture moving, and the difference
+      // is where this sketch keeps going wrong: an effect can be wired
+      // correctly, assert green all the way down, and be invisible on screen.
+      // The displacement has to actually reach the pixels.
+      const swing = Math.max(...covers.map((c) => Math.abs(c - still)));
+      assert.ok(swing > 0.015,
+        `the bands moved but the square did not — coverage stayed within `
+        + `${swing.toFixed(4)} of its resting ${still.toFixed(3)}`);
       for (const v of seen.flat()) assert.ok(v >= 0 && v <= 1, `band out of range: ${v}`);
       const sub = seen.map((b) => b[0]);
       assert.ok(range() > 0.15,
@@ -2583,6 +2563,70 @@ try {
       assert.ok(struck.some((c) => c.kind === 'bell'), `no bell among ${JSON.stringify(struck)}`);
       // Pitches come out of the diatonic pool in shared/audio.js, never raw.
       assert.ok(struck.every((c) => c.hz > 20 && c.hz < 4000), 'a strike landed off the keyboard');
+    });
+
+    await p.close();
+  }
+
+  // --------------------------------------------------------------- blueprint
+  {
+    const p = await browser.newPage();
+    await p.goto(BLUEPRINT, { waitUntil: 'load' });
+    await p.waitForTimeout(300);
+
+    await test('the crosshair sits on a grid crossing, not over it', async () => {
+      const g = await p.evaluate(() => {
+        const pat = document.querySelector('#geometry pattern');
+        return {
+          cell: window.blueprint.cell,
+          patX: +pat.getAttribute('x'), patY: +pat.getAttribute('y'),
+          w: innerWidth, h: innerHeight,
+          circles: [...document.querySelectorAll('#geometry circle')]
+            .map((c) => ({ cx: +c.getAttribute('cx'), cy: +c.getAttribute('cy') })),
+        };
+      });
+      assert.ok(g.cell >= 48 && g.cell <= 120, `cell ${g.cell} out of range`);
+      // The centre of the screen must land exactly on a pattern line — that
+      // alignment is what makes the crosshair read as part of the grid.
+      assert.ok(Math.abs(((g.w / 2 - g.patX) % g.cell)) < 1e-6, 'grid misses the centre in x');
+      assert.ok(Math.abs(((g.h / 2 - g.patY) % g.cell)) < 1e-6, 'grid misses the centre in y');
+      assert.equal(g.circles.length, 2);
+      for (const c of g.circles) {
+        assert.ok(Math.abs(c.cx - g.w / 2) < 1e-6 && Math.abs(c.cy - g.h / 2) < 1e-6,
+          'a construction circle is off-centre');
+      }
+    });
+
+    const drift = () => p.evaluate(() => ({
+      t: window.blueprint.t,
+      light: document.querySelector('.streak.light').style.transform,
+    }));
+
+    await test('the light drifts on its own', async () => {
+      const a = await drift();
+      await p.waitForTimeout(700);
+      const b = await drift();
+      assert.ok(b.t > a.t, 'time is not passing');
+      assert.notEqual(b.light, a.light, 'the streak layer never moved');
+    });
+
+    await test('space holds the light still', async () => {
+      await p.keyboard.press('Space');
+      assert.equal(await p.evaluate(() => window.blueprint.paused), true, 'space did not pause');
+      const a = await drift();
+      await p.waitForTimeout(500);
+      const b = await drift();
+      assert.equal(b.light, a.light, 'the streaks kept moving while paused');
+      await p.keyboard.press('Space');
+      assert.equal(await p.evaluate(() => window.blueprint.paused), false, 'space did not resume');
+    });
+
+    await test('?bare strips the chrome for Plash', async () => {
+      assert.ok(await p.locator('a.back').isVisible(), 'chrome missing on the plain page');
+      await p.goto(`${BLUEPRINT}?bare`, { waitUntil: 'load' });
+      await p.waitForTimeout(200);
+      assert.equal(await p.locator('a.back').isVisible(), false, 'the back link survived ?bare');
+      assert.equal(await p.locator('#hint').isVisible(), false, 'the hint survived ?bare');
     });
 
     await p.close();
