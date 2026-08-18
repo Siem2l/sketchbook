@@ -3324,13 +3324,18 @@ try {
             .map((c) => ({ cx: +c.getAttribute('cx'), cy: +c.getAttribute('cy') })),
         };
       });
-      // The sheet holds exactly 40 columns and 28 rows (20 x 14 blocks).
-      assert.ok(Math.abs(g.patW - g.w / 40) < 1e-6, `column width ${g.patW} is not w/40`);
-      assert.ok(Math.abs(g.patH - g.h / 28) < 1e-6, `row height ${g.patH} is not h/28`);
+      // Square cells, cover-fit: the crowded axis dictates the size, so the
+      // sheet holds 20 blocks across or 14 down, whichever is tighter.
+      const want = Math.max(g.w / 40, g.h / 28);
+      assert.ok(Math.abs(g.patW - want) < 1e-6 && Math.abs(g.patH - want) < 1e-6,
+        `cells ${g.patW}x${g.patH}, expected square ${want}`);
       // The centre of the screen must land exactly on a pattern line — that
       // alignment is what makes the crosshair read as part of the grid.
-      assert.ok(Math.abs(((g.w / 2 - g.patX) % g.patW)) < 1e-6, 'grid misses the centre in x');
-      assert.ok(Math.abs(((g.h / 2 - g.patY) % g.patH)) < 1e-6, 'grid misses the centre in y');
+      // (modulo leaves float dust, so a residual near cell counts as zero)
+      for (const [half, off] of [[g.w / 2, g.patX], [g.h / 2, g.patY]]) {
+        const r = (((half - off) % want) + want) % want;
+        assert.ok(Math.min(r, want - r) < 1e-3, `grid misses the centre by ${r}`);
+      }
       assert.equal(g.circles.length, 2);
       for (const c of g.circles) {
         assert.ok(Math.abs(c.cx - g.w / 2) < 1e-6 && Math.abs(c.cy - g.h / 2) < 1e-6,

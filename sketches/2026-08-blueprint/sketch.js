@@ -76,12 +76,11 @@ function rebuild() {
   const h = window.innerHeight;
   const cx = w / 2;
   const cy = h / 2;
-  // The sheet holds exactly 20 heavy-bounded 2x2 blocks across and 14 down —
-  // 40 columns, 28 rows — so the cells give up perfect squareness to keep
-  // the count on every screen. Everything round is sized off the row height.
-  const cellX = w / 40;
-  const cellY = h / 28;
-  const cell = cellY;
+  // Square cells, sized like a cover-fit image: whichever axis needs the
+  // bigger cell wins, so a landscape screen holds exactly 20 heavy-bounded
+  // 2x2 blocks across and a portrait one exactly 14 down — the other axis
+  // runs to the edge with cut cells, the way the original crops.
+  const cell = Math.max(w / 40, h / 28);
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   svg.replaceChildren();
 
@@ -95,11 +94,11 @@ function rebuild() {
   el('stop', { offset: '1', 'stop-color': 'rgba(0,0,40,0.03)' }, bevel);
 
   const pat = el('pattern', {
-    id: 'grid', width: cellX, height: cellY, patternUnits: 'userSpaceOnUse',
+    id: 'grid', width: cell, height: cell, patternUnits: 'userSpaceOnUse',
     // Anchor the pattern so tile seams land on the exact centre.
-    x: cx % cellX, y: cy % cellY,
+    x: cx % cell, y: cy % cell,
   }, defs);
-  el('rect', { width: cellX, height: cellY, fill: 'url(#bevel)' }, pat);
+  el('rect', { width: cell, height: cell, fill: 'url(#bevel)' }, pat);
 
   el('rect', { width: w, height: h, fill: 'url(#grid)' }, svg);
 
@@ -114,9 +113,9 @@ function rebuild() {
   // the mark touches not a single line. Custom icons vary in reach, so
   // they keep a wider clearing than the apple.
   const hole = icon === null ? 1.0 * cell : icon === 'none' ? 0 : 1.8 * cell;
+  // Flat strokes, no glow underneath — the lines end where they end.
   const minor = el('g', { stroke: 'rgba(255,255,255,0.34)', 'stroke-width': 1 }, svg);
-  const majorGlow = el('g', { stroke: 'rgba(255,255,255,0.15)', 'stroke-width': 6 }, svg);
-  const major = el('g', { stroke: 'rgba(255,255,255,0.65)', 'stroke-width': 2.6 }, svg);
+  const major = el('g', { stroke: 'rgba(255,255,255,0.68)', 'stroke-width': 2.6 }, svg);
   const rule = (fixed, vertical, group, gap) => {
     const [a, b, mid] = vertical ? ['x', 'y', cy] : ['y', 'x', cx];
     const line = (from, to) =>
@@ -133,13 +132,11 @@ function rebuild() {
   // the heavy rules, the dashes, and the mark.
   const rim = 7 * cell;
   for (const vertical of [true, false]) {
-    const [centre, extent, step] = vertical ? [cx, w, cellX] : [cy, h, cellY];
-    for (let k = -Math.ceil(centre / step); centre + k * step <= extent; k++) {
-      const at = centre + k * step;
+    const [centre, extent] = vertical ? [cx, w] : [cy, h];
+    for (let k = -Math.ceil(centre / cell); centre + k * cell <= extent; k++) {
+      const at = centre + k * cell;
       if (k % 2 === 0) {
-        const gap = k === 0 ? hole : 0;
-        rule(at, vertical, majorGlow, gap);
-        rule(at, vertical, major, gap);
+        rule(at, vertical, major, k === 0 ? hole : 0);
       } else {
         const d = Math.abs(at - centre);
         rule(at, vertical, minor, d < rim ? Math.sqrt(rim * rim - d * d) : 0);
