@@ -108,7 +108,11 @@ function rebuild() {
   // rule is heavy, anchored so the two through the centre are heavy.
   // Those two centre rules are the crosshair, and like everything drawn near
   // the middle they stop short of the mark.
-  const hole = icon === 'none' ? 0 : 1.35 * cell;
+  // The rules cross partway into the innermost cell — past the last grid
+  // crossing, stopped before the logo — so the clearing hugs the mark and
+  // the mark touches not a single line. Custom icons vary in reach, so
+  // they keep a wider clearing than the apple.
+  const hole = icon === null ? 0.85 * cell : icon === 'none' ? 0 : 1.35 * cell;
   const minor = el('g', { stroke: 'rgba(255,255,255,0.34)', 'stroke-width': 1 }, svg);
   const majorGlow = el('g', { stroke: 'rgba(255,255,255,0.14)', 'stroke-width': 4.5 }, svg);
   const major = el('g', { stroke: 'rgba(255,255,255,0.62)', 'stroke-width': 2 }, svg);
@@ -157,7 +161,7 @@ function rebuild() {
   el('circle', { cx, cy, r: 4.5 * cell }, marks);
 
   if (icon === null) {
-    const logoH = 1.6 * cell;
+    const logoH = 1.4 * cell;
     const s = logoH / 512;
     el('path', {
       d: APPLE, fill: 'rgba(235,240,255,0.9)',
