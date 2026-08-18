@@ -2993,6 +2993,121 @@ try {
       assert.deepEqual(errors, []);
     });
 
+    await test('at rest it idles, and idling does not blank the wallpaper', async () => {
+      // The reason this exists: left open on a desktop the sketch was drawing
+      // 230,400 points sixty times a second to produce the picture already on
+      // screen. The rest-state test proves those frames are byte-identical,
+      // which is also the licence to stop making them.
+      await el(() => window.__elsewhere.setAudio('off'));
+      await p.mouse.move(5, 5);                       // off the canvas
+      await p.waitForTimeout(2600);                   // outlast the wake window
+
+      // The contract is a ceiling, and a ceiling holds on any machine: while
+      // idle it must never draw faster than the cap. Whether it actually skips
+      // anything depends on the loop being able to run faster than the cap in
+      // the first place, which on a loaded box it cannot — so that half is
+      // asserted below, and only once the machine has shown it can.
+      const a = await el(() => window.__elsewhere.frames());
+      await p.waitForTimeout(2500);
+      const a2 = await el(() => window.__elsewhere.frames());
+      const idle = (a2.drawn - a.drawn) / 2.5;
+      assert.ok(idle < 8, `idling drew ${idle.toFixed(1)} fps, over the 5 Hz cap`);
+
+      // Not zero, and this is the reason: preserveDrawingBuffer is false, so a
+      // canvas that stopped drawing entirely could come back blank — which on a
+      // desktop is a black screen and not a saving. Compared against a frame
+      // taken while awake, so a blanked canvas cannot pass by being stably
+      // blank the way a byte-identical check alone would let it.
+      const shot = async () => {
+        await el(() => { document.getElementById('ui').style.visibility = 'hidden'; });
+        const png = await p.locator('canvas').screenshot();
+        await el(() => { document.getElementById('ui').style.visibility = ''; });
+        return png;
+      };
+      const idling = await shot();
+      assert.ok((await el(() => window.__elsewhere.coverage())) > 0.08,
+        'the canvas went blank while idling');
+
+      // And it comes back. A pointer over the square is both a wake and a wave,
+      // so the rate has to climb.
+      const box = await p.locator('canvas').boundingBox();
+      const b = await el(() => window.__elsewhere.frames());
+      for (let i = 0; i < 12; i++) {
+        await p.mouse.move(box.x + box.width * (0.3 + 0.03 * i), box.y + box.height * 0.5);
+      }
+      await p.waitForTimeout(1000);
+      const b2 = await el(() => window.__elsewhere.frames());
+      const ran = b2.ticks - b.ticks;
+      // Awake, every tick is drawn — that part is a ratio and holds anywhere.
+      assert.ok((b2.drawn - b.drawn) / Math.max(1, ran) > 0.9,
+        `awake it drew ${b2.drawn - b.drawn} of ${ran} ticks`);
+      if (ran > 12) {
+        assert.ok(b2.drawn - b.drawn > idle * 1.8,
+          `the throttle saved nothing: ${b2.drawn - b.drawn} fps awake vs ${idle.toFixed(1)} idle`);
+      } else {
+        console.log(`     (the loop only reached ${ran} ticks/s, at or below the cap, `
+          + 'so there was nothing here for the throttle to skip)');
+      }
+
+      await p.mouse.move(5, 5);
+      await p.waitForTimeout(2600);
+      assert.ok(idling.equals(await shot()), 'the square did not settle back to the same picture');
+      assert.deepEqual(errors, []);
+    });
+
+    await test('the URL is the whole interface when there is nobody to click', async () => {
+      // Behind Plash the panel is gone, so every control it carries has to be
+      // sayable in the address bar.
+      const q = await browser.newPage({ viewport: { width: 900, height: 700 } });
+      const qErrors = [];
+      q.on('pageerror', (e) => qErrors.push(e.message));
+      // Closed in a finally: a page left open by a failing assertion is a whole
+      // renderer still holding memory for the rest of the run, and this suite
+      // has already been killed once by the machine running out of it.
+      try {
+      await q.goto(`${BASE}/sketches/2026-08-elsewhere/?bare&listen=field&input=NoSuchDevice`,
+        { waitUntil: 'networkidle' });
+      await q.waitForFunction(() => window.__elsewhere?.ready(), null, { timeout: 40000 });
+      await q.waitForFunction(() => window.__elsewhere.audioMode() === 'field', null, { timeout: 20000 });
+
+      assert.equal(await q.evaluate(() => window.__elsewhere.bare()), true, '?bare did not strip the page');
+      for (const sel of ['a.back', '#meta', '#hint']) {
+        assert.equal(await q.locator(sel).isVisible(), false, `${sel} survived ?bare`);
+      }
+      // The note stays. Behind a wallpaper it is the only channel the page has
+      // left, and it is where a refused microphone says so.
+      assert.equal(await q.locator('#note').isVisible(), true, 'the note was hidden too');
+
+      // `h` drives the same class, so the key and the parameter cannot disagree
+      // about what is currently shown.
+      await q.locator('canvas').press('h');
+      assert.equal(await q.evaluate(() => window.__elsewhere.bare()), false, 'h did not un-hide');
+      await q.locator('canvas').press('h');
+      assert.equal(await q.evaluate(() => window.__elsewhere.bare()), true);
+
+      assert.deepEqual(qErrors, []);
+      } finally { await q.close(); }
+    });
+
+    await test('an input named in the URL that is not there says so and carries on', async () => {
+      // Asked for by name with `exact`, so a missing device is an error to
+      // report rather than a silent fall back to the built-in microphone —
+      // which would look like it worked and sound like the room.
+      const q = await browser.newPage({ viewport: { width: 900, height: 700 } });
+      try {
+      await q.goto(`${BASE}/sketches/2026-08-elsewhere/?listen=mic&input=NoSuchDevice`,
+        { waitUntil: 'networkidle' });
+      await q.waitForFunction(() => window.__elsewhere?.ready(), null, { timeout: 40000 });
+      await q.waitForTimeout(1500);
+      // Headless grants no microphone, so this lands on the documented
+      // fallback either way — what is asserted is that it says which.
+      const mode = await q.evaluate(() => window.__elsewhere.audioMode());
+      assert.ok(['field', 'mic'].includes(mode), `ended up on ${mode}`);
+      const said = await q.textContent('#note');
+      assert.ok(said.trim().length > 0, 'a named input that was not there said nothing');
+      } finally { await q.close(); }
+    });
+
     await test('every colour mode draws the whole square', async () => {
       for (let i = 0; i < 3; i++) {
         await el((n) => window.__elsewhere.setColour(n), i);

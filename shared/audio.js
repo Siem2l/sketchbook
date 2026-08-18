@@ -42,6 +42,7 @@ export class Listener {
     this.bins = null;
     this.nodes = null;
     this.stream = null;
+    this.deviceId = null;
     this.error = '';
     this.peak = new Float32Array([0.2, 0.2, 0.2, 0.2]);
     this.floor = new Float32Array([0.2, 0.2, 0.2, 0.2]);
@@ -279,9 +280,30 @@ export class Listener {
     if (this.voice) this.voice.gain.value = 0;
   }
 
-  async setMode(mode) {
+  // The audio inputs the browser will admit to. Labels are blank until the user
+  // has granted access once, which is a rule rather than a choice — so a caller
+  // building a picker has to call this after a successful `mic`, not before.
+  async inputs() {
+    if (!navigator.mediaDevices?.enumerateDevices) return [];
+    const all = await navigator.mediaDevices.enumerateDevices().catch(() => []);
+    return all.filter((d) => d.kind === 'audioinput')
+      .map((d) => ({ id: d.deviceId, label: d.label || '' }));
+  }
+
+  // Matched on the label rather than the id. A deviceId is an opaque per-origin
+  // string a browser is free to rotate; "BlackHole" is something a person can
+  // type into a URL and still have right next month.
+  async inputMatching(text) {
+    if (!text) return null;
+    const want = text.toLowerCase();
+    const hit = (await this.inputs()).find((d) => d.label.toLowerCase().includes(want));
+    return hit ? hit.id : null;
+  }
+
+  async setMode(mode, deviceId = null) {
     this.error = '';
-    if (mode === this.mode) return;
+    if (mode === this.mode && deviceId === this.deviceId) return;
+    this.deviceId = deviceId;
     if (this.stream && mode !== 'mic') {
       this.stream.getTracks().forEach((t) => t.stop());
       this.stream = null;
@@ -302,9 +324,15 @@ export class Listener {
     const voiceFor = (m) => { if (this.voice) this.voice.gain.value = m === 'field' ? 0 : 0.6; };
     if (mode === 'mic') {
       try {
-        this.stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-        });
+        // Nothing the browser might helpfully do to a voice is wanted here: a
+        // loopback of the system's own output is already clean, and every one
+        // of these would be fighting the music rather than the room.
+        const want = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+        // `exact`, so a missing device is an error to report rather than a
+        // silent fall back to the built-in microphone — which would look like
+        // it worked and sound like the room.
+        if (deviceId) want.deviceId = { exact: deviceId };
+        this.stream = await navigator.mediaDevices.getUserMedia({ audio: want });
         this.ensureCtx();
         this.micNode = this.ctx.createMediaStreamSource(this.stream);
         this.micNode.connect(this.analyser);
@@ -312,8 +340,13 @@ export class Listener {
         // through the room's own speakers is a feedback loop.
         await this.ctx.resume();
       } catch (e) {
-        this.error = 'no microphone — staying on the built-in field';
+        // Two different failures worth telling apart: a device that was asked
+        // for by name and is not there, and no audio input at all.
+        this.error = deviceId
+          ? 'that input is not available — staying on the built-in field'
+          : 'no microphone — staying on the built-in field';
         this.mode = 'field';
+        this.deviceId = null;
         voiceFor('field');
         return;
       }

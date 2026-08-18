@@ -39,6 +39,20 @@
             color: #8a877e; font-size: 12px; transition: opacity .5s; }
     #veil.gone { opacity: 0; pointer-events: none; }
     @media (max-width: 720px) { #meta, #hint { display: none; } }
+
+    /* A wallpaper has nobody to click it. `?bare` strips the interface and the
+       `h` key toggles this same class, so hiding is one mechanism rather than
+       two that can disagree. The note survives on purpose: it is where a
+       refused microphone says so, and behind Plash it is the only channel the
+       page has left. */
+    body.bare a.back, body.bare #meta, body.bare #hint,
+    body.bare #ui > .row { display: none; }
+    /* The panel collapses to nothing but the note keeps room to speak in:
+       behind Plash it is the only channel the page has left, and it is where a
+       refused microphone says so. Without a width of its own a fit-content
+       panel with every row hidden measures zero and the message never lands. */
+    body.bare #ui { background: none; padding: 0; width: 100vw; }
+    body.bare #note { text-align: center; }
   </style>
 </head>
 <body>
@@ -60,6 +74,7 @@
   <div id="hint">
     drag to orbit · wheel to dolly<br />
     sweep to disturb · click to drop a weight<br />
+    <span style="color:#555350">?bare&amp;listen=mic&amp;input=BlackHole for Plash</span><br />
     <span id="keyhint"></span>
   </div>
 
@@ -82,6 +97,7 @@
         <option value="tone">tone</option>
         <option value="mic">mic</option>
       </select>
+      <select id="input" style="display:none" title="route system audio here with a loopback device"></select>
       <button id="colour">height ramp</button>
       <button id="save">png ×3</button>
     </div>

@@ -474,7 +474,7 @@ async function main() {
 
   // --------------------------------------------------------------- controls
   const SOURCES = ['off', 'field', 'tone', 'mic'];
-  async function setAudio(mode) {
+  async function setAudio(mode, deviceId = null) {
     if (mode === 'off') {
       audioOn = false;
       audio.bands.fill(0);          // exact, not merely still
@@ -484,18 +484,38 @@ async function main() {
       // given and left a drone playing over a still square.
       audio.hush();
       $('audio').value = 'off';
+      $('input').style.display = 'none';
       note('');
       return;
     }
-    await audio.setMode(mode);      // falls back to field if the mic is refused
+    await audio.setMode(mode, deviceId);   // falls back to field if the mic is refused
     audioOn = true;
     $('audio').value = audio.mode;   // may not be what was asked for
     note(audio.error || (audio.mode === 'mic' ? 'listening to the room'
       : audio.mode === 'tone' ? 'the built-in pattern, now audible' : ''));
+    await fillInputs();
   }
   // A menu, not a cycling button: four sources hidden behind one label meant
   // you could not see that `tone` existed without clicking past it.
   $('audio').onchange = (e) => setAudio(e.target.value);
+
+  // Which input the microphone is actually listening to. macOS will not hand a
+  // browser its own output, but a loopback device will — install BlackHole,
+  // send the system through a Multi-Output Device, and pick it here to get
+  // exactly what is playing with none of the room in it.
+  //
+  // The list can only be filled after access has been granted once: a browser
+  // reports blank labels until then, so an empty picker before the first `mic`
+  // is the rule working rather than a bug.
+  async function fillInputs() {
+    const list = await audio.inputs();
+    const named = list.filter((d) => d.label);
+    $('input').style.display = named.length > 1 && audioOn && audio.mode === 'mic' ? '' : 'none';
+    $('input').innerHTML = named
+      .map((d) => `<option value="${d.id}">${d.label.slice(0, 28)}</option>`).join('');
+    if (audio.deviceId) $('input').value = audio.deviceId;
+  }
+  $('input').onchange = (e) => setAudio('mic', e.target.value);
 
   // --------------------------------------------------------- inferred layer
   const INFERRED = ['walls', 'canopy', 'tone', 'shade'];
@@ -569,11 +589,9 @@ async function main() {
     { key: 'c', label: 'colour', run: () => setColour((view.colour + 1) % COLOURS.length) },
     { key: 'm', label: 'measured only', run: () => measuredOnly() },
     { key: 'p', label: 'png ×3', run: () => savePNG() },
-    { key: 'h', label: 'hide', run: () => {
-      document.querySelectorAll('#ui, #meta, #hint').forEach((n) => {
-        n.style.display = n.style.display === 'none' ? '' : 'none';
-      });
-    } },
+    // The same class `?bare` sets, so hiding is one mechanism rather than two
+    // that can disagree about what is currently shown.
+    { key: 'h', label: 'hide', run: () => document.body.classList.toggle('bare') },
   ];
 
   const bound = new Map();
@@ -652,6 +670,37 @@ async function main() {
     cam.dist = Math.max(60, Math.min(1800, cam.dist * Math.exp(e.deltaY * 0.0011)));
   }, { passive: false });
 
+  // A wallpaper is watched far more than it is used. At rest with the audio off
+  // the rest-state test pins consecutive frames as byte-identical, which means
+  // 230,400 points are being drawn sixty times a second to produce the picture
+  // that is already on screen — the whole cost and none of the value.
+  //
+  // So the loop has two rates. Something can be changing while audio is on,
+  // while a jump is in the air, while tiles are still arriving, or within two
+  // seconds of anything the person did; the rest of the time it idles at five
+  // frames a second.
+  //
+  // Five and not zero, because of the drawing buffer. preserveDrawingBuffer is
+  // false — the default, and what savePNG is already written around — so after
+  // compositing the buffer's contents are undefined and a canvas that stops
+  // drawing altogether may come back blank. On a desktop that is a black
+  // screen rather than a saving. Five frames a second keeps it alive and still
+  // removes about 92% of the work; going to a true zero would mean paying a
+  // full-buffer copy on every active frame instead, which is the worse trade
+  // for a sketch that is interactive whenever anyone is actually looking.
+  const IDLE_HZ = 5;
+  let awakeUntil = 0;
+  let drawnAt = -1;
+  let frames = 0;      // frames actually drawn
+  let ticks = 0;       // times the loop ran, drawn or not
+  const wake = (secs = 2) => { awakeUntil = Math.max(awakeUntil, view.clock + secs); };
+  // One capturing listener rather than a call in every handler. Forgetting a
+  // wake() somewhere reads as a frozen page, and that failure is far worse than
+  // waking for a pointer move that turned out not to matter.
+  for (const ev of ['pointerdown', 'pointermove', 'pointerup', 'wheel', 'keydown', 'input', 'change', 'click']) {
+    addEventListener(ev, () => wake(), { capture: true, passive: true });
+  }
+
   let lastFrame = performance.now();
   function frame(now) {
     // Two budgets from one elapsed time. view.clock is clamped hard, because a
@@ -666,6 +715,7 @@ async function main() {
     const dt = Math.min(0.05, real);
     view.clock += dt;
     lastFrame = now;
+    ticks++;
     // Before the upload, so anything past its life is a hard zero on the way to
     // the GPU rather than a small number the shader has to tolerate.
     touch.expire(view.clock);
@@ -701,14 +751,44 @@ async function main() {
 
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
-    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-    render(w, h);
+    const resized = canvas.width !== w || canvas.height !== h;
+    if (resized) { canvas.width = w; canvas.height = h; }
+
+    const busy = audioOn || phase !== 'roam' || queue.length + inflight > 0
+      || view.clock < awakeUntil || touch.busy();
+    if (resized || busy || view.clock - drawnAt >= 1 / IDLE_HZ) {
+      render(w, h);
+      drawnAt = view.clock;
+      frames++;
+    }
     $('m-x').textContent = cam.x.toFixed(0);
     $('m-z').textContent = cam.z.toFixed(0);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
   $('veil').classList.add('gone');
+
+  // The address bar stands in for the panel, because behind Plash there is
+  // nobody to click it. `?bare` strips the interface, `listen` picks the
+  // source, and `input` names the audio device by a piece of its label — a
+  // deviceId is an opaque per-origin string a browser may rotate, where
+  // "BlackHole" is something a person can type and still have right next month.
+  const qs = new URLSearchParams(location.search);
+  if (qs.has('bare')) document.body.classList.add('bare');
+  const wanted = qs.get('listen');
+  if (SOURCES.includes(wanted)) {
+    (async () => {
+      await setAudio(wanted);
+      const named = qs.get('input');
+      // Only reachable once access has been granted, because labels are blank
+      // until then — so this is a second acquisition and not a first.
+      if (named && audio.mode === 'mic') {
+        const id = await audio.inputMatching(named);
+        if (id) await setAudio('mic', id);
+        else note(`no input matching "${named}" — using the default`);
+      }
+    })();
+  }
 
   // A fresh render and a readback of the middle of it. Rendering here rather
   // than trusting the last frame is what makes both readers below answer for
@@ -745,6 +825,13 @@ async function main() {
     mix: () => (flight ? flight.mix : 0),
     jumpTo,
     touch: () => touch.live(),
+    // Drawn against ran. A rate in frames per second measures the machine as
+    // much as the throttle — on a loaded box the whole loop drops to a crawl
+    // and an idling sketch and a busy one look alike. The ratio does not care:
+    // idling draws a fraction of its ticks, working draws all of them.
+    frames: () => ({ drawn: frames, ticks }),
+    bare: () => document.body.classList.contains('bare'),
+    inputs: () => audio.inputs(),
     strikes: () => strikes.map((s) => ({ ...s })),
     under: (x, z) => ground.at(x ?? cam.x, z ?? cam.z),
     voice: () => (audio.voice ? audio.voice.gain.value : null),

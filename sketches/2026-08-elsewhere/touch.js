@@ -164,5 +164,12 @@ export function createTouch() {
       weights: count(weights, WEIGHT_N),
       peak: peak(wake, WAKE_N),
     }),
+    // The same question as live(), asked by the frame loop sixty times a second
+    // and so answered without building an object to throw away.
+    busy: () => {
+      for (let i = 0; i < WAKE_N; i++) if (wake[i * 4 + 3] !== 0) return true;
+      for (let i = 0; i < WEIGHT_N; i++) if (weights[i * 4 + 3] !== 0) return true;
+      return false;
+    },
   };
 }
