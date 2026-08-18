@@ -3317,18 +3317,20 @@ try {
       const g = await p.evaluate(() => {
         const pat = document.querySelector('#geometry pattern');
         return {
-          cell: window.blueprint.cell,
           patX: +pat.getAttribute('x'), patY: +pat.getAttribute('y'),
+          patW: +pat.getAttribute('width'), patH: +pat.getAttribute('height'),
           w: innerWidth, h: innerHeight,
           circles: [...document.querySelectorAll('#geometry circle')]
             .map((c) => ({ cx: +c.getAttribute('cx'), cy: +c.getAttribute('cy') })),
         };
       });
-      assert.ok(g.cell >= 48 && g.cell <= 120, `cell ${g.cell} out of range`);
+      // The sheet holds exactly 40 columns and 28 rows (20 x 14 blocks).
+      assert.ok(Math.abs(g.patW - g.w / 40) < 1e-6, `column width ${g.patW} is not w/40`);
+      assert.ok(Math.abs(g.patH - g.h / 28) < 1e-6, `row height ${g.patH} is not h/28`);
       // The centre of the screen must land exactly on a pattern line — that
       // alignment is what makes the crosshair read as part of the grid.
-      assert.ok(Math.abs(((g.w / 2 - g.patX) % g.cell)) < 1e-6, 'grid misses the centre in x');
-      assert.ok(Math.abs(((g.h / 2 - g.patY) % g.cell)) < 1e-6, 'grid misses the centre in y');
+      assert.ok(Math.abs(((g.w / 2 - g.patX) % g.patW)) < 1e-6, 'grid misses the centre in x');
+      assert.ok(Math.abs(((g.h / 2 - g.patY) % g.patH)) < 1e-6, 'grid misses the centre in y');
       assert.equal(g.circles.length, 2);
       for (const c of g.circles) {
         assert.ok(Math.abs(c.cx - g.w / 2) < 1e-6 && Math.abs(c.cy - g.h / 2) < 1e-6,

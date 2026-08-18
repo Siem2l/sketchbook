@@ -71,16 +71,17 @@ function el(name, attrs, parent) {
   return node;
 }
 
-function cellSize(w, h) {
-  return Math.max(48, Math.min(120, Math.round(Math.min(w, h) / 17)));
-}
-
 function rebuild() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   const cx = w / 2;
   const cy = h / 2;
-  const cell = cellSize(w, h);
+  // The sheet holds exactly 20 heavy-bounded 2x2 blocks across and 14 down —
+  // 40 columns, 28 rows — so the cells give up perfect squareness to keep
+  // the count on every screen. Everything round is sized off the row height.
+  const cellX = w / 40;
+  const cellY = h / 28;
+  const cell = cellY;
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
   svg.replaceChildren();
 
@@ -94,11 +95,11 @@ function rebuild() {
   el('stop', { offset: '1', 'stop-color': 'rgba(0,0,40,0.03)' }, bevel);
 
   const pat = el('pattern', {
-    id: 'grid', width: cell, height: cell, patternUnits: 'userSpaceOnUse',
+    id: 'grid', width: cellX, height: cellY, patternUnits: 'userSpaceOnUse',
     // Anchor the pattern so tile seams land on the exact centre.
-    x: cx % cell, y: cy % cell,
+    x: cx % cellX, y: cy % cellY,
   }, defs);
-  el('rect', { width: cell, height: cell, fill: 'url(#bevel)' }, pat);
+  el('rect', { width: cellX, height: cellY, fill: 'url(#bevel)' }, pat);
 
   el('rect', { width: w, height: h, fill: 'url(#grid)' }, svg);
 
@@ -112,10 +113,10 @@ function rebuild() {
   // crossing, stopped before the logo — so the clearing hugs the mark and
   // the mark touches not a single line. Custom icons vary in reach, so
   // they keep a wider clearing than the apple.
-  const hole = icon === null ? 0.85 * cell : icon === 'none' ? 0 : 1.35 * cell;
+  const hole = icon === null ? 1.0 * cell : icon === 'none' ? 0 : 1.8 * cell;
   const minor = el('g', { stroke: 'rgba(255,255,255,0.34)', 'stroke-width': 1 }, svg);
-  const majorGlow = el('g', { stroke: 'rgba(255,255,255,0.14)', 'stroke-width': 4.5 }, svg);
-  const major = el('g', { stroke: 'rgba(255,255,255,0.62)', 'stroke-width': 2 }, svg);
+  const majorGlow = el('g', { stroke: 'rgba(255,255,255,0.15)', 'stroke-width': 6 }, svg);
+  const major = el('g', { stroke: 'rgba(255,255,255,0.65)', 'stroke-width': 2.6 }, svg);
   const rule = (fixed, vertical, group, gap) => {
     const [a, b, mid] = vertical ? ['x', 'y', cy] : ['y', 'x', cx];
     const line = (from, to) =>
@@ -127,16 +128,21 @@ function rebuild() {
       line(0, vertical ? h : w);
     }
   };
+  // Minor rules stop inside the circles: where one would cross the outer
+  // circle it is drawn only up to the rim, so the middle holds nothing but
+  // the heavy rules, the dashes, and the mark.
+  const rim = 7 * cell;
   for (const vertical of [true, false]) {
-    const [centre, extent] = vertical ? [cx, w] : [cy, h];
-    for (let k = -Math.ceil(centre / cell); centre + k * cell <= extent; k++) {
-      const at = centre + k * cell;
-      const gap = k === 0 ? hole : 0;
+    const [centre, extent, step] = vertical ? [cx, w, cellX] : [cy, h, cellY];
+    for (let k = -Math.ceil(centre / step); centre + k * step <= extent; k++) {
+      const at = centre + k * step;
       if (k % 2 === 0) {
+        const gap = k === 0 ? hole : 0;
         rule(at, vertical, majorGlow, gap);
         rule(at, vertical, major, gap);
       } else {
-        rule(at, vertical, minor, 0);
+        const d = Math.abs(at - centre);
+        rule(at, vertical, minor, d < rim ? Math.sqrt(rim * rim - d * d) : 0);
       }
     }
   }
@@ -157,11 +163,11 @@ function rebuild() {
   };
   diag(0, 0);
   diag(w, 0);
-  el('circle', { cx, cy, r: 2.5 * cell }, marks);
-  el('circle', { cx, cy, r: 4.5 * cell }, marks);
+  el('circle', { cx, cy, r: 4 * cell }, marks);
+  el('circle', { cx, cy, r: 7 * cell }, marks);
 
   if (icon === null) {
-    const logoH = 1.4 * cell;
+    const logoH = 1.65 * cell;
     const s = logoH / 512;
     el('path', {
       d: APPLE, fill: 'rgba(235,240,255,0.9)',
@@ -170,7 +176,7 @@ function rebuild() {
   } else if (/\.(svg|png|jpe?g|webp)$/i.test(icon) || icon.includes('/')) {
     // An image URL — resolved against the page, so a file shipped next to
     // the sketch is just ?icon=boid.svg. It keeps its own colours.
-    const box = 2.5 * cell;
+    const box = 3.2 * cell;
     el('image', {
       x: cx - box / 2, y: cy - box / 2, width: box, height: box,
       href: icon, preserveAspectRatio: 'xMidYMid meet',
@@ -178,7 +184,7 @@ function rebuild() {
   } else if (icon !== 'none') {
     const glyph = el('text', {
       x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central',
-      'font-size': 2.1 * cell, fill: 'rgba(235,240,255,0.9)',
+      'font-size': 2.6 * cell, fill: 'rgba(235,240,255,0.9)',
       'font-family': "system-ui, 'Apple Color Emoji', 'Noto Color Emoji', sans-serif",
     }, svg);
     glyph.textContent = icon;
