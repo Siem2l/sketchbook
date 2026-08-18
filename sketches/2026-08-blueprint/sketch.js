@@ -10,6 +10,51 @@ const svg = document.getElementById('geometry');
 const qs = new URLSearchParams(location.search);
 if (qs.has('bare')) document.body.classList.add('bare');
 
+// A wallpaper is personal, so the sheet is configurable from the URL alone:
+// ?hue=145 (or a name below, or 'graphite'), ?sat=60, ?icon=🌲 or ?icon=none.
+const NAMED_HUES = { red: 2, orange: 28, gold: 45, green: 145, teal: 175, blue: 230, purple: 275, pink: 330 };
+const BASE_HUE = 230;
+const icon = qs.get('icon');
+let hue = BASE_HUE;
+let satMul = 1;
+{
+  const raw = qs.get('hue');
+  if (raw === 'graphite') satMul = 0.12;
+  else if (raw !== null) {
+    const n = raw in NAMED_HUES ? NAMED_HUES[raw] : parseFloat(raw);
+    if (Number.isFinite(n)) hue = ((n % 360) + 360) % 360;
+  }
+  const s = parseFloat(qs.get('sat'));
+  if (Number.isFinite(s)) satMul *= Math.max(0, Math.min(1.5, s / 100));
+}
+const hueDelta = hue - BASE_HUE;
+const tinted = hueDelta !== 0 || satMul !== 1;
+
+function hslToRgb(h, s, l) {
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    return l - s * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  };
+  return [f(0), f(8), f(4)];
+}
+
+// The ground's five stops, as the blue original's hue/sat/lightness — a new
+// hue keeps the ramp and swaps the paper.
+const GROUND = [
+  [229, 0.65, 0.58, '0%'], [230, 0.62, 0.49, '38%'], [232, 0.70, 0.43, '68%'],
+  [233, 0.75, 0.37, '88%'], [234, 0.79, 0.32, '100%'],
+];
+if (tinted) {
+  // Equal HSL lightness reads paler once the hue leaves blue, so a shifted
+  // hue gives a little lightness back to keep the paper's depth.
+  const lightMul = hueDelta === 0 ? 1 : 0.86;
+  const stops = GROUND.map(([gh, gs, gl, at]) =>
+    `hsl(${(gh + hueDelta + 360) % 360} ${Math.round(gs * satMul * 100)}% ${Math.round(gl * lightMul * 100)}%) ${at}`);
+  document.body.style.background = `radial-gradient(120% 90% at 50% 44%, ${stops.join(', ')})`;
+}
+// The shade the canopy casts, re-derived from the same shift.
+const LEAF = hslToRgb((237 + hueDelta + 360) % 360, Math.min(1, 0.85 * satMul), 0.205);
+
 // FontAwesome's apple glyph, viewBox 0 0 384 512.
 const APPLE =
   'M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 ' +
@@ -69,25 +114,54 @@ function rebuild() {
   }
 
   // Construction marks: corner-to-corner diagonals, two concentric circles,
-  // and a crosshair that runs a little past the outer circle.
+  // and a crosshair that runs a little past the outer circle. Every line
+  // stops short of the mark being drawn — the original leaves its subject
+  // room, so nothing intersects the icon.
   const marks = el('g', {
     fill: 'none', stroke: 'rgba(255,255,255,0.55)',
     'stroke-width': 1.1, 'stroke-dasharray': '7 7',
   }, svg);
-  el('line', { x1: 0, y1: 0, x2: w, y2: h }, marks);
-  el('line', { x1: w, y1: 0, x2: 0, y2: h }, marks);
+  const hole = icon === 'none' ? 0 : 1.35 * cell;
+  const diag = (x, y) => {
+    const len = Math.hypot(cx - x, cy - y);
+    const ux = (cx - x) / len;
+    const uy = (cy - y) / len;
+    el('line', { x1: x, y1: y, x2: cx - ux * hole, y2: cy - uy * hole }, marks);
+    el('line', { x1: cx + ux * hole, y1: cy + uy * hole, x2: 2 * cx - x, y2: 2 * cy - y }, marks);
+  };
+  diag(0, 0);
+  diag(w, 0);
   el('circle', { cx, cy, r: 2.5 * cell }, marks);
   el('circle', { cx, cy, r: 4.5 * cell }, marks);
   const reach = 5.5 * cell;
-  el('line', { x1: cx - reach, y1: cy, x2: cx + reach, y2: cy }, marks);
-  el('line', { x1: cx, y1: cy - reach, x2: cx, y2: cy + reach }, marks);
+  el('line', { x1: cx - reach, y1: cy, x2: cx - hole, y2: cy }, marks);
+  el('line', { x1: cx + hole, y1: cy, x2: cx + reach, y2: cy }, marks);
+  el('line', { x1: cx, y1: cy - reach, x2: cx, y2: cy - hole }, marks);
+  el('line', { x1: cx, y1: cy + hole, x2: cx, y2: cy + reach }, marks);
 
-  const logoH = 1.6 * cell;
-  const s = logoH / 512;
-  el('path', {
-    d: APPLE, fill: 'rgba(235,240,255,0.9)',
-    transform: `translate(${cx - (384 * s) / 2} ${cy - (512 * s) / 2}) scale(${s})`,
-  }, svg);
+  if (icon === null) {
+    const logoH = 1.6 * cell;
+    const s = logoH / 512;
+    el('path', {
+      d: APPLE, fill: 'rgba(235,240,255,0.9)',
+      transform: `translate(${cx - (384 * s) / 2} ${cy - (512 * s) / 2}) scale(${s})`,
+    }, svg);
+  } else if (/\.(svg|png|jpe?g|webp)$/i.test(icon) || icon.includes('/')) {
+    // An image URL — resolved against the page, so a file shipped next to
+    // the sketch is just ?icon=boid.svg. It keeps its own colours.
+    const box = 2.5 * cell;
+    el('image', {
+      x: cx - box / 2, y: cy - box / 2, width: box, height: box,
+      href: icon, preserveAspectRatio: 'xMidYMid meet',
+    }, svg);
+  } else if (icon !== 'none') {
+    const glyph = el('text', {
+      x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+      'font-size': 2.1 * cell, fill: 'rgba(235,240,255,0.9)',
+      'font-family': "system-ui, 'Apple Color Emoji', 'Noto Color Emoji', sans-serif",
+    }, svg);
+    glyph.textContent = icon;
+  }
 
   // A whisper of grain keeps the flat fields from banding on big displays.
   const filt = el('filter', { id: 'grain' }, defs);
@@ -109,6 +183,7 @@ const FRAG = `
 precision mediump float;
 uniform vec2 uRes;
 uniform float uT;
+uniform vec3 uLeaf;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p) {
@@ -139,7 +214,7 @@ void main() {
   float light = smoothstep(0.50, 0.78, n);
   float shade = smoothstep(0.48, 0.22, n);
   vec3 sun = vec3(0.94, 0.96, 1.0) * light * 0.34;
-  vec3 leaf = vec3(0.03, 0.05, 0.38) * shade * 0.38;
+  vec3 leaf = uLeaf * shade * 0.38;
   gl_FragColor = vec4(sun + leaf, light * 0.34 + shade * 0.38);
 }`;
 
@@ -147,10 +222,10 @@ const VERT = 'attribute vec2 aPos; void main() { gl_Position = vec4(aPos, 0.0, 1
 
 const shadeCanvas = document.getElementById('shade');
 const gl = shadeCanvas.getContext('webgl', { alpha: true, premultipliedAlpha: true });
+let glOn = false;
 let uT, uRes;
 
 if (gl) {
-  document.body.classList.add('gl');
   const compile = (type, src) => {
     const sh = gl.createShader(type);
     gl.shaderSource(sh, src);
@@ -161,18 +236,31 @@ if (gl) {
   gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
   gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
   gl.linkProgram(prog);
-  gl.useProgram(prog);
-  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  const aPos = gl.getAttribLocation(prog, 'aPos');
-  gl.enableVertexAttribArray(aPos);
-  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-  uT = gl.getUniformLocation(prog, 'uT');
-  uRes = gl.getUniformLocation(prog, 'uRes');
+  // A driver that will not link this shader is a driver we fall back on,
+  // same as no WebGL at all — the CSS layers are behind the canvas anyway.
+  if (gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    glOn = true;
+    document.body.classList.add('gl');
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(prog, 'aPos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    uT = gl.getUniformLocation(prog, 'uT');
+    uRes = gl.getUniformLocation(prog, 'uRes');
+    gl.uniform3f(gl.getUniformLocation(prog, 'uLeaf'), LEAF[0], LEAF[1], LEAF[2]);
+    shadeCanvas.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      glOn = false;
+      document.body.classList.remove('gl');
+      applyDrift();
+    });
+  }
 }
 
 function sizeShade() {
-  if (!gl) return;
+  if (!glOn) return;
   shadeCanvas.width = Math.ceil(window.innerWidth / 3);
   shadeCanvas.height = Math.ceil(window.innerHeight / 3);
   gl.viewport(0, 0, shadeCanvas.width, shadeCanvas.height);
@@ -180,19 +268,25 @@ function sizeShade() {
 }
 
 function renderShade() {
-  if (!gl) return;
+  if (!glOn) return;
   gl.uniform1f(uT, t);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
-// Fallback drift for the CSS layers when WebGL is missing.
+// Fallback drift for the CSS layers when WebGL is missing. Their gradients
+// are authored in blue, so a tint re-aims them the cheap way.
 const light = document.querySelector('.streak.light');
 const dark = document.querySelector('.streak.dark');
+if (tinted) {
+  for (const layer of [light, dark]) {
+    layer.style.filter = `hue-rotate(${hueDelta}deg) saturate(${satMul})`;
+  }
+}
 let t = 0;
 let paused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function applyDrift() {
-  if (gl) return;
+  if (glOn) return;
   const w = window.innerWidth;
   const h = window.innerHeight;
   light.style.transform =
@@ -204,15 +298,18 @@ function applyDrift() {
 }
 
 let last = performance.now();
-let tick = 0;
+let lastShade = -1e9;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (!paused) {
     t += dt;
-    // A wallpaper does not need 60fps: every third frame is plenty for
-    // weather, and Plash keeps the page alive all day.
-    if (tick++ % 3 === 0) renderShade();
+    // A wallpaper does not need 60fps: ~20 is plenty for weather, and pacing
+    // by time rather than frame count keeps a 120Hz display at 20, not 40.
+    if (now - lastShade >= 48) {
+      lastShade = now;
+      renderShade();
+    }
     applyDrift();
   }
   requestAnimationFrame(frame);

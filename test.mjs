@@ -3373,6 +3373,52 @@ try {
       assert.equal(await p.locator('#hint').isVisible(), false, 'the hint survived ?bare');
     });
 
+    await test('the sheet takes another colour and another mark', async () => {
+      // Default page: the apple, and marks that stop short of it.
+      await p.goto(BLUEPRINT, { waitUntil: 'load' });
+      await p.waitForTimeout(200);
+      const dflt = await p.evaluate(() => ({
+        apple: document.querySelectorAll('#geometry path').length,
+        bg: document.body.style.background,
+      }));
+      assert.equal(dflt.apple, 1, 'no apple on the default page');
+      assert.equal(dflt.bg, '', 'the default page overrode its own ground');
+      // A hue recolours the ground; an icon replaces the apple; the icon
+      // keeps the clearing the apple had.
+      await p.goto(`${BLUEPRINT}?hue=145&icon=${encodeURIComponent('🌲')}`, { waitUntil: 'load' });
+      await p.waitForTimeout(200);
+      const tinted = await p.evaluate(() => {
+        const cy = innerHeight / 2;
+        // Only the dashed construction marks must keep clear of the icon —
+        // the solid grid line behind it is the design.
+        const spansCentre = [...document.querySelectorAll('#geometry g[stroke-dasharray] line')]
+          .some((l) => {
+            const y1 = +l.getAttribute('y1');
+            const y2 = +l.getAttribute('y2');
+            return Math.min(y1, y2) < cy - 1 && Math.max(y1, y2) > cy + 1;
+          });
+        return {
+          bg: document.body.style.background,
+          apple: document.querySelectorAll('#geometry path').length,
+          glyph: document.querySelector('#geometry text')?.textContent,
+          gap: !spansCentre,
+        };
+      });
+      assert.match(tinted.bg, /radial-gradient/, '?hue left the ground alone');
+      assert.equal(tinted.apple, 0, 'the apple survived ?icon');
+      assert.equal(tinted.glyph, '🌲', 'the glyph is not the one asked for');
+      assert.ok(tinted.gap, 'a construction line runs into the icon');
+      // icon=none: no mark, and the lines close ranks over the centre.
+      await p.goto(`${BLUEPRINT}?icon=none`, { waitUntil: 'load' });
+      await p.waitForTimeout(200);
+      const bare = await p.evaluate(() => ({
+        apple: document.querySelectorAll('#geometry path').length,
+        glyph: !!document.querySelector('#geometry text'),
+      }));
+      assert.equal(bare.apple, 0, 'icon=none still drew the apple');
+      assert.equal(bare.glyph, false, 'icon=none still drew a glyph');
+    });
+
     await p.close();
   }
 
