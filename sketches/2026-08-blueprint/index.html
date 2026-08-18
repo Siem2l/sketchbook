@@ -48,6 +48,11 @@
       radial-gradient(28% 10% at 72% 58%, rgba(9,14,95,0.40), transparent 70%);
     }
 
+    /* The real dapple: a low-res noise shader upscaled to the viewport. The
+       CSS .streak layers above stay as the fallback when WebGL is missing. */
+    #shade { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+    body.gl .streak { display: none; }
+
     #geometry { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
   </style>
 </head>
@@ -57,6 +62,7 @@
     <div class="streak dark"></div>
     <div class="streak light"></div>
   </div>
+  <canvas id="shade"></canvas>
   <svg id="geometry"></svg>
   <div id="hint"><kbd>space</kbd> holds the light still<br />add <kbd>?bare</kbd> before pointing Plash at it</div>
   <script type="module" src="./sketch.js"></script>

@@ -7,6 +7,6 @@
     "wallpaper",
     "animation"
   ],
-  "description": "The macOS blueprint wallpaper taken apart and rebuilt as four flat layers: a blue ground, bands of light and shade, a grid of glass tiles, and the draughtsman's dashed marks around the thing being drawn. The layers of weather wander on sine periods that never quite agree, slowly enough that the desk breathes rather than scrolls, and the whole page costs nothing to leave open all day — which is the point: add ?bare to the URL, hand it to Plash, and it is a living desktop.",
+  "description": "The macOS blueprint wallpaper taken apart and rebuilt in layers: a blue ground, a canopy shadow, a grid of glass tiles, and the draughtsman's dashed marks around the thing being drawn. The shadow is grown rather than placed — two anisotropic noise fields, one for the leaf masses and one stretched hard across the diagonal so it breaks into branches, gated so the branches arrive in clusters the way a canopy actually hangs. It renders at a third of the resolution and a third of the frame rate, because softness upscales for free — which is the point: add ?bare to the URL, hand it to Plash, and the light through the leaves moves on your desk all day for almost nothing.",
   "thumbnail": "thumb.png"
 }

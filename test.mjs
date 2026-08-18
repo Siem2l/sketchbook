@@ -3166,8 +3166,12 @@ try {
       }
     });
 
+    // The dapple is a shader when WebGL is there and CSS layers when it is
+    // not; both are driven by the same clock, so the clock is what the tests
+    // watch. The CSS fallback additionally moves its transform off the clock.
     const drift = () => p.evaluate(() => ({
       t: window.blueprint.t,
+      gl: document.body.classList.contains('gl'),
       light: document.querySelector('.streak.light').style.transform,
     }));
 
@@ -3176,7 +3180,7 @@ try {
       await p.waitForTimeout(700);
       const b = await drift();
       assert.ok(b.t > a.t, 'time is not passing');
-      assert.notEqual(b.light, a.light, 'the streak layer never moved');
+      if (!b.gl) assert.notEqual(b.light, a.light, 'no WebGL, and the fallback never moved');
     });
 
     await test('space holds the light still', async () => {
@@ -3185,7 +3189,8 @@ try {
       const a = await drift();
       await p.waitForTimeout(500);
       const b = await drift();
-      assert.equal(b.light, a.light, 'the streaks kept moving while paused');
+      assert.equal(b.t, a.t, 'the clock kept running while paused');
+      assert.equal(b.light, a.light, 'the fallback kept moving while paused');
       await p.keyboard.press('Space');
       assert.equal(await p.evaluate(() => window.blueprint.paused), false, 'space did not resume');
     });
