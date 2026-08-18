@@ -73,19 +73,32 @@ Insert into `test.mjs` immediately after the `const failures = [];` / `async fun
   // The design's central claim, asserted against its own source. If a refetch
   // ever changes this, the build fails loudly rather than the page quietly
   // telling a story that is no longer true.
-  await test('every horizon eclipse lands between 60 and 80 degrees of latitude', async () => {
+  await test('every horizon eclipse lands between 60 and 72 degrees of latitude', async () => {
     const horizon = [];
     for (let i = 0; i < raw.count; i++) if (raw.alt[i] === 0) horizon.push(Math.abs(raw.lat[i]));
     assert.ok(horizon.length / raw.count > 0.3, `only ${horizon.length} at the horizon`);
-    assert.ok(Math.min(...horizon) >= 60, `a horizon eclipse at |lat| ${Math.min(...horizon)}`);
-    assert.ok(Math.max(...horizon) <= 80, `a horizon eclipse at |lat| ${Math.max(...horizon)}`);
+    assert.equal(Math.min(...horizon), 60, `the band's low edge moved to ${Math.min(...horizon)}`);
+    assert.equal(Math.max(...horizon), 72, `the band's high edge moved to ${Math.max(...horizon)}`);
   });
 
-  await test('a partial eclipse is always a horizon eclipse and never the reverse', async () => {
+  // Every partial is a horizon eclipse; the converse is false, and the
+  // exceptions are the interesting ones. 68 annular and 26 total eclipses also
+  // peak at 0° — the "non-central" ones the catalog marks A- and T+, where the
+  // shadow axis misses the Earth but the antumbra still grazes the polar limb.
+  // They are the same near-miss geometry as the partials, caught one notch
+  // closer in. Asserting the biconditional would delete them.
+  await test('a partial always peaks on the horizon, and it is not alone there', async () => {
+    let partials = 0, nonCentral = 0;
     for (let i = 0; i < raw.count; i++) {
-      if (raw.type[i] === 'P') assert.equal(raw.alt[i], 0, `partial at year ${raw.year[i]} has alt ${raw.alt[i]}`);
-      if (raw.alt[i] === 0) assert.equal(raw.type[i], 'P', `alt 0 at year ${raw.year[i]} is type ${raw.type[i]}`);
+      if (raw.type[i] === 'P') { partials++; assert.equal(raw.alt[i], 0, `partial in ${raw.year[i]} peaks at ${raw.alt[i]}°`); }
+      else if (raw.alt[i] === 0) {
+        nonCentral++;
+        assert.ok('AT'.includes(raw.type[i]), `alt 0 in ${raw.year[i]} is type ${raw.type[i]}`);
+        assert.ok(Math.abs(raw.gamma[i]) > 0.99, `a non-central ${raw.type[i]} in ${raw.year[i]} at gamma ${raw.gamma[i]}`);
+      }
     }
+    assert.ok(partials > 4000, `only ${partials} partials`);
+    assert.ok(nonCentral > 50 && nonCentral < 200, `${nonCentral} non-central eclipses at the horizon`);
   });
 }
 ```
@@ -167,12 +180,16 @@ for (const url of urls) {
       const m = ROW.exec(line);
       if (!m) { unmatched++; console.error(`unmatched: ${line.slice(0, 90)}`); continue; }
       rows.push({
+        // The regex has 16 groups, not 17: the time column is matched by a
+        // bare \S+ and captures nothing. Counting it is an easy off-by-one
+        // that still "works" — every index lands on a real field, just the
+        // wrong one — so the data comes out plausible and wrong.
         year: Number(m[2]),
-        type: m[9][0],
-        gamma: Number(m[11]),
-        lat: Number(m[13]) * (m[14] === 'N' ? 1 : -1),
-        lon: Number(m[15]) * (m[16] === 'E' ? 1 : -1),
-        alt: Number(m[17]),
+        type: m[8][0],
+        gamma: Number(m[10]),
+        lat: Number(m[12]) * (m[13] === 'N' ? 1 : -1),
+        lon: Number(m[14]) * (m[15] === 'E' ? 1 : -1),
+        alt: Number(m[16]),
       });
     }
   }
@@ -206,9 +223,28 @@ console.log(`${horizon.length} at the horizon (${(100 * horizon.length / rows.le
 - [ ] **Step 4: Run the script**
 
 Run: `node scripts/fetch-eclipses.mjs`
-Expected: 50 dots, then a summary. The eclipse count should be near 11,898 and the horizon share near 35%, `|lat|` range 60–80.
+Expected: 50 dots, then a summary reading `11898 eclipses, -1999 to 3000` and `4294 at the horizon (36.1%), |lat| 60-72`.
 
 **If the count differs from 11,898, the parser is right and the spec's number was wrong** — say so in the commit message and move on. If any line reports `unmatched`, stop: read the offending line and widen `ROW` to cover it. Do not loosen `LOOKS_LIKE_ROW` to make the error disappear.
+
+**The numbers below are measured over all 50 pages and are the ones to use.**
+An earlier draft of this plan carried `60`/`80` and 35.3%, read off a 10°-bin
+histogram of 20 centuries. The bin edge was not the extremum. The full run says:
+
+```
+11,898 eclipses          -1999 to +3000, exactly the published count
+ 4,294 at alt 0 (36.1%)  |lat| 60-72, exact — nothing outside the band
+       of those: 4,200 partial, 68 non-central annular, 26 non-central total
+45.1%  of all eclipses peak with the Sun 30° or lower
+91.8%  of eclipses inside |lat| 15 peak with the Sun 60° or higher
+```
+
+If your run disagrees with any of these, the run is the authority and something
+is wrong with this plan — report the discrepancy rather than editing the numbers
+to match, because three later tasks and the spec now quote them.
+
+A band that is not a band at all — horizon eclipses near the equator — would
+falsify the sketch's premise. Stop and report BLOCKED with the offending rows.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -279,13 +315,19 @@ Expected: FAIL — the page 404s, so `window.eclipse` never appears and `waitFor
   "title": "eclipse horizon",
   "date": "2026-08-13",
   "tags": ["nasa", "eclipses", "globe", "canvas", "deep-time"],
-  "description": "Every solar eclipse from 1999 BC to 3000 AD, plotted where it peaked. A third of them happen with the Sun exactly on the horizon, and all of those land in two rings between 60 and 80 degrees of latitude — because the Moon's shadow misses the Earth entirely a third of the time, and a near miss is only visible from the sunrise line."
+  "description": "All 11,898 solar eclipses from 2000 BC to 3000 AD, plotted where each one peaked. 36% of them peak with the Sun exactly on the horizon, and every single one of those lands in two rings between 60 and 72 degrees of latitude — because the Moon's shadow misses the Earth entirely about a third of the time, and a near miss is only visible from the sunrise line."
 }
 ```
 
 - [ ] **Step 4: Write index.html**
 
-Follow `sketches/2026-08-edge/index.html` exactly for the chrome — same back link, same `#ui` panel rules, same fonts and colours. The controls are added in Task 5; leave the panel in place with only the hint block populated.
+Take the chrome from `sketches/2026-08-edge/index.html` — same back link, same
+`#ui` panel, same fonts and colours, so the two pages are visibly siblings.
+"Same visual language", not "byte-identical stylesheet": this page has a hint
+block that `edge` does not, has no `#note` element to style, and needs a wider
+`label .val` because its readout says `2000 BC` where `edge`'s says a number.
+Diverge where this page genuinely differs and nowhere else. The controls are
+added in Task 5; leave the panel in place with only the hint block populated.
 
 ```html
 <!doctype html>
@@ -374,17 +416,25 @@ export function drawGlobe(ctx, view, r, cx, cy) {
   ctx.fillStyle = '#15151a';
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
 
+  // 60 and 72 are drawn heavier below, so the plain graticule skips ±60 rather
+  // than laying a thin line under a thick one.
+  const BAND = [-72, -60, 60, 72];
+
   ctx.lineWidth = 1;
   ctx.strokeStyle = '#26262e';
-  for (let lat = -75; lat <= 75; lat += 15) if (lat % 15 === 0) strokeParallel(ctx, lat, view, r, cx, cy);
+  for (let lat = -75; lat <= 75; lat += 15) {
+    if (BAND.includes(lat)) continue;
+    strokeParallel(ctx, lat, view, r, cx, cy);
+  }
   for (let lon = -180; lon < 180; lon += 15) strokeMeridian(ctx, lon, view, r, cx, cy);
 
-  // 60 and 80 are drawn heavier because they are exactly what the horizon
-  // eclipses refuse to cross. Drawing them is the difference between a pattern
-  // a viewer notices and one they can check.
+  // 60 and 72 are exactly what the horizon eclipses refuse to cross — measured
+  // over all 11,898, not rounded to the graticule, which is why 72 is not on
+  // the 15° grid above. Drawing them is the difference between a pattern a
+  // viewer notices and one they can check.
   ctx.strokeStyle = '#3c4a46';
   ctx.lineWidth = 1.5;
-  for (const lat of [-80, -60, 60, 80]) strokeParallel(ctx, lat, view, r, cx, cy);
+  for (const lat of BAND) strokeParallel(ctx, lat, view, r, cx, cy);
 
   ctx.strokeStyle = '#2e2e38';
   ctx.lineWidth = 1;
@@ -395,11 +445,11 @@ export function drawGlobe(ctx, view, r, cx, cy) {
 - [ ] **Step 6: Write sketch.js**
 
 ```js
-// Every solar eclipse NASA has computed, from 1999 BC to 3000 AD, plotted at
+// Every solar eclipse NASA has computed, from 2000 BC to 3000 AD, plotted at
 // the point where it peaked. The claim the page makes is not subtle and is not
-// argued: a third of them have the Sun at exactly 0°, and every one of those
-// lands between 60° and 80° of latitude. Turn the globe and the two rings are
-// simply there.
+// argued: 4,294 of the 11,898 — 36% — have the Sun at exactly 0°, and every
+// one of those lands between 60° and 72° of latitude, with nothing outside the
+// band. Turn the globe and the two rings are simply there.
 //
 // Why gamma: the Moon's shadow axis misses the Earth's centre by a distance
 // that, over 5,000 years, is uniformly distributed from 0 to about 1.55 Earth
@@ -412,17 +462,25 @@ export function drawGlobe(ctx, view, r, cx, cy) {
 // is the bright end. That is backwards for an altitude scale and correct for
 // this page, whose subject is the horizon.
 //
-// No p5 and no import at all: see globe.js for why the projection does not
-// need one.
-import { project, drawGlobe } from './globe.js';
+// No drawing library of any kind — no p5, no d3, no WebGL. The only import is
+// this sketch's own projection; see globe.js for why six lines of trig did not
+// need a dependency behind them.
+import { drawGlobe } from './globe.js';
 
 const SIZE = 720;
 const canvas = document.createElement('canvas');
 canvas.width = SIZE; canvas.height = SIZE;
 document.body.insertBefore(canvas, document.getElementById('ui'));
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
+// No willReadFrequently: this canvas is written every frame and read only by
+// the test probe below. The hint asks the browser for a software-backed
+// surface, which is exactly the wrong trade for a page whose job is to draw
+// 11,898 marks per frame.
+const ctx = canvas.getContext('2d');
 
-const view = { lambda: 20, phi: 25 };
+// phi 15, not 25: the two bands sit at ±60-72, and tilting far enough to show
+// the northern one properly pushes the southern one off the limb entirely,
+// which reads as a bug rather than as a hemisphere. Low enough to keep both.
+const view = { lambda: 20, phi: 15 };
 let data = null;
 
 function render() {
@@ -436,12 +494,18 @@ function loop() { render(); requestAnimationFrame(loop); }
 window.eclipse = {
   view: () => ({ ...view }),
   ready: () => data !== null,
-  // Cheap "is anything actually drawn" probe for the tests. Counts pixels that
-  // differ from the page background on a coarse grid.
+  // Cheap "is anything actually drawn" probe for the tests. Counts opaque
+  // pixels that differ from the page background, on a coarse grid.
+  //
+  // The alpha test is not redundant. An untouched canvas is transparent black,
+  // which differs from the background tuple just as much as a drawn pixel does
+  // — so without it this returns "everything is ink" for a page that rendered
+  // nothing at all, which is the one answer it exists to rule out.
   inkCount: () => {
     const d = ctx.getImageData(0, 0, SIZE, SIZE).data;
     let n = 0;
     for (let i = 0; i < d.length; i += 4 * 4) {
+      if (d[i + 3] === 0) continue;
       if (d[i] !== 14 || d[i + 1] !== 14 || d[i + 2] !== 17) n++;
     }
     return n;
@@ -536,9 +600,18 @@ export const RAMP = ['#32554b', '#467466', '#5d9383', '#77b3a1', '#90d4c0'];
 export const HORIZON_COLOR = '#e0a316';
 
 // Horizon-ness, not altitude: alt 90 is the dim end, alt 1 the bright one.
+//
+// The parameter is cos(alt), not a linear walk from 90 down to 1, and that is
+// not a cosmetic curve. Central-eclipse altitude is distributed as sin(alt) —
+// uniform gamma pushed through alt = 90 − arcsin|gamma| — so a linear ramp puts
+// 54.5% of all 7,604 marks into its two dimmest steps, 2.2% in the brightest,
+// globe comes out one flat colour. cos(alt) is that distribution's own CDF, so
+// the five steps carry equal populations and the ramp shows what it encodes.
+// Reading the scale off the physics is also what makes it honest: the steps are
+// equal shares of eclipses, not equal spans of degrees.
 export function colorFor(alt) {
   if (alt === 0) return HORIZON_COLOR;
-  const t = 1 - (alt - 1) / 89;                       // 0 at overhead, 1 at the horizon
+  const t = Math.cos(alt * Math.PI / 180);            // 0 at overhead, →1 at the horizon
   return RAMP[Math.min(RAMP.length - 1, Math.max(0, Math.round(t * (RAMP.length - 1))))];
 }
 
@@ -553,14 +626,19 @@ export function drawPoints(ctx, data, upTo, view, r, cx, cy) {
   }
   vis.sort((a, b) => a[0] - b[0]);
 
+  // Mark sizes are set by the densest case, not the sparsest. 4,294 horizon
+  // eclipses crowd into two narrow bands, and at r=2.6 their strokes overlap
+  // into one solid arc — which loses the hollow ring that is the whole point of
+  // giving them a separate mark. Smaller, thinner, and the band keeps its
+  // grain: you can see it is made of individual eclipses.
   for (const [, px, py, alt] of vis) {
     if (alt === 0) {
       ctx.strokeStyle = HORIZON_COLOR;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(px, py, 2.6, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 0.9;
+      ctx.beginPath(); ctx.arc(px, py, 1.7, 0, Math.PI * 2); ctx.stroke();
     } else {
       ctx.fillStyle = colorFor(alt);
-      ctx.beginPath(); ctx.arc(px, py, 1.9, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px, py, 1.5, 0, Math.PI * 2); ctx.fill();
     }
   }
   return vis.length;
@@ -569,10 +647,12 @@ export function drawPoints(ctx, data, upTo, view, r, cx, cy) {
 
 - [ ] **Step 4: Wire it into sketch.js**
 
-Add the import, track the count, and extend the exposed object:
+Add the import, track the count, and extend the exposed object. `sketch.js`
+never calls `project` itself — `points.js` and `globe.js` both do, and they
+import it directly — so the import line stays two names wide:
 
 ```js
-import { project, drawGlobe } from './globe.js';
+import { drawGlobe } from './globe.js';
 import { drawPoints, colorFor } from './points.js';
 ```
 
@@ -605,7 +685,13 @@ Expected: both `ok`.
 
 - [ ] **Step 6: Look at it**
 
-Run: `npm run dev`, open the sketch, and confirm by eye that two amber rings are visible near the poles and the teal dots crowd the tropics. The validator checks colour, not layout. If the rings are not obvious, the marks are too small — raise both radii by 0.5 and re-check, but do not change the colours.
+Run `npm run dev`, open the sketch, and confirm by eye that two amber bands sit near the poles and that the teal visibly varies between poles and tropics. The validator checks colour, not layout.
+
+Three things went wrong here on the first pass and every one was invisible to the tests, so look for them specifically:
+
+- **Marks too large, not too small.** At r=2.6 the 4,294 horizon rings overlap into one solid amber arc, which destroys the hollow mark that is the only reason they are drawn differently. The band should have visible grain — you should be able to see it is made of individual eclipses.
+- **The southern band clipped by the default view**, which reads as a rendering bug rather than as a hemisphere.
+- **A flat-looking ramp.** If the teal is all one colour the ramp is mis-scaled against the `sin(alt)` population, not too subtle. Fix the scale, not the palette: the hexes are validated and do not change.
 
 - [ ] **Step 7: Commit**
 
@@ -744,10 +830,10 @@ await test('the readout earns its numbers as the points land', async () => {
   await p.evaluate(() => window.eclipse.setIndex(window.eclipse.total()));
   await p.waitForTimeout(150);
   const s = await p.evaluate(() => window.eclipse.stats());
-  assert.ok(Math.abs(s.pctZero - 35) < 4, `${s.pctZero}% at the horizon, expected about 35`);
-  assert.ok(Math.abs(s.pctLow - 45) < 5, `${s.pctLow}% below 30 degrees, expected about 45`);
+  assert.ok(Math.abs(s.pctZero - 36.1) < 1, `${s.pctZero}% at the horizon, expected 36.1`);
+  assert.ok(Math.abs(s.pctLow - 45.1) < 1, `${s.pctLow}% below 30 degrees, expected 45.1`);
   assert.equal(s.latMin, 60, `horizon eclipses reach down to ${s.latMin}`);
-  assert.equal(s.latMax, 80, `horizon eclipses reach up to ${s.latMax}`);
+  assert.equal(s.latMax, 72, `horizon eclipses reach up to ${s.latMax}`);
 
   // Early on the claim has not been earned yet, and the page should show that
   // rather than a settled number computed from data not yet on screen.
@@ -951,7 +1037,17 @@ await test('the page says what its colours mean, in degrees', async () => {
   const swatches = await p.evaluate(() =>
     [...document.querySelectorAll('#legend i')].map((el) => getComputedStyle(el).backgroundColor));
   assert.ok(swatches.length >= 5, `only ${swatches.length} swatches`);
-  assert.ok(swatches.includes('rgb(224, 163, 22)'), 'the reserved horizon colour is missing from the legend');
+
+  // The horizon key must be hollow like the mark it stands for. Asserting on
+  // the border rather than the fill is the point: a filled amber dot here
+  // would advertise an encoding the globe does not use.
+  const ring = await p.evaluate(() => {
+    const s = getComputedStyle(document.querySelector('#legend i.ring'));
+    return { border: s.borderTopColor, fill: s.backgroundColor };
+  });
+  assert.equal(ring.border, 'rgb(224, 163, 22)', 'the horizon key is not on its reserved colour');
+  assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(ring.fill),
+    `the horizon key is filled (${ring.fill}) — it should be hollow`);
 });
 ```
 
@@ -973,7 +1069,7 @@ Add to the `<style>` block:
 ```css
     #legend { color: #8a877e; font-size: 11px; gap: 0.35rem; align-items: center; }
     #legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
-    #legend i.ring { background: none; border: 1.5px solid #e0a316; }
+    #legend i.ring { background: transparent; border: 1.5px solid #e0a316; }
 ```
 
 Build it in `sketch.js`, importing `RAMP` and `HORIZON_COLOR`:
@@ -988,11 +1084,14 @@ function buildLegend() {
     + RAMP.map(swatch).reverse().join('')
     + '<span>1°</span>'
     + '<span style="margin-left:0.8rem">on the horizon, 0°</span>'
-    + `<i class="ring" style="background:${HORIZON_COLOR}"></i>`;
+    + `<i class="ring" style="border-color:${HORIZON_COLOR}"></i>`;
 }
 ```
 
-The ring swatch needs the reserved colour present as a background for the test's `getComputedStyle` check and visible as a border for the reader; `background` is overridden by the inline style while `border` comes from the class, so both hold. Call `buildLegend()` in the load callback.
+The horizon swatch is styled through `border-color`, never `background` — it has
+to be hollow, because it stands for a hollow mark. Setting a background here
+would make the key advertise a filled dot the globe never draws. Call
+`buildLegend()` in the load callback.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
@@ -1013,7 +1112,7 @@ Expected: `public/sketches/2026-08-eclipse-horizon/thumb.png` appears. Open it: 
 
 Add an entry to the `## Sketches` list in `README.md`, matching the register of the existing entries — what the data is, where it came from, and the one non-obvious thing. Roughly:
 
-> - **eclipse horizon** (`2026-08-eclipse-horizon`) — every solar eclipse from 1999 BC to 3000 AD, at the point where it peaked, out of Espenak's Five Millennium Catalog. A third of them have the Sun at exactly 0°, and all of those land between 60° and 80° of latitude, because gamma — the miss distance of the Moon's shadow axis from the Earth's centre — is uniform out to about 1.55 Earth radii while the Earth stops at 1.0. A third of the range is the shadow missing the planet, and a near miss is only visible from the sunrise line. The ramp runs on horizon-ness rather than altitude, so the low Sun is the bright end; the 0° eclipses are off the ramp entirely, on a reserved colour and a hollow mark, because 35% of the data stacked on one value is a category, not the bottom of a scale. `scripts/fetch-eclipses.mjs` pulls the 50 century pages by hand and the result is committed, so a page load never depends on NASA being up.
+> - **eclipse horizon** (`2026-08-eclipse-horizon`) — all 11,898 solar eclipses from 2000 BC to 3000 AD, at the point where each one peaked, out of Espenak's Five Millennium Catalog. 4,294 of them — 36% — have the Sun at exactly 0°, and every one of those lands between 60° and 72° of latitude with nothing outside the band, because gamma, the miss distance of the Moon's shadow axis from the Earth's centre, is uniform out to about 1.55 Earth radii while the Earth stops at 1.0. A third of the range is the shadow missing the planet, and a near miss is only visible from the sunrise line. Mostly those are partial eclipses, but 94 are not: the non-central annulars and totals the catalog marks `A-` and `T+`, where the axis misses and the antumbra grazes the limb anyway. The ramp runs on horizon-ness rather than altitude, so the low Sun is the bright end; the 0° eclipses are off the ramp entirely, on a reserved colour and a hollow mark, because a third of the data stacked on one value is a category and not the bottom of a scale. `scripts/fetch-eclipses.mjs` pulls the 50 century pages by hand and the result is committed, so a page load never depends on NASA being up.
 
 - [ ] **Step 8: Commit**
 

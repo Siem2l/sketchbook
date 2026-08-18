@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>eclipse horizon</title>
+  <style>
+    /* The panel grew to six rows once the orientation and caveat text moved
+       into it, and it is fixed, so the page needs to reserve that much or the
+       globe's south pole sits underneath it. */
+    body { margin: 0; padding-bottom: 13rem; box-sizing: border-box; background: #0e0e11; color: #e8e6e0; font: 14px ui-monospace, monospace; display: grid; place-items: center; min-height: 100vh; }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #8a877e; text-decoration: none; }
+    canvas { touch-action: none; cursor: grab; }
+    canvas.dragging { cursor: grabbing; }
+    #ui { position: fixed; bottom: 0.75rem; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: calc(100vw - 2rem); display: flex; flex-direction: column; gap: 0.4rem; background: #17171cdd; padding: 0.5rem 0.7rem; border-radius: 8px; }
+    .row { display: flex; gap: 0.4rem; align-items: center; justify-content: center; flex-wrap: wrap; }
+    button { background: #26262e; color: #e8e6e0; border: 1px solid #444; border-radius: 4px; padding: 0.3rem 0.55rem; font: inherit; font-size: 13px; cursor: pointer; }
+    button:hover { border-color: #7fb3a3; }
+    label { display: flex; gap: 0.3rem; align-items: center; color: #8a877e; font-size: 11px; }
+    label .val { color: #e8e6e0; min-width: 3.5rem; }
+    input[type=range] { accent-color: #7fb3a3; }
+    /* In the panel, not floating top-right: the cross-section is 720px wide and
+       a fixed corner block sat straight on top of it. */
+    #hint { color: #8a877e; font-size: 11px; gap: 1.2rem; max-width: 62rem; }
+    #hint b { color: #e0a316; font-weight: normal; }
+    #caveat { color: #8a877e; font-size: 11px; max-width: 62rem; text-align: center; }
+    #caveat b { color: #e0a316; font-weight: normal; }
+    #readout { color: #8a877e; font-size: 11px; gap: 1.1rem; }
+    #readout b { color: #e8e6e0; font-weight: normal; }
+    #readout .zero { color: #e0a316; }
+    #legend { color: #8a877e; font-size: 11px; gap: 0.35rem; align-items: center; }
+    #legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+    #legend i.ring { background: transparent; border: 1.5px solid #e0a316; }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← sketchbook</a>
+  <div id="ui">
+    <div class="row" id="hint">
+      <span>sunlight comes from behind you, so the whole disc is daylight and <b>its rim is the sunrise line</b> — the Sun is on the horizon all the way round it.</span>
+    </div>
+    <div class="row" id="hint">
+      <span>drag γ to slide the Moon's shadow across the Earth — <b>one arrangement, shown live.</b> the dots are 11,898 real ones, each at the place it peaked, coloured by how high the Sun stood there.</span>
+    </div>
+    <div class="row">
+      <button id="play">play</button>
+      <button id="reset">rewind</button>
+      <label>year <input id="scrub" type="range" min="0" max="1" step="1" value="1" style="width: 18rem" /><span class="val" id="year">—</span></label>
+      <label>speed <input id="speed" type="range" min="1" max="60" step="1" value="18" style="width: 5rem" /></label>
+    </div>
+    <div class="row">
+      <label>γ — how far the shadow axis misses the Earth's centre
+        <input id="gamma" type="range" min="0" max="1.7" step="0.01" value="0.3" style="width: 14rem" />
+        <span class="val" id="gamma-val" style="min-width: 20rem"></span></label>
+    </div>
+    <div class="row"><span id="shadow-note" style="color:#8a877e;font-size:11px"></span></div>
+    <div class="row" id="readout"></div>
+    <div class="row" id="legend"></div>
+    <div class="row" id="caveat">
+      <span><b>a sphere is horizon-heavy for free:</b> half of all daylight anywhere is below 30° too. the rings are what eclipses add to that.</span>
+    </div>
+  </div>
+  <script type="module" src="./sketch.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "title": "blueprint",
+  "date": "2026-08-18",
+  "tags": [
+    "svg",
+    "css",
+    "wallpaper",
+    "animation"
+  ],
+  "description": "The macOS blueprint wallpaper taken apart and rebuilt as four flat layers: a blue ground, bands of light and shade, a grid of glass tiles, and the draughtsman's dashed marks around the thing being drawn. The layers of weather wander on sine periods that never quite agree, slowly enough that the desk breathes rather than scrolls, and the whole page costs nothing to leave open all day — which is the point: add ?bare to the URL, hand it to Plash, and it is a living desktop.",
+  "thumbnail": "thumb.png"
+}

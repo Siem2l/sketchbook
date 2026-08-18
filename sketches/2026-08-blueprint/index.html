@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>blueprint</title>
+  <style>
+    html, body { height: 100%; }
+    body {
+      margin: 0; overflow: hidden;
+      /* Deep blueprint blue: a touch lighter where the light pools mid-screen,
+         darkening toward the corners so the grid can glow against it. */
+      background:
+        radial-gradient(120% 90% at 50% 44%,
+          #4f68da 0%, #3049cb 38%, #2136ba 68%, #1728a4 88%, #111f92 100%);
+    }
+    a.back { position: fixed; top: 1rem; left: 1rem; color: #cdd6ff; opacity: 0.75;
+             font: 14px ui-monospace, monospace; text-decoration: none; z-index: 4; }
+    #hint { position: fixed; bottom: 1rem; right: 1rem; z-index: 4; color: #cdd6ff; opacity: 0.55;
+            font: 12px ui-monospace, monospace; line-height: 1.6; text-align: right; }
+    #hint kbd { color: #ffffff; font: inherit; }
+    body.bare a.back, body.bare #hint { display: none; }
+
+    /* The weather layer: soft diagonal bands of light and shade, oversized so
+       they can wander without ever showing an edge. The softness lives in the
+       gradient stops themselves — no blur filter, so Plash pays almost nothing
+       to keep this on screen all day. */
+    #streaks { position: fixed; inset: 0; overflow: hidden; }
+    .streak { position: absolute; inset: -30%; will-change: transform; }
+    .streak.light { background:
+      linear-gradient(112deg, transparent 10%, rgba(235,242,255,0.28) 21%, transparent 30%),
+      linear-gradient(118deg, transparent 38%, rgba(240,246,255,0.38) 49%, transparent 57%),
+      linear-gradient(110deg, transparent 63%, rgba(235,242,255,0.24) 74%, transparent 86%);
+    }
+    .streak.dark { background:
+      linear-gradient(115deg, rgba(10,16,110,0.5) 0%, rgba(10,16,110,0.5) 5%, transparent 16%),
+      linear-gradient(109deg, transparent 26%, rgba(9,15,105,0.45) 35%, transparent 44%),
+      linear-gradient(117deg, transparent 52%, rgba(10,15,100,0.48) 60%, transparent 69%),
+      linear-gradient(112deg, transparent 80%, rgba(9,14,95,0.48) 91%, transparent 100%);
+    }
+
+    #geometry { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  </style>
+</head>
+<body>
+  <a class="back" href="/">← sketchbook</a>
+  <div id="streaks">
+    <div class="streak dark"></div>
+    <div class="streak light"></div>
+  </div>
+  <svg id="geometry"></svg>
+  <div id="hint"><kbd>space</kbd> holds the light still<br />add <kbd>?bare</kbd> before pointing Plash at it</div>
+  <script type="module" src="./sketch.js"></script>
+</body>
+</html>

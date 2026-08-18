@@ -20,6 +20,7 @@ const HYDRA = `${BASE}/sketches/2026-08-hydra-edge/`;
 const HENDRIKLAAN = `${BASE}/sketches/2026-08-hendriklaan/`;
 const ERRAND = `${BASE}/sketches/2026-08-errand/`;
 const BLUEPRINT = `${BASE}/sketches/2026-08-blueprint/`;
+const ECLIPSE = `${BASE}/sketches/2026-08-eclipse-horizon/`;
 
 let passed = 0;
 const failures = [];
@@ -54,6 +55,115 @@ const browser = await chromium.launch();
 
 try {
   await waitForServer(BASE);
+
+  // ----------------------------------------------------------------- eclipses
+  // Node-side: the data is on disk and the claim this sketch makes is a claim
+  // about the data, so neither the server nor a page is involved.
+  {
+    const raw = JSON.parse(readFileSync(new URL('./public/data/eclipses.json', import.meta.url), 'utf8'));
+
+    await test('the catalog parsed whole, with every column the same length', async () => {
+      // Pinned, not bounded. The page, the README and this file all state 11,898
+      // as a fact; a loose `> 11000` would let a refetch drop a century while
+      // every prose claim around it silently became wrong.
+      assert.equal(raw.count, 11898, `${raw.count} eclipses — a page is missing or doubled`);
+      for (const k of ['year', 'lat', 'lon', 'alt', 'gamma']) {
+        assert.equal(raw[k].length, raw.count, `${k} is ${raw[k].length}, count is ${raw.count}`);
+      }
+      assert.equal(raw.type.length, raw.count);
+      assert.equal(raw.year[0], -1999, `starts at ${raw.year[0]} — astronomical, so 2000 BC`);
+      assert.equal(raw.year[raw.count - 1], 3000, `ends at ${raw.year[raw.count - 1]}`);
+    });
+
+    await test('the globe has a map on it, and the map covers both bands', async () => {
+      const land = JSON.parse(readFileSync(new URL('./public/data/coastline.json', import.meta.url), 'utf8'));
+      assert.ok(land.rings.length > 100, `only ${land.rings.length} coastline rings`);
+      let lo = 90, hi = -90, pts = 0;
+      for (const ring of land.rings) {
+        assert.equal(ring.length % 2, 0, 'a ring has an odd number of coordinates');
+        for (let i = 0; i < ring.length; i += 2) {
+          const lon = ring[i], lat = ring[i + 1];
+          assert.ok(lon >= -180.1 && lon <= 180.1, `longitude ${lon} out of range`);
+          assert.ok(lat >= -90.1 && lat <= 90.1, `latitude ${lat} out of range`);
+          lo = Math.min(lo, lat); hi = Math.max(hi, lat); pts++;
+        }
+      }
+      assert.ok(pts > 4000, `only ${pts} coastline points`);
+      // The horizon eclipses sit at |lat| 60-72 in both hemispheres, and the
+      // whole reason for drawing land is that those rings should cross
+      // recognisable places rather than empty grid.
+      assert.ok(hi > 72, `land reaches only ${hi.toFixed(1)}°N — the northern band has no map under it`);
+      assert.ok(lo < -60, `land reaches only ${lo.toFixed(1)}°S — the southern band has no map under it`);
+    });
+
+    // The shadow the page casts on the globe is driven by a toy model: parallel
+    // sunlight, a spherical Earth, no parallax, no oblateness, no atmosphere.
+    // This asserts the toy is nonetheless the actual mechanism, by holding its
+    // one prediction against 7,628 eclipses NASA computed properly. If the
+    // agreement ever breaks, the shadow has stopped explaining the dots it
+    // falls across.
+    await test('the shadow model predicts the catalog it falls across', async () => {
+      const errs = [];
+      for (let i = 0; i < raw.count; i++) {
+        const g = Math.abs(raw.gamma[i]);
+        if (g >= 1) continue;
+        const predicted = Math.asin(Math.sqrt(1 - g * g)) * 180 / Math.PI;
+        errs.push(Math.abs(predicted - raw.alt[i]));
+      }
+      errs.sort((a, b) => a - b);
+      const median = errs[Math.floor(errs.length / 2)];
+      const p99 = errs[Math.floor(errs.length * 0.99)];
+      assert.ok(errs.length > 7000, `only ${errs.length} central eclipses to compare`);
+      assert.ok(median < 0.5, `median disagreement ${median.toFixed(2)}° — the model has drifted`);
+      assert.ok(p99 < 2.5, `99th percentile disagreement ${p99.toFixed(2)}°`);
+    });
+
+    await test('the numbers the page prints are the numbers the catalog holds', async () => {
+      // Every figure quoted in the README, meta.json and the sketch's own header
+      // is asserted here, so prose and data cannot drift apart unnoticed.
+      let zero = 0, low = 0, nonCentral = 0, central = 0;
+      for (let i = 0; i < raw.count; i++) {
+        if (raw.alt[i] <= 30) low++;
+        if (raw.alt[i] === 0) { zero++; if (raw.type[i] !== 'P') nonCentral++; } else central++;
+      }
+      assert.equal(zero, 4294, `${zero} eclipses peak at exactly 0°`);
+      assert.equal(central, 7604, `${central} central eclipses`);
+      assert.equal(nonCentral, 94, `${nonCentral} non-central eclipses at the horizon`);
+      assert.equal((100 * zero / raw.count).toFixed(1), '36.1');
+      assert.equal((100 * low / raw.count).toFixed(1), '45.1');
+    });
+
+    // The design's central claim, asserted against its own source. If a refetch
+    // ever changes this, the build fails loudly rather than the page quietly
+    // telling a story that is no longer true.
+    await test('every horizon eclipse lands between 60 and 72 degrees of latitude', async () => {
+      const horizon = [];
+      for (let i = 0; i < raw.count; i++) if (raw.alt[i] === 0) horizon.push(Math.abs(raw.lat[i]));
+      assert.ok(horizon.length / raw.count > 0.3, `only ${horizon.length} at the horizon`);
+      assert.equal(Math.min(...horizon), 60, `the band's low edge moved to ${Math.min(...horizon)}`);
+      assert.equal(Math.max(...horizon), 72, `the band's high edge moved to ${Math.max(...horizon)}`);
+    });
+
+    // Every partial is a horizon eclipse; the converse is false, and the
+    // exceptions are the interesting ones. 68 annular and 26 total eclipses also
+    // peak at 0° — the "non-central" ones the catalog marks A- and T+, where the
+    // shadow axis misses the Earth but the antumbra still grazes the polar limb.
+    // They are the same near-miss geometry as the partials, caught one notch
+    // closer in. Asserting the biconditional would delete them.
+    await test('a partial always peaks on the horizon, and it is not alone there', async () => {
+      let partials = 0, nonCentral = 0;
+      for (let i = 0; i < raw.count; i++) {
+        if (raw.type[i] === 'P') { partials++; assert.equal(raw.alt[i], 0, `partial in ${raw.year[i]} peaks at ${raw.alt[i]}°`); }
+        else if (raw.alt[i] === 0) {
+          nonCentral++;
+          assert.ok('AT'.includes(raw.type[i]), `alt 0 in ${raw.year[i]} is type ${raw.type[i]}`);
+          assert.ok(Math.abs(raw.gamma[i]) > 0.99, `a non-central ${raw.type[i]} in ${raw.year[i]} at gamma ${raw.gamma[i]}`);
+        }
+      }
+      assert.ok(partials > 4000, `only ${partials} partials`);
+      assert.ok(nonCentral > 50 && nonCentral < 200, `${nonCentral} non-central eclipses at the horizon`);
+    });
+  }
 
   // ------------------------------------------------------------------ geotiff
   // Node-side and browser-free: the decoder is pure and the fixtures are on
@@ -2762,6 +2872,204 @@ try {
     } finally {
       rmSync(FIX, { recursive: true, force: true });
     }
+  }
+
+  // ------------------------------------------------------------ eclipse-horizon
+  {
+    const p = await browser.newPage();
+    await p.goto(ECLIPSE, { waitUntil: 'load' });
+    await p.waitForFunction(() => window.eclipse?.ready(), null, { timeout: 15000 });
+    await p.waitForTimeout(400);
+
+    await test('the globe draws itself with no gesture', async () => {
+      const ink = await p.evaluate(() => window.eclipse.inkCount());
+      assert.ok(ink > 2000, `only ${ink} lit pixels — the canvas is effectively blank`);
+    });
+
+    await test('an overhead eclipse and a horizon eclipse are not the same mark', async () => {
+      const c = await p.evaluate(() => [
+        window.eclipse.colorFor(0), window.eclipse.colorFor(1),
+        window.eclipse.colorFor(45), window.eclipse.colorFor(90),
+      ]);
+      assert.equal(c[0], '#e0a316', 'the horizon spike is not on its reserved colour');
+      assert.equal(c[3], '#32554b', 'overhead is not the dim end');
+      assert.equal(c[1], '#90d4c0', 'a 1-degree Sun is not the bright end');
+      assert.notEqual(c[1], c[2], 'the ramp is flat');
+    });
+
+    await test('it draws the front hemisphere and not the back', async () => {
+      // Bounding the count is not enough: the two hemispheres hold 5,896 and
+      // 6,002 points, so a cull with its sign flipped would paint the far side
+      // and still land inside any loose range. This recomputes which points
+      // ought to be visible, independently of drawPoints, and demands the exact
+      // number — which the inverted cull misses by 106.
+      const { drawn, expected, total } = await p.evaluate(async () => {
+        const j = await (await fetch('/data/eclipses.json')).json();
+        const v = window.eclipse.view();
+        const RAD = Math.PI / 180;
+        const phi = v.phi * RAD;
+        let n = 0;
+        for (let i = 0; i < j.count; i++) {
+          const lat = j.lat[i] * RAD;
+          const dl = (j.lon[i] - v.lambda) * RAD;
+          const z = Math.sin(phi) * Math.sin(lat)
+            + Math.cos(phi) * Math.cos(lat) * Math.cos(dl);
+          if (z > 0) n++;
+        }
+        return { drawn: window.eclipse.drawn(), expected: n, total: j.count };
+      });
+      assert.ok(drawn > 1000, `only ${drawn} marks drawn`);
+      assert.equal(drawn, expected,
+        `${drawn} drawn, ${expected} are actually facing us (${total} total)`);
+    });
+
+    await test('dragging turns the globe, and letting go hands it back to the drift', async () => {
+      // #globe, not `canvas`: the page grew a second canvas for the
+      // cross-section, and a bare selector silently started dragging that one.
+      // And scroll it in first — with the cross-section above it the globe's
+      // centre sits below a 720px viewport, so mouse coordinates taken from the
+      // page box land nowhere near it.
+      await p.locator('#globe').scrollIntoViewIfNeeded();
+      await p.waitForTimeout(150);
+      const before = await p.evaluate(() => window.eclipse.view());
+      const box = await p.locator('#globe').boundingBox();
+      await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await p.mouse.down();
+      await p.mouse.move(box.x + box.width / 2 + 160, box.y + box.height / 2 + 40, { steps: 8 });
+      await p.mouse.up();
+      const after = await p.evaluate(() => window.eclipse.view());
+      assert.ok(Math.abs(after.lambda - before.lambda) > 10, `lambda barely moved (${before.lambda} → ${after.lambda})`);
+      assert.ok(Math.abs(after.phi - before.phi) > 3, `phi barely moved (${before.phi} → ${after.phi})`);
+      assert.ok(after.phi <= 90 && after.phi >= -90, `phi escaped its clamp at ${after.phi}`);
+
+      await p.waitForTimeout(3800);
+      const drifted = await p.evaluate(() => window.eclipse.view());
+      assert.notEqual(drifted.lambda, after.lambda, 'the idle drift never resumed');
+    });
+
+    await test('the past is a prefix: scrubbing back draws strictly fewer eclipses', async () => {
+      await p.evaluate(() => window.eclipse.setIndex(window.eclipse.total()));
+      await p.waitForTimeout(120);
+      const all = await p.evaluate(() => window.eclipse.drawn());
+      await p.evaluate(() => window.eclipse.setIndex(Math.floor(window.eclipse.total() / 4)));
+      await p.waitForTimeout(120);
+      const quarter = await p.evaluate(() => window.eclipse.drawn());
+      assert.ok(quarter < all, `${quarter} drawn at a quarter, ${all} at the end`);
+      assert.ok(quarter > 100, `only ${quarter} drawn at a quarter of the catalog`);
+    });
+
+    await test('the readout earns its numbers as the points land', async () => {
+      await p.evaluate(() => window.eclipse.setIndex(window.eclipse.total()));
+      await p.waitForTimeout(150);
+      const s = await p.evaluate(() => window.eclipse.stats());
+      assert.ok(Math.abs(s.pctZero - 36.1) < 1, `${s.pctZero}% at the horizon, expected 36.1`);
+      assert.ok(Math.abs(s.pctLow - 45.1) < 1, `${s.pctLow}% below 30 degrees, expected 45.1`);
+      assert.equal(s.latMin, 60, `horizon eclipses reach down to ${s.latMin}`);
+      assert.equal(s.latMax, 72, `horizon eclipses reach up to ${s.latMax}`);
+
+      // Early on the claim has not been earned yet, and the page should show
+      // that rather than a settled number computed from data not yet on screen.
+      await p.evaluate(() => window.eclipse.setIndex(12));
+      await p.waitForTimeout(120);
+      const early = await p.evaluate(() => window.eclipse.stats());
+      assert.equal(early.n, 12, `stats read ${early.n} with 12 eclipses placed`);
+      assert.notEqual(early.pctZero, s.pctZero, 'the readout is not tracking what has landed');
+    });
+
+    await test('space plays and pauses the five thousand years', async () => {
+      await p.evaluate(() => window.eclipse.setIndex(0));
+      await p.keyboard.press('Space');
+      await p.waitForTimeout(700);
+      assert.equal(await p.evaluate(() => window.eclipse.playing()), true);
+      const moving = await p.evaluate(() => window.eclipse.index());
+      assert.ok(moving > 0, 'play did not advance the catalog');
+      await p.keyboard.press('Space');
+      await p.waitForTimeout(300);
+      const held = await p.evaluate(() => window.eclipse.index());
+      await p.waitForTimeout(500);
+      assert.equal(await p.evaluate(() => window.eclipse.index()), held, 'pause did not hold');
+    });
+
+    await test('the page says what its colours mean, in degrees', async () => {
+      const txt = await p.evaluate(() => document.getElementById('legend').innerText);
+      assert.match(txt, /0°/, 'the horizon mark is unlabelled');
+      assert.match(txt, /90°/, 'the overhead end is unlabelled');
+      const swatches = await p.evaluate(() =>
+        [...document.querySelectorAll('#legend i')].map((el) => getComputedStyle(el).backgroundColor));
+      assert.ok(swatches.length >= 5, `only ${swatches.length} swatches`);
+
+      // The horizon key must be hollow like the mark it stands for. Asserting on
+      // the border rather than the fill is the point: a filled amber dot here
+      // would advertise an encoding the globe does not use.
+      const ring = await p.evaluate(() => {
+        const s = getComputedStyle(document.querySelector('#legend i.ring'));
+        return { border: s.borderTopColor, fill: s.backgroundColor };
+      });
+      assert.equal(ring.border, 'rgb(224, 163, 22)', 'the horizon key is not on its reserved colour');
+      assert.ok(/rgba\(0, 0, 0, 0\)|transparent/.test(ring.fill),
+        `the horizon key is filled (${ring.fill}) — it should be hollow`);
+    });
+
+    await test('the key runs the same way round as the encoding it describes', async () => {
+      // A legend can be laid out in the exact inverse of the scale it explains
+      // and still look entirely plausible, so this reads the swatches in DOM
+      // order and checks them against colorFor at the altitudes the labels name.
+      const { first, last, at90, at1 } = await p.evaluate(() => {
+        const sw = [...document.querySelectorAll('#legend i:not(.ring)')]
+          .map((el) => getComputedStyle(el).backgroundColor);
+        const hex = (h) => {
+          const n = parseInt(h.slice(1), 16);
+          return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+        };
+        return {
+          first: sw[0], last: sw[sw.length - 1],
+          at90: hex(window.eclipse.colorFor(90)), at1: hex(window.eclipse.colorFor(1)),
+        };
+      });
+      assert.equal(first, at90, 'the swatch beside "sun 90°" is not the colour a 90° sun gets');
+      assert.equal(last, at1, 'the swatch beside "1°" is not the colour a 1° sun gets');
+      assert.notEqual(first, last, 'the key has no range at all');
+    });
+
+    await test('the shadow slides off, and the sun goes down with it', async () => {
+      const seen = await p.evaluate(() => {
+        const out = [];
+        for (const g of [0, 0.5, 0.9, 1.0, 1.3, 1.6]) {
+          window.eclipse.setGamma(g);
+          out.push([g, window.eclipse.gamma(), window.eclipse.sunAltitudeFor(g)]);
+        }
+        return out;
+      });
+      const alt = Object.fromEntries(seen.map(([g, , a]) => [g, a]));
+      assert.equal(alt[0], 90, 'a dead-centre hit does not put the Sun overhead');
+      assert.ok(Math.abs(alt[0.5] - 60) < 0.01, `gamma 0.5 gives ${alt[0.5]}°, not 60°`);
+      assert.ok(alt[0.9] > 0 && alt[0.9] < 30, `gamma 0.9 gives ${alt[0.9]}°`);
+      assert.equal(alt[1.0], 0, 'a grazing axis does not put the Sun on the horizon');
+      assert.equal(alt[1.3], 0, 'a missed axis should still be a horizon eclipse');
+      assert.equal(alt[1.6], null, 'gamma 1.6 should be no eclipse at all');
+      // Monotone: the further the axis misses, the lower the Sun. That is the
+      // whole claim the page makes, in one assertion.
+      for (const [a, b] of [[0, 0.5], [0.5, 0.9], [0.9, 1.0]]) {
+        assert.ok(alt[a] > alt[b], `sun altitude did not fall from gamma ${a} to ${b}`);
+      }
+    });
+
+    await test('the years read in astronomical numbering, where there is a year zero', async () => {
+      // The catalog has three eclipses in year 0, which is 1 BC — so the first
+      // row is 2000 BC, not 1999 BC, and no eclipse is ever "0 AD".
+      const labels = await p.evaluate(async () => {
+        const out = {};
+        window.eclipse.setIndex(1);
+        out.first = document.getElementById('year').textContent;
+        window.eclipse.setIndex(window.eclipse.total());
+        out.last = document.getElementById('year').textContent;
+        return out;
+      });
+      assert.equal(labels.first, '2000 BC', `the catalog opens at ${labels.first}`);
+      assert.equal(labels.last, '3000 AD', `the catalog closes at ${labels.last}`);
+    });
+
+    await p.close();
   }
 
 } finally {
