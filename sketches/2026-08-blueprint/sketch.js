@@ -104,24 +104,46 @@ function rebuild() {
 
   // The lines are drawn whole, not as pattern-tile edges: a stroke on a tile
   // edge gets its glow clipped by the tile boundary and every line comes out
-  // lopsided. Walking out from the centre also makes the crosshair share its
-  // coordinates with the grid exactly.
-  const glow = el('g', { stroke: 'rgba(255,255,255,0.15)', 'stroke-width': 3.2 }, svg);
-  const core = el('g', { stroke: 'rgba(255,255,255,0.6)', 'stroke-width': 1.2 }, svg);
-  for (const g of [glow, core]) {
-    for (let x = cx % cell; x <= w; x += cell) el('line', { x1: x, y1: 0, x2: x, y2: h }, g);
-    for (let y = cy % cell; y <= h; y += cell) el('line', { x1: 0, y1: y, x2: w, y2: y }, g);
+  // lopsided. The grid carries two weights like the original — a heavy rule
+  // every fourth line, anchored so the two through the centre are heavy.
+  // Those two centre rules are the crosshair, and like everything drawn near
+  // the middle they stop short of the mark.
+  const hole = icon === 'none' ? 0 : 1.35 * cell;
+  const minor = el('g', { stroke: 'rgba(255,255,255,0.34)', 'stroke-width': 1 }, svg);
+  const majorGlow = el('g', { stroke: 'rgba(255,255,255,0.14)', 'stroke-width': 4.5 }, svg);
+  const major = el('g', { stroke: 'rgba(255,255,255,0.62)', 'stroke-width': 2 }, svg);
+  const rule = (fixed, vertical, group, gap) => {
+    const [a, b, mid] = vertical ? ['x', 'y', cy] : ['y', 'x', cx];
+    const line = (from, to) =>
+      el('line', { [`${a}1`]: fixed, [`${a}2`]: fixed, [`${b}1`]: from, [`${b}2`]: to }, group);
+    if (gap) {
+      line(0, mid - gap);
+      line(mid + gap, vertical ? h : w);
+    } else {
+      line(0, vertical ? h : w);
+    }
+  };
+  for (const vertical of [true, false]) {
+    const [centre, extent] = vertical ? [cx, w] : [cy, h];
+    for (let k = -Math.ceil(centre / cell); centre + k * cell <= extent; k++) {
+      const at = centre + k * cell;
+      const gap = k === 0 ? hole : 0;
+      if (k % 4 === 0) {
+        rule(at, vertical, majorGlow, gap);
+        rule(at, vertical, major, gap);
+      } else {
+        rule(at, vertical, minor, 0);
+      }
+    }
   }
 
-  // Construction marks: corner-to-corner diagonals, two concentric circles,
-  // and a crosshair that runs a little past the outer circle. Every line
-  // stops short of the mark being drawn — the original leaves its subject
-  // room, so nothing intersects the icon.
+  // Construction marks — only the diagonals and circles, and only dashed:
+  // the crosshair is the pair of heavy grid rules above. The diagonals stop
+  // short of the mark the same way those do.
   const marks = el('g', {
     fill: 'none', stroke: 'rgba(255,255,255,0.55)',
     'stroke-width': 1.1, 'stroke-dasharray': '7 7',
   }, svg);
-  const hole = icon === 'none' ? 0 : 1.35 * cell;
   const diag = (x, y) => {
     const len = Math.hypot(cx - x, cy - y);
     const ux = (cx - x) / len;
@@ -133,11 +155,6 @@ function rebuild() {
   diag(w, 0);
   el('circle', { cx, cy, r: 2.5 * cell }, marks);
   el('circle', { cx, cy, r: 4.5 * cell }, marks);
-  const reach = 5.5 * cell;
-  el('line', { x1: cx - reach, y1: cy, x2: cx - hole, y2: cy }, marks);
-  el('line', { x1: cx + hole, y1: cy, x2: cx + reach, y2: cy }, marks);
-  el('line', { x1: cx, y1: cy - reach, x2: cx, y2: cy - hole }, marks);
-  el('line', { x1: cx, y1: cy + hole, x2: cx, y2: cy + reach }, marks);
 
   if (icon === null) {
     const logoH = 1.6 * cell;
