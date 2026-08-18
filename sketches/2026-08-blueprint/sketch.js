@@ -104,8 +104,8 @@ function rebuild() {
 
   // The lines are drawn whole, not as pattern-tile edges: a stroke on a tile
   // edge gets its glow clipped by the tile boundary and every line comes out
-  // lopsided. The grid carries two weights like the original — a heavy rule
-  // every fourth line, anchored so the two through the centre are heavy.
+  // lopsided. The grid carries two weights like the original — every other
+  // rule is heavy, anchored so the two through the centre are heavy.
   // Those two centre rules are the crosshair, and like everything drawn near
   // the middle they stop short of the mark.
   const hole = icon === 'none' ? 0 : 1.35 * cell;
@@ -128,7 +128,7 @@ function rebuild() {
     for (let k = -Math.ceil(centre / cell); centre + k * cell <= extent; k++) {
       const at = centre + k * cell;
       const gap = k === 0 ? hole : 0;
-      if (k % 4 === 0) {
+      if (k % 2 === 0) {
         rule(at, vertical, majorGlow, gap);
         rule(at, vertical, major, gap);
       } else {
