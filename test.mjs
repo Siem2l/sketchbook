@@ -3108,6 +3108,61 @@ try {
       } finally { await q.close(); }
     });
 
+    await test('a superseded microphone is let go of, and off lets go entirely', async () => {
+      // Two bugs, one of them a privacy bug, both found by a person noticing
+      // the square answering their typing. Switching input device left the old
+      // capture connected to the analyser beside the new one, so a page that
+      // had briefly opened the default microphone to read the device labels
+      // went on listening to the room for the rest of the session. And `off`
+      // returned before setMode was ever reached, so choosing it stopped the
+      // picture while the microphone stayed open and the recording indicator
+      // stayed lit — the user had said off and the machine said otherwise.
+      //
+      // A browser of its own, because a fake capture device is the only way a
+      // headless run can exercise this at all, and it is a launch argument.
+      const fake = await chromium.launch({
+        args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
+      });
+      try {
+        const q = await fake.newPage({ viewport: { width: 900, height: 700 } });
+        // Every stream the page is handed, recorded before its own script runs.
+        await q.addInitScript(() => {
+          window.__streams = [];
+          const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+          navigator.mediaDevices.getUserMedia = async (c) => {
+            const s = await real(c);
+            window.__streams.push(s);
+            return s;
+          };
+        });
+        await q.goto(`${BASE}/sketches/2026-08-elsewhere/?listen=mic`, { waitUntil: 'networkidle' });
+        await q.waitForFunction(() => window.__elsewhere?.ready(), null, { timeout: 60000 });
+        await q.waitForFunction(() => window.__elsewhere.audioMode() === 'mic', null, { timeout: 30000 });
+
+        const devs = await q.evaluate(() => window.__elsewhere.inputs());
+        const id = devs.find((d) => d.label)?.id ?? devs[0]?.id;
+        await q.evaluate((i) => window.__elsewhere.setAudio('mic', i), id);
+        await q.waitForTimeout(900);
+        await q.evaluate(() => window.__elsewhere.setAudio('mic', null));
+        await q.waitForTimeout(900);
+
+        const live = () => q.evaluate(() => window.__streams.map(
+          (s) => s.getTracks().map((t) => t.readyState).join(',')));
+        const mid = await live();
+        assert.ok(mid.length > 1, `only ${mid.length} captures were opened, so nothing was superseded`);
+        assert.deepEqual(mid.slice(0, -1).filter((x) => x.includes('live')), [],
+          `a superseded capture is still live: ${JSON.stringify(mid)}`);
+        assert.ok(mid.at(-1).includes('live'), `the current capture is not live: ${JSON.stringify(mid)}`);
+
+        await q.evaluate(() => window.__elsewhere.setAudio('off'));
+        await q.waitForTimeout(700);
+        assert.deepEqual((await live()).filter((x) => x.includes('live')), [],
+          'off left the microphone open');
+      } finally {
+        await fake.close();
+      }
+    });
+
     await test('every colour mode draws the whole square', async () => {
       for (let i = 0; i < 3; i++) {
         await el((n) => window.__elsewhere.setColour(n), i);

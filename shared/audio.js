@@ -280,9 +280,38 @@ export class Listener {
     if (this.voice) this.voice.gain.value = 0;
   }
 
+  // Let go of the microphone. Separate from hush() because that one is about
+  // what comes out and this is about what goes in, and a caller switching a
+  // source off means both. Leaving it out meant a page told to stop listening
+  // kept the capture open and the recording indicator lit — the user had said
+  // off and the machine still said otherwise.
+  releaseInput() {
+    if (this.stream) {
+      this.stream.getTracks().forEach((t) => t.stop());
+      this.stream = null;
+    }
+    if (this.micNode) { this.micNode.disconnect(); this.micNode = null; }
+    this.deviceId = null;
+  }
+
+  // Ask once, purely to make the device labels readable, and let go again
+  // immediately. Labels are blank until access has been granted, so choosing a
+  // device by name needs permission first — and doing that by opening the
+  // default input for real means listening to whatever it hears in the
+  // meantime. This opens nothing into the graph and stops the tracks before
+  // returning, so the wrong microphone is never connected at all.
+  async unlockLabels() {
+    if (!navigator.mediaDevices?.getUserMedia) return false;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach((t) => t.stop());
+      return true;
+    } catch { return false; }
+  }
+
   // The audio inputs the browser will admit to. Labels are blank until the user
   // has granted access once, which is a rule rather than a choice — so a caller
-  // building a picker has to call this after a successful `mic`, not before.
+  // building a picker has to call this after permission, not before.
   async inputs() {
     if (!navigator.mediaDevices?.enumerateDevices) return [];
     const all = await navigator.mediaDevices.enumerateDevices().catch(() => []);
@@ -302,13 +331,23 @@ export class Listener {
 
   async setMode(mode, deviceId = null) {
     this.error = '';
-    if (mode === this.mode && deviceId === this.deviceId) return;
+    // Nothing to do only if the source and the device both already match *and*,
+    // for the microphone, a capture is actually still held. Without that last
+    // clause a source switched off and back on again returned here without
+    // re-acquiring, and listened to nothing for the rest of the session.
+    if (mode === this.mode && deviceId === this.deviceId
+        && (mode !== 'mic' || this.stream !== null)) return;
     this.deviceId = deviceId;
-    if (this.stream && mode !== 'mic') {
-      this.stream.getTracks().forEach((t) => t.stop());
-      this.stream = null;
-      if (this.micNode) { this.micNode.disconnect(); this.micNode = null; }
-    }
+    // Released before anything is acquired, and on every transition including
+    // mic to mic. The guard here used to be `mode !== 'mic'`, which was right
+    // while the only way into mic was from another mode — the moment a device
+    // argument made mic-to-mic possible it became a leak, and a bad one: the
+    // old capture stayed connected to the analyser beside the new one, so a
+    // page that had briefly opened the default microphone to read the device
+    // labels went on listening to the room forever. It answered typing.
+    const keep = this.deviceId;
+    this.releaseInput();
+    this.deviceId = keep;
     if (mode === 'tone') {
       this.ensureCtx();
       if (!this.nodes) this.buildTone();

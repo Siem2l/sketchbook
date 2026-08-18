@@ -483,6 +483,9 @@ async function main() {
       // after `tone` held the oscillators at whatever envelope they were last
       // given and left a drone playing over a still square.
       audio.hush();
+      // And let go of the microphone. Off has to mean the page is not
+      // listening, not merely that nothing is being done with what it hears.
+      audio.releaseInput();
       $('audio').value = 'off';
       $('input').style.display = 'none';
       note('');
@@ -778,15 +781,20 @@ async function main() {
   const wanted = qs.get('listen');
   if (SOURCES.includes(wanted)) {
     (async () => {
-      await setAudio(wanted);
       const named = qs.get('input');
-      // Only reachable once access has been granted, because labels are blank
-      // until then — so this is a second acquisition and not a first.
-      if (named && audio.mode === 'mic') {
+      if (named && wanted === 'mic') {
+        // Permission first, because device labels are blank without it — but
+        // taken with a stream that is stopped before it is ever connected to
+        // anything. Opening the default input for real to read the labels and
+        // then switching meant the sketch spent that window listening to the
+        // room, and until the release bug above was found, forever after.
+        await audio.unlockLabels();
         const id = await audio.inputMatching(named);
-        if (id) await setAudio('mic', id);
-        else note(`no input matching "${named}" — using the default`);
+        if (!id) note(`no input matching "${named}" — using the default`);
+        await setAudio('mic', id);
+        return;
       }
+      await setAudio(wanted);
     })();
   }
 
