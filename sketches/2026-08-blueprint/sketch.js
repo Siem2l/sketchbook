@@ -112,7 +112,7 @@ function rebuild() {
   // crossing, stopped before the logo — so the clearing hugs the mark and
   // the mark touches not a single line. Custom icons vary in reach, so
   // they keep a wider clearing than the apple.
-  const hole = icon === null ? 1.0 * cell : icon === 'none' ? 0 : 1.8 * cell;
+  const hole = icon === null ? 1.0 * cell : icon === 'none' ? 0 : 1.5 * cell;
   // Flat strokes, no glow underneath — the lines end where they end.
   const minor = el('g', { stroke: 'rgba(255,255,255,0.34)', 'stroke-width': 1 }, svg);
   const major = el('g', { stroke: 'rgba(255,255,255,0.68)', 'stroke-width': 2.6 }, svg);
@@ -173,7 +173,7 @@ function rebuild() {
   } else if (/\.(svg|png|jpe?g|webp)$/i.test(icon) || icon.includes('/')) {
     // An image URL — resolved against the page, so a file shipped next to
     // the sketch is just ?icon=boid.svg. It keeps its own colours.
-    const box = 3.2 * cell;
+    const box = 2.4 * cell;
     el('image', {
       x: cx - box / 2, y: cy - box / 2, width: box, height: box,
       href: icon, preserveAspectRatio: 'xMidYMid meet',
